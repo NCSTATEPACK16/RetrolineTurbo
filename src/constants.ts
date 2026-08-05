@@ -17,3 +17,14 @@ export const STEP_MS = 1000 / 60;
  * steps — that "spiral of death" would make the freeze worse. We clamp instead.
  */
 export const MAX_FRAME_MS = 250;
+
+/**
+ * Default projection intrinsics (plan §7). These are *seed defaults* for the
+ * per-camera fields (`Camera.focalLength`, `.height`, `.horizon`) — the carrier
+ * of truth is the `Camera`, not these constants. Exact numbers are provisional
+ * and get retuned when the road first renders in Phase 2; the math is correct
+ * regardless of the values.
+ */
+export const DEFAULT_FOCAL_LENGTH = 0.84; // d_screen (screen-plane distance)
+export const DEFAULT_CAMERA_HEIGHT = 1000; // h_camera above the road plane (world units)
+export const HORIZON_Y = LOGICAL_HEIGHT / 2; // Y_horizon = 135; vanishing row for a level camera
