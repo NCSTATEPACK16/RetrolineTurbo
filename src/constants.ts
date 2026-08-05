@@ -3,6 +3,8 @@
  * cadence are single-sourced.
  */
 
+import type { TrackConfig } from './types/engine.js';
+
 /** Fixed logical framebuffer (research §4 / plan §2.4). Nearest-neighbour upscaled. */
 export const LOGICAL_WIDTH = 480;
 export const LOGICAL_HEIGHT = 270;
@@ -28,3 +30,27 @@ export const MAX_FRAME_MS = 250;
 export const DEFAULT_FOCAL_LENGTH = 0.84; // d_screen (screen-plane distance)
 export const DEFAULT_CAMERA_HEIGHT = 1000; // h_camera above the road plane (world units)
 export const HORIZON_Y = LOGICAL_HEIGHT / 2; // Y_horizon = 135; vanishing row for a level camera
+
+/**
+ * Provisional track geometry (Jake Gordon's proven seed values). `roadWidth` is
+ * the road's world *half*-width used directly as the `X_offset` of each edge in
+ * projection. Retuned during the Phase 2 visual gate.
+ */
+export const DEFAULT_TRACK_CONFIG: TrackConfig = {
+  roadWidth: 2000, // world half-width of the road surface
+  segmentLength: 200, // world depth per segment
+  drawDistance: 300, // segments projected per frame
+  rumbleSegments: 5, // segments per rumble colour band
+};
+
+/** Provisional retro palette. Retuned when the look locks in Phase 4. */
+export const COLORS = {
+  sky: '#3a1a5a',
+  groundLight: '#1d6b2e',
+  groundDark: '#175a26',
+  road: '#4a4a52',
+  roadDark: '#42424a',
+  rumbleLight: '#d0d0d8',
+  rumbleDark: '#c04040',
+  lane: '#d8d8e0',
+} as const;
