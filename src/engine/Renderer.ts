@@ -87,12 +87,27 @@ export class Renderer {
         if (clip.visible) {
           maxy = clip.clip;
           const dark = Math.floor((base + i) / this.config.rumbleSegments) % 2 === 1;
-          // Quad top = far edge (smaller y), bottom = near edge (larger y).
+
+          // Rumble (wider, drawn first so the road overlays it).
+          backend.drawQuad(
+            this.far.x, this.far.y, this.far.w * 1.15,
+            this.near.x, this.near.y, this.near.w * 1.15,
+            dark ? COLORS.rumbleDark : COLORS.rumbleLight,
+          );
+          // Road surface.
           backend.drawQuad(
             this.far.x, this.far.y, this.far.w,
             this.near.x, this.near.y, this.near.w,
             dark ? COLORS.roadDark : COLORS.road,
           );
+          // Centre lane line on light bands only.
+          if (!dark) {
+            backend.drawQuad(
+              this.far.x, this.far.y, this.far.w * 0.04,
+              this.near.x, this.near.y, this.near.w * 0.04,
+              COLORS.lane,
+            );
+          }
         }
       }
 

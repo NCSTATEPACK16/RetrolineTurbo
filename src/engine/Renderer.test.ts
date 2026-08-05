@@ -64,3 +64,25 @@ describe('Renderer straight road surface', () => {
     expect(backend.presents).toBe(1);
   });
 });
+
+describe('Renderer rumble + lane decoration', () => {
+  it('alternates rumble colour by band and overlays road on rumble', () => {
+    const track = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+    const backend = new RecordingBackend();
+    const cam: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
+    renderer.render(cam, track, backend);
+
+    const rumbleColors = new Set(backend.quads.map((q) => q.color));
+    expect(rumbleColors.has(COLORS.rumbleLight)).toBe(true);
+    expect(rumbleColors.has(COLORS.rumbleDark)).toBe(true);
+    expect(rumbleColors.has(COLORS.lane)).toBe(true);
+
+    // For a given span the rumble quad is wider than the road quad and drawn earlier.
+    const firstRoadIdx = backend.quads.findIndex((q) => q.color === COLORS.road || q.color === COLORS.roadDark);
+    expect(firstRoadIdx).toBeGreaterThan(0);
+    const rumbleBefore = backend.quads[firstRoadIdx - 1]!;
+    const road = backend.quads[firstRoadIdx]!;
+    expect(rumbleBefore.w1).toBeGreaterThan(road.w1);
+  });
+});
