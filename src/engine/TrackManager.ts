@@ -28,13 +28,27 @@ export class TrackManager {
     return this._segments[i]!;
   }
 
-  /** Straight track: enough segments to loop past the draw distance. */
+  /**
+   * Track script: a straight lead-in, an S-curve (right then left), and a hill
+   * crest, padded past the draw distance so the loop has no visible seam.
+   */
   private build(): Segment[] {
-    const count = this.config.drawDistance * 2; // room to loop without a visible seam
-    const segments: Segment[] = new Array(count);
-    for (let i = 0; i < count; i++) {
-      segments[i] = { index: i, z: i * this.config.segmentLength, curve: 0, pitch: 0 };
-    }
+    const segments: Segment[] = [];
+    const push = (count: number, curve: number, pitch: number): void => {
+      for (let n = 0; n < count; n++) {
+        segments.push({ index: segments.length, z: segments.length * this.config.segmentLength, curve, pitch });
+      }
+    };
+
+    push(60, 0, 0); // straight, flat lead-in
+    push(40, 3, 0); // gentle right curve
+    push(40, 0, 40); // uphill
+    push(40, -3, -40); // left curve over the crest, downhill
+    push(40, 0, 0); // recover
+    // Pad past the draw distance so the loop has no visible seam.
+    const pad = this.config.drawDistance * 2 - segments.length;
+    push(Math.max(pad, this.config.drawDistance), 0, 0);
+
     return segments;
   }
 }
