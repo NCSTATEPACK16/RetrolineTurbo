@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-ssr/
+
+# Local env (holds the Supabase URL + anon key). Never commit.
+.env
+.env.local
+.env.*.local
+
+# Editor / OS cruft
+.DS_Store
+*.log
+.vite/
+coverage/
+.idea/
+.vscode/

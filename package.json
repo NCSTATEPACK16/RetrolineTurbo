@@ -1,0 +1,23 @@
+{
+  "name": "retroline-turbo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Web-first pseudo-3D arcade racer (scanline segment-projection engine).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vitest": "^2.1.2"
+  }
+}
