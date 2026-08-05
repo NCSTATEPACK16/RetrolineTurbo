@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import type { Session } from '@supabase/supabase-js';
 
 /**
  * Supabase edge module. This is the ONLY place the game core talks to the
@@ -20,7 +20,11 @@ if (!url || !anonKey) {
   );
 }
 
-export const supabase: SupabaseClient = createClient(url ?? '', anonKey ?? '', {
+export const supabase = createClient(url ?? '', anonKey ?? '', {
+  // Retroline Turbo lives in its own `retroline` schema, isolated from other
+  // games in this shared project. Table access via the Data API also requires
+  // `retroline` to be listed under Settings → API → Exposed schemas (Phase 8).
+  db: { schema: 'retroline' },
   auth: {
     persistSession: true,
     autoRefreshToken: true,
