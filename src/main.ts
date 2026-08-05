@@ -1,6 +1,13 @@
 import { Canvas2DBackend } from './engine/Canvas2DBackend.js';
 import { createLoop } from './physics/loop.js';
 import { ensureAnonSession } from './net/supabase.js';
+import { Renderer } from './engine/Renderer.js';
+import { TrackManager } from './engine/TrackManager.js';
+import { Background } from './engine/Background.js';
+import {
+  DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
+} from './constants.js';
+import type { Camera } from './types/engine.js';
 
 const canvas = document.getElementById('game');
 if (!(canvas instanceof HTMLCanvasElement)) {
@@ -16,30 +23,37 @@ function fit(): void {
 fit();
 window.addEventListener('resize', fit);
 
-// --- Temporary Phase-0 diagnostics: confirm the fixed 60Hz cadence. ----------
-// Remove once Phase 1+ draws real content. Counts fixed sim steps vs rendered
-// frames over each real second and logs the rates.
-let simSteps = 0;
-let frames = 0;
-let windowStart = performance.now();
+// --- Temporary Phase 2/3 camera harness (replaced by real physics in Phase 5) ---
+const track = new TrackManager(DEFAULT_TRACK_CONFIG);
+const background = new Background();
+const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+
+const camera: Camera = {
+  x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y,
+};
+const autoSpeed = 12000; // world units/sec — retune during the visual gate
+
+// Throwaway debug input: A/D steer, W/S change auto-speed. Removed in Phase 5.
+let steer = 0;
+let speedScale = 1;
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'a') steer = -1;
+  else if (e.key === 'd') steer = 1;
+  else if (e.key === 'w') speedScale = Math.min(3, speedScale + 0.25);
+  else if (e.key === 's') speedScale = Math.max(0, speedScale - 0.25);
+});
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'a' || e.key === 'd') steer = 0;
+});
 
 const loop = createLoop({
-  update: (_dt: number): void => {
-    simSteps++;
+  update: (dt: number): void => {
+    camera.z += autoSpeed * speedScale * dt;
+    camera.x += steer * 2000 * dt;
   },
   render: (_alpha: number): void => {
-    backend.clear('#101018'); // blank framebuffer — proves the pipeline ticks
-    backend.present();
-    frames++;
-
-    const now = performance.now();
-    if (now - windowStart >= 1000) {
-      // eslint-disable-next-line no-console
-      console.log(`[phase0] sim ${simSteps} steps/s · render ${frames} fps`);
-      simSteps = 0;
-      frames = 0;
-      windowStart = now;
-    }
+    // The Renderer owns the whole frame (§7 order): clear → background → road → present.
+    renderer.render(camera, track, backend, background);
   },
 });
 

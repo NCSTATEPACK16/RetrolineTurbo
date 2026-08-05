@@ -43,19 +43,23 @@ export class Canvas2DBackend implements RenderBackend {
   // --- Segment / sprite raster: stubbed until Phase 2+ ------------------------
 
   drawQuad(
-    _x1: number,
-    _y1: number,
-    _w1: number,
-    _x2: number,
-    _y2: number,
-    _w2: number,
-    _color: string,
+    x1: number, y1: number, w1: number,
+    x2: number, y2: number, w2: number,
+    color: string,
   ): void {
-    // Phase 2: trapezoidal road/rumble/grass quads.
+    this.ctx.fillStyle = color;
+    this.ctx.beginPath();
+    this.ctx.moveTo(x1 - w1, y1); // top-left
+    this.ctx.lineTo(x1 + w1, y1); // top-right
+    this.ctx.lineTo(x2 + w2, y2); // bottom-right
+    this.ctx.lineTo(x2 - w2, y2); // bottom-left
+    this.ctx.closePath();
+    this.ctx.fill();
   }
 
-  fillBand(_y: number, _h: number, _color: string): void {
-    // Phase 2: sky/ground horizontal bands.
+  fillBand(y: number, h: number, color: string): void {
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(0, y, LOGICAL_WIDTH, h);
   }
 
   drawSprite(
