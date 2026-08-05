@@ -16,9 +16,15 @@ export function layerOffset(cameraX: number, curvature: number, speed: number): 
  * {@link layerOffset}. Uses `fillBand` only — full-width horizontal fills.
  */
 export class Background {
-  render(camera: Camera, _curvatureAtCamera: number, backend: RenderBackend): void {
+  render(camera: Camera, curvatureAtCamera: number, backend: RenderBackend): void {
     const horizon = camera.horizon;
-    backend.fillBand(0, horizon, COLORS.sky);
+    // Sky pans slowest, a hill band faster — expressed as a colour phase shift
+    // (full-width bands can't move in x; textured layers replace this in Phase 4).
+    const skyPhase = Math.floor(Math.abs(layerOffset(camera.x, curvatureAtCamera, 0.001))) % 2;
+    const hillPhase = Math.floor(Math.abs(layerOffset(camera.x, curvatureAtCamera, 0.003))) % 2;
+
+    backend.fillBand(0, horizon * 0.6, skyPhase === 0 ? COLORS.sky : COLORS.groundDark);
+    backend.fillBand(horizon * 0.6, horizon * 0.4, hillPhase === 0 ? COLORS.groundDark : COLORS.groundLight);
     backend.fillBand(horizon, LOGICAL_HEIGHT - horizon, COLORS.groundDark);
   }
 }

@@ -53,7 +53,8 @@ const loop = createLoop({
   },
   render: (_alpha: number): void => {
     // The Renderer owns the whole frame (§7 order): clear → background → road → present.
-    renderer.render(camera, track, backend, background);
+    const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
+    renderer.render(camera, track, backend, background, track.segment(base).curve);
   },
 });
 

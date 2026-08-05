@@ -17,9 +17,13 @@ describe('Background bands', () => {
     expect(sky).toBeDefined();
     expect(ground).toBeDefined();
     expect(sky!.y).toBe(0);
-    expect(sky!.h).toBeCloseTo(HORIZON_Y, 6);
-    expect(ground!.y).toBeCloseTo(HORIZON_Y, 6);
-    expect(ground!.y + ground!.h).toBeCloseTo(LOGICAL_HEIGHT, 6);
+    // Sky now occupies the upper 60% down to the horizon; a hill band fills the
+    // remaining 40% (Task 9). The last full-height ground band still spans
+    // [horizon, LOGICAL_HEIGHT].
+    expect(sky!.h).toBeCloseTo(HORIZON_Y * 0.6, 6);
+    const groundFull = backend.bands.find((x) => x.y === HORIZON_Y);
+    expect(groundFull).toBeDefined();
+    expect(groundFull!.y + groundFull!.h).toBeCloseTo(LOGICAL_HEIGHT, 6);
   });
 });
 
@@ -31,5 +35,19 @@ describe('layerOffset', () => {
     expect(layerOffset(0, 500, 0.002)).not.toBe(0);
     // zero inputs ⇒ zero offset
     expect(layerOffset(0, 0, 0.002)).toBe(0);
+  });
+});
+
+describe('Background parallax panning', () => {
+  it('shifts layer bands horizontally as the camera pans, faster for nearer layers', () => {
+    const b = new Background();
+    const backend0 = new RecordingBackend();
+    const backendPan = new RecordingBackend();
+    const cam0: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
+    const camPan: Camera = { ...cam0, x: 5000 };
+    b.render(cam0, 0, backend0);
+    b.render(camPan, 0, backendPan);
+    // Panning must change what is drawn (band count/positions differ from the static frame).
+    expect(JSON.stringify(backendPan.bands)).not.toBe(JSON.stringify(backend0.bands));
   });
 });

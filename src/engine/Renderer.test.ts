@@ -32,8 +32,11 @@ describe('projectSegment', () => {
 
 describe('Renderer straight road surface', () => {
   it('emits road quads centred and shrinking near→far, in draw order', () => {
-    const track = new TrackManager(DEFAULT_TRACK_CONFIG);
-    const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+    // The track has a 60-segment straight lead-in before its first curve; keep
+    // the whole rendered view inside it (drawDistance < 60) so "centred" is exact.
+    const straightCfg = { ...DEFAULT_TRACK_CONFIG, drawDistance: 40 };
+    const track = new TrackManager(straightCfg);
+    const renderer = new Renderer(straightCfg);
     const backend = new RecordingBackend();
     const cam: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
 
@@ -84,5 +87,46 @@ describe('Renderer rumble + lane decoration', () => {
     const rumbleBefore = backend.quads[firstRoadIdx - 1]!;
     const road = backend.quads[firstRoadIdx]!;
     expect(rumbleBefore.w1).toBeGreaterThan(road.w1);
+  });
+});
+
+describe('Renderer curve + hill + occlusion (M2 track)', () => {
+  const cam = (): Camera => ({ x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y });
+
+  it('drifts road-quad centres away from screen centre through a curve', () => {
+    const track = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+    const backend = new RecordingBackend();
+    const c = cam();
+    c.z = 60 * DEFAULT_TRACK_CONFIG.segmentLength; // park the camera at the curve entry
+    renderer.render(c, track, backend);
+    const road = backend.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark);
+    // Far quads bend off-centre: the farthest quad's centre differs from screen centre.
+    const farthest = road[road.length - 1]!;
+    expect(Math.abs(farthest.x1 - LOGICAL_WIDTH / 2)).toBeGreaterThan(1);
+  });
+
+  it('discards far segments hidden behind a crest (fewer quads than an equal flat run)', () => {
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+    const track = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const segLen = DEFAULT_TRACK_CONFIG.segmentLength;
+
+    // Occluded case: from the lead-in the hill crest (~segment 140) sits ahead in
+    // the draw distance and hides the road beyond it.
+    const cCrest = cam();
+    cCrest.z = 0;
+    const crestBackend = new RecordingBackend();
+    renderer.render(cCrest, track, crestBackend);
+
+    // Unoccluded reference: parked deep in the flat run-out after the crest, the
+    // whole draw distance is level so nothing is occluded (full draw distance).
+    const cFlat = cam();
+    cFlat.z = 300 * segLen;
+    const flatBackend = new RecordingBackend();
+    renderer.render(cFlat, track, flatBackend);
+
+    const crestRoad = crestBackend.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark).length;
+    const flatRoad = flatBackend.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark).length;
+    expect(crestRoad).toBeLessThan(flatRoad); // crest occluded the far road
   });
 });
