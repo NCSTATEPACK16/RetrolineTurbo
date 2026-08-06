@@ -13,6 +13,7 @@ import { Vehicle, createCommand } from './physics/Vehicle.js';
 import { InputManager, mouseSteerCurve } from './input/InputManager.js';
 import { LocalStorageSaveBackend } from './economy/save.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
+import { EditorScreen } from './track/editor/EditorScreen.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
 } from './constants.js';
@@ -58,16 +59,34 @@ const vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
 const remap = new RemapScreen(atlas, save, input);
 const cmd = createCommand(); // pre-allocated; refilled each step (hard rule 4)
 
+const editor = new EditorScreen(atlas, save, (t) => {
+  // Config-compat rule: only activate tracks matching the engine config.
+  if (t.file.segmentLength !== DEFAULT_TRACK_CONFIG.segmentLength || t.file.roadWidth !== DEFAULT_TRACK_CONFIG.roadWidth) {
+    console.warn('[editor] track config mismatch; not activated:', t.file.trackId);
+    return;
+  }
+  track.rebuild(t);
+});
+void editor.loadIndex();
+
 const camera: Camera = {
   x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y,
 };
 
 void loadBindings(save).then((b) => { input.setBindings(b); });
 
-// RemapScreen sees every key first; unconsumed keys drive the InputManager.
+// Screens see every key first (remap, then editor); leftovers drive the InputManager.
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Tab' || input.isBound(e.code)) e.preventDefault(); // no scroll/focus-steal
-  if (!remap.handleKey(e.code)) input.press(e.code);
+  if (e.code === 'Tab' || e.code === 'F2' || input.isBound(e.code)) e.preventDefault();
+  if (remap.handleKey(e.code)) return;
+  if (editor.handleKey(e.code)) return;
+  input.press(e.code);
+});
+// Clipboard edge for the editor (kept here so EditorScreen stays clipboard-free).
+window.addEventListener('keydown', (e) => {
+  if (!editor.open) return;
+  if (e.code === 'KeyE') void navigator.clipboard?.writeText(editor.exportJson());
+  else if (e.code === 'KeyI') void navigator.clipboard?.readText?.().then((json) => { editor.importJson(json); });
 });
 window.addEventListener('keyup', (e) => { input.release(e.code); });
 window.addEventListener('mousemove', (e) => {
@@ -95,7 +114,7 @@ createLoop({
   update: (dt: number): void => {
     pollGamepad();
     input.read(cmd);
-    if (remap.open) { // pause driving while remapping
+    if (remap.open || editor.open) { // pause driving while a screen is up
       cmd.throttle = 0; cmd.brake = 0; cmd.steer = 0; cmd.handbrake = true;
     }
 
@@ -118,7 +137,8 @@ createLoop({
     renderer.render(camera, track, backend, background, traffic, track.segment(base).curve);
     hud.render(vehicle, elapsedMs, track, camera, backend);
     remap.render(backend);
-    backend.present(); // HUD + remap composited onto the logical frame, then blit
+    editor.render(backend);
+    backend.present(); // HUD + screens composited onto the logical frame, then blit
   },
 }).start();
 
