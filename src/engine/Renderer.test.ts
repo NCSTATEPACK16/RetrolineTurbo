@@ -10,6 +10,7 @@ import {
   DEFAULT_TRACK_CONFIG, COLORS,
 } from '../constants.js';
 import type { Camera, Segment, Sprite } from '../types/engine.js';
+import { parseTrackFile } from '../track/schema.js';
 
 const CAM: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
 const ROAD_HALF = 2000;
@@ -144,6 +145,58 @@ describe('Renderer curve + hill + occlusion (M2 track)', () => {
     const crestRoad = crestBackend.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark).length;
     const flatRoad = flatBackend.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark).length;
     expect(crestRoad).toBeLessThan(flatRoad); // crest occluded the far road
+  });
+});
+
+describe('Renderer branch pass (fork roads + median)', () => {
+  const camAt = (z: number): Camera => ({ x: 0, z, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y });
+  const cfg = { ...DEFAULT_TRACK_CONFIG, drawDistance: 40 };
+  const segLen = DEFAULT_TRACK_CONFIG.segmentLength;
+
+  function flatTrack(ways: 2 | 3 | null): TrackManager {
+    const r = parseTrackFile({
+      trackId: 'forked', stageName: 'Forked', segmentLength: 200, roadWidth: 2000, lanes: 3,
+      sections: [{ length: 700, curve: 0, pitch: 0 }],
+      ...(ways === null ? {} : { branchPoint: { startSegment: 100, splitDurationSegments: 60, ways } }),
+    });
+    if (!r.ok) throw new Error(r.errors.join('; '));
+    return new TrackManager(cfg, r.track);
+  }
+  const roadQuads = (b: RecordingBackend): number =>
+    b.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark).length;
+
+  it('draws exactly as many road quads as an unforked control before the window', () => {
+    const forked = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(0), flatTrack(2), forked); // segments 0–40, window at 100
+    const control = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(0), flatTrack(null), control);
+    expect(roadQuads(forked)).toBe(roadQuads(control));
+  });
+
+  it('multiplies road quads inside the split window', () => {
+    const forked = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(90 * segLen), flatTrack(2), forked); // view spans the window
+    const control = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(90 * segLen), flatTrack(null), control);
+    expect(roadQuads(forked)).toBeGreaterThan(roadQuads(control));
+  });
+
+  it('draws a median wedge once the gap opens', () => {
+    const early = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(95 * segLen), flatTrack(2), early); // window mouth: no gap yet
+    const deep = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(130 * segLen), flatTrack(2), deep); // deep split near the node
+    const medians = (b: RecordingBackend): number => b.quads.filter((q) => q.color === COLORS.groundDark).length;
+    expect(medians(deep)).toBeGreaterThan(0);
+    expect(medians(deep)).toBeGreaterThan(medians(early));
+  });
+
+  it('a 3-way fork renders more road quads than a 2-way at the same spot', () => {
+    const two = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(130 * segLen), flatTrack(2), two);
+    const three = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(130 * segLen), flatTrack(3), three);
+    expect(roadQuads(three)).toBeGreaterThan(roadQuads(two));
   });
 });
 
