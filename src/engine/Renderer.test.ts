@@ -72,14 +72,15 @@ describe('Renderer straight road surface', () => {
     expect(road[0]!.w2).toBeGreaterThan(road[road.length - 1]!.w1);
   });
 
-  it('presents exactly once per render and clears first', () => {
+  it('clears the frame first and leaves present() to the caller', () => {
     const track = new TrackManager(DEFAULT_TRACK_CONFIG);
     const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
     const backend = new RecordingBackend();
     const cam: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
     renderer.render(cam, track, backend);
     expect(backend.clears.length).toBe(1);
-    expect(backend.presents).toBe(1);
+    // The caller composites the HUD then presents; the renderer no longer does.
+    expect(backend.presents).toBe(0);
   });
 });
 

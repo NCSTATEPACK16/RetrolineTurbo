@@ -152,8 +152,8 @@ export class Renderer {
 
     this.drawSprites(camera, track, backend, traffic);
     this.drawPlayerCar(backend);
-
-    backend.present();
+    // NOTE: present() is the caller's responsibility so the HUD can composite
+    // onto the same logical frame before the blit (see main.ts render step).
   }
 
   private projectInto(
