@@ -14,8 +14,14 @@ import { InputManager, mouseSteerCurve } from './input/InputManager.js';
 import { LocalStorageSaveBackend } from './economy/save.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
+import { RouteState, sceneTrack, resolveFork, STAGES } from './track/route.js';
+import { chosenOffsetAtNode } from './engine/BranchRenderer.js';
+import { RouteMap } from './ui/RouteMap.js';
+import { drawText } from './ui/text.js';
+import { parseTrackFile } from './track/schema.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
+  LOGICAL_WIDTH, LOGICAL_HEIGHT,
 } from './constants.js';
 import type { Camera } from './types/engine.js';
 
@@ -59,6 +65,16 @@ const vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
 const remap = new RemapScreen(atlas, save, input);
 const cmd = createCommand(); // pre-allocated; refilled each step (hard rule 4)
 
+// --- Phase 7: route mode — the pyramid drives which scene is loaded ----------
+let route = new RouteState(1);
+const routeMap = new RouteMap(atlas);
+function bootScene(): void {
+  const r = parseTrackFile(sceneTrack(route.currentPlan()));
+  if (r.ok) track.rebuild(r.track);
+  else console.error('[route] scene failed to parse:', r.errors);
+}
+bootScene();
+
 const editor = new EditorScreen(atlas, save, (t) => {
   // Config-compat rule: only activate tracks matching the engine config.
   if (t.file.segmentLength !== DEFAULT_TRACK_CONFIG.segmentLength || t.file.roadWidth !== DEFAULT_TRACK_CONFIG.roadWidth) {
@@ -87,6 +103,15 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (editor.handleKey(e.code)) return;
+  if (e.code === 'KeyM') { routeMap.flashMs = routeMap.flashMs > 0 ? 0 : 60_000; return; }
+  if (e.code === 'KeyR' && (route.expired || route.finished)) {
+    route = new RouteState(1);
+    vehicle.reset();
+    elapsedMs = 0;
+    routeMap.flashMs = 0;
+    bootScene();
+    return;
+  }
   input.press(e.code);
 });
 // Clipboard edge for the editor (kept here so EditorScreen stays clipboard-free).
@@ -123,6 +148,8 @@ createLoop({
     input.read(cmd);
     if (remap.open || editor.open) { // pause driving while a screen is up
       cmd.throttle = 0; cmd.brake = 0; cmd.steer = 0; cmd.handbrake = true;
+    } else if (route.expired || route.finished) {
+      cmd.throttle = 0; cmd.steer = 0; cmd.brake = 1; // roll to a stop on the end screens
     }
 
     const seg = track.segment(Math.floor(vehicle.z / DEFAULT_TRACK_CONFIG.segmentLength));
@@ -136,15 +163,48 @@ createLoop({
       vehicle.applyCollision(d.speedFactor, (vehicle.x >= 0 ? -1 : 1) * d.xPush * dt);
     }
 
+    // Route progression: countdown, fork hand-off, final-stage finish.
+    if (!route.finished && !route.expired && !remap.open && !editor.open) {
+      route.tick(dt * 1000);
+      const branch = track.activeBranch;
+      if (branch) {
+        const nodeZ = (branch.startSegment + branch.splitDurationSegments) * DEFAULT_TRACK_CONFIG.segmentLength;
+        if (vehicle.z >= nodeZ) {
+          const choice = resolveFork(vehicle.x, branch.ways, DEFAULT_TRACK_CONFIG.roadWidth);
+          const plan = route.advance(choice);
+          const r = parseTrackFile(sceneTrack(plan));
+          if (r.ok) {
+            const maxSpread = DEFAULT_TRACK_CONFIG.roadWidth * Renderer.MAX_SPREAD_ROADWIDTHS;
+            track.rebuild(r.track);
+            vehicle.translate(-nodeZ, -chosenOffsetAtNode(choice, branch.ways, maxSpread));
+            routeMap.flashMs = 3000;
+          }
+        }
+      } else if (route.stage === STAGES - 1
+          && vehicle.z >= track.length * DEFAULT_TRACK_CONFIG.segmentLength) {
+        route.finish();
+        routeMap.flashMs = Number.MAX_SAFE_INTEGER; // stays up on the ending screen
+      }
+    }
+    if (routeMap.flashMs > 0 && routeMap.flashMs < Number.MAX_SAFE_INTEGER) {
+      routeMap.flashMs = Math.max(0, routeMap.flashMs - dt * 1000);
+    }
+
     camera.z = vehicle.z;
     camera.x = vehicle.x;
   },
   render: (): void => {
     const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
     renderer.render(camera, track, backend, background, traffic, track.segment(base).curve);
-    hud.render(vehicle, elapsedMs, track, camera, backend);
+    hud.render(vehicle, elapsedMs, track, camera, backend, route.remainingMs);
     remap.render(backend);
     editor.render(backend);
+    routeMap.render(route, backend);
+    if (route.expired) {
+      drawText(backend, atlas, 'time up  press r', LOGICAL_WIDTH / 2 - 56, LOGICAL_HEIGHT / 2 - 6, 3);
+    } else if (route.finished) {
+      drawText(backend, atlas, 'route complete  press r', LOGICAL_WIDTH / 2 - 80, LOGICAL_HEIGHT / 2 - 6, 3);
+    }
     backend.present(); // HUD + screens composited onto the logical frame, then blit
   },
 }).start();
