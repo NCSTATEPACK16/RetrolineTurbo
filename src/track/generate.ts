@@ -57,7 +57,11 @@ export function generateTrack(
     return s === undefined ? undefined : { sprites: s };
   };
   const add = (length: number, curve: number, pitch: number): void => {
-    sections.push({ length, curve, pitch, ...(sceneryRules(length) ?? {}) });
+    // Round to editor-friendly precision (curve 0.1 steps, integer pitch/offset
+    // display) so generated tracks read cleanly in the section editor.
+    const c = Math.round(curve * 10) / 10;
+    const p = Math.round(pitch);
+    sections.push({ length, curve: c, pitch: p, ...(sceneryRules(length) ?? {}) });
     total += length;
   };
 
