@@ -43,6 +43,30 @@ export const DEFAULT_TRACK_CONFIG: TrackConfig = {
   rumbleSegments: 5, // segments per rumble colour band
 };
 
+/**
+ * Vehicle tuning (plan.md §7 PRD). Display/UI works in km/h; the world sim works
+ * in world units (u/s). `KMH_PER_WORLD` is the single conversion (moved from HUD).
+ * Feel numbers are provisional and retuned at the Phase 5 visual gate; the PRD
+ * limits (gear caps, −60% skid grip, μ_offroad) are contractual and tested.
+ */
+export const KMH_PER_WORLD = 0.05; // world u/s → km/h display
+export const WORLD_PER_KMH = 1 / KMH_PER_WORLD;
+
+export const GEAR_MAX_KMH = [120, 290] as const; // Low, High top speeds
+export const GEAR_ACCEL_KMH_S = [60, 25] as const; // zero-speed accel per gear (Low torquey)
+export const BRAKE_KMH_S = 180; // full-brake decel
+export const HANDBRAKE_KMH_S = 270; // handbrake decel
+export const COAST_KMH_S = 20; // engine-drag decel at zero throttle
+export const MU_OFFROAD = 0.85; // per-second speed retention factor off-road
+export const OFFROAD_MAX_KMH = 60; // off-road drag only bleeds speed above this
+export const STEER_MAX_WPS = 2500; // lateral world u/s at full steer authority
+export const CENTRIFUGAL = 9000; // curvature × speedRatio² lateral push (world u/s)
+export const SKID_CURVE_THRESHOLD = 0.4; // |segment curve| that can trigger a skid
+export const SKID_SPEED_KMH = 200; // min speed for a skid trigger
+export const SKID_GRIP = 0.4; // steering grip while skidding (−60%)
+export const SKID_SPEED_DECAY = 0.9; // per-second speed retention while skidding
+export const SKID_RECOVERY_STEPS = 12; // consecutive counter-steer steps to recover
+
 /** Provisional retro palette. Retuned when the look locks in Phase 4. */
 export const COLORS = {
   sky: '#3a1a5a',

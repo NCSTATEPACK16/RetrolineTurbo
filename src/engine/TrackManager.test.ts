@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TrackManager } from './TrackManager.js';
 import { DEFAULT_TRACK_CONFIG } from '../constants.js';
+import { parseTrackFile } from '../track/schema.js';
 
 describe('TrackManager (straight track)', () => {
   it('builds a flat, straight track whose segments carry monotonic z and zero curve/pitch', () => {
@@ -43,5 +44,50 @@ describe('TrackManager (curves + hills)', () => {
     // The opening lead-in is still straight & flat.
     expect(track.segment(0).curve).toBe(0);
     expect(track.segment(0).pitch).toBe(0);
+  });
+});
+
+describe('TrackManager (roadside sprites)', () => {
+  it('populates segments with roadside sprites', () => {
+    const tm = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const total = tm.segments.reduce((n, s) => n + s.sprites.length, 0);
+    expect(total).toBeGreaterThan(20);
+  });
+  it('places sprites on both sides of the road', () => {
+    const tm = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const offs = tm.segments.flatMap((s) => s.sprites.map((sp) => sp.offset));
+    expect(offs.some((o) => o < -1)).toBe(true);
+    expect(offs.some((o) => o > 1)).toBe(true);
+  });
+});
+
+describe('TrackManager (data-driven rebuild)', () => {
+  it('rebuild swaps segments in place behind the same reference', () => {
+    const tm = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const before = tm.length;
+    const r = parseTrackFile({
+      trackId: 'tiny', stageName: 'Tiny', segmentLength: 200, roadWidth: 2000, lanes: 3,
+      sections: [{ length: 700, curve: 1, pitch: 0 }],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tm.rebuild(r.track);
+    expect(tm.length).toBe(700);
+    expect(tm.length).not.toBe(before);
+    expect(tm.segment(10).curve).toBe(1);
+  });
+
+  it('exposes the active branch and refreshes it on rebuild', () => {
+    const tm = new TrackManager(DEFAULT_TRACK_CONFIG);
+    expect(tm.activeBranch).toBeNull(); // default track has no fork
+    const r = parseTrackFile({
+      trackId: 'forked', stageName: 'Forked', segmentLength: 200, roadWidth: 2000, lanes: 3,
+      sections: [{ length: 700, curve: 0, pitch: 0 }],
+      branchPoint: { startSegment: 500, splitDurationSegments: 60, ways: 2 },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tm.rebuild(r.track);
+    expect(tm.activeBranch).toEqual({ startSegment: 500, splitDurationSegments: 60, ways: 2 });
   });
 });

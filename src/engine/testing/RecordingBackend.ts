@@ -2,6 +2,11 @@ import type { RenderBackend } from '../RenderBackend.js';
 
 export interface QuadCall { x1: number; y1: number; w1: number; x2: number; y2: number; w2: number; color: string; }
 export interface BandCall { y: number; h: number; color: string; }
+export interface SpriteCall {
+  sx: number; sy: number; sw: number; sh: number;
+  dx: number; dy: number; dw: number; dh: number;
+  clipBottom: number;
+}
 
 /**
  * A {@link RenderBackend} that records every call instead of drawing. Lets the
@@ -12,6 +17,7 @@ export class RecordingBackend implements RenderBackend {
   readonly clears: string[] = [];
   readonly quads: QuadCall[] = [];
   readonly bands: BandCall[] = [];
+  readonly sprites: SpriteCall[] = [];
   presents = 0;
 
   clear(color: string): void {
@@ -26,8 +32,13 @@ export class RecordingBackend implements RenderBackend {
     this.bands.push({ y, h, color });
   }
 
-  drawSprite(): void {
-    // Phase 4 — not exercised by Phase 2/3 tests.
+  drawSprite(
+    _image: CanvasImageSource,
+    sx: number, sy: number, sw: number, sh: number,
+    dx: number, dy: number, dw: number, dh: number,
+    clipBottom: number,
+  ): void {
+    this.sprites.push({ sx, sy, sw, sh, dx, dy, dw, dh, clipBottom });
   }
 
   present(): void {

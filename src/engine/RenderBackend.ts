@@ -30,11 +30,17 @@ export interface RenderBackend {
   fillBand(y: number, h: number, color: string): void;
 
   /**
-   * Draw a scaled sprite. `clipBottom` is the lowest logical scanline the sprite
-   * is allowed to occupy (hill occlusion); rows below it are not drawn.
+   * Draw a scaled sprite. Source rect (`sx,sy,sw,sh`) selects a region of the
+   * atlas image; destination rect (`dx,dy,dw,dh`) places it in the logical
+   * framebuffer. `clipBottom` is the lowest logical scanline the sprite is
+   * allowed to occupy (hill occlusion); rows below it are not drawn.
    */
   drawSprite(
     image: CanvasImageSource,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
     dx: number,
     dy: number,
     dw: number,

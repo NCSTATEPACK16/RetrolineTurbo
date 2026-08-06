@@ -1,16 +1,32 @@
-import type { Segment, TrackConfig } from '../types/engine.js';
+import type { BranchPoint, Segment, TrackConfig } from '../types/engine.js';
+import { parsedDefaultTrack } from '../track/tracks.js';
+import type { ParsedTrack } from '../track/schema.js';
 
 /**
- * Owns the segment array for the active track. Phase 2 builds a straight track
- * from a `TrackConfig`; Phase 3 extends `build()` with curve/hill sections.
- * Phase 6 will replace the *source* (file loader / editor output) behind this
- * same interface. `segment()` wraps so the track loops seamlessly.
+ * Owns the segment array for the active track. Since Phase 6 the source is a
+ * validated ParsedTrack (default: the hand-authored DEFAULT_TRACK_FILE); the
+ * hardcoded build() is gone. `rebuild` swaps the track behind the same object
+ * reference so consumers (renderer, HUD, main loop) never rewire.
+ * `segment()` wraps so the track loops seamlessly.
  */
 export class TrackManager {
-  private readonly _segments: Segment[];
+  private _segments: Segment[];
+  private _branch: BranchPoint | null;
 
-  constructor(private readonly config: TrackConfig) {
-    this._segments = this.build();
+  constructor(readonly config: TrackConfig, track?: ParsedTrack) {
+    const t = track ?? parsedDefaultTrack();
+    this._segments = t.segments;
+    this._branch = t.file.branchPoint ?? null;
+  }
+
+  rebuild(track: ParsedTrack): void {
+    this._segments = track.segments;
+    this._branch = track.file.branchPoint ?? null;
+  }
+
+  /** The active track's fork, or null when the track ends without one. */
+  get activeBranch(): BranchPoint | null {
+    return this._branch;
   }
 
   get length(): number {
@@ -24,31 +40,6 @@ export class TrackManager {
   segment(index: number): Segment {
     const n = this._segments.length;
     const i = ((index % n) + n) % n; // positive modulo for negative indices
-    // noUncheckedIndexedAccess: i is guaranteed in-range by the modulo above.
     return this._segments[i]!;
-  }
-
-  /**
-   * Track script: a straight lead-in, an S-curve (right then left), and a hill
-   * crest, padded past the draw distance so the loop has no visible seam.
-   */
-  private build(): Segment[] {
-    const segments: Segment[] = [];
-    const push = (count: number, curve: number, pitch: number): void => {
-      for (let n = 0; n < count; n++) {
-        segments.push({ index: segments.length, z: segments.length * this.config.segmentLength, curve, pitch });
-      }
-    };
-
-    push(60, 0, 0); // straight, flat lead-in
-    push(40, 3, 0); // gentle right curve
-    push(40, 0, 40); // uphill
-    push(40, -3, -40); // left curve over the crest, downhill
-    push(40, 0, 0); // recover
-    // Pad past the draw distance so the loop has no visible seam.
-    const pad = this.config.drawDistance * 2 - segments.length;
-    push(Math.max(pad, this.config.drawDistance), 0, 0);
-
-    return segments;
   }
 }

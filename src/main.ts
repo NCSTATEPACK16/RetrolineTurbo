@@ -4,8 +4,24 @@ import { ensureAnonSession } from './net/supabase.js';
 import { Renderer } from './engine/Renderer.js';
 import { TrackManager } from './engine/TrackManager.js';
 import { Background } from './engine/Background.js';
+import { generateAtlas } from './assets/generateSprites.js';
+import { SpriteAtlas } from './engine/SpriteAtlas.js';
+import { Traffic, type TrafficCar } from './engine/Traffic.js';
+import { HUD } from './ui/HUD.js';
+import { hitCar, responseDelta } from './engine/Collision.js';
+import { Vehicle, createCommand } from './physics/Vehicle.js';
+import { InputManager, mouseSteerCurve } from './input/InputManager.js';
+import { LocalStorageSaveBackend } from './economy/save.js';
+import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
+import { EditorScreen } from './track/editor/EditorScreen.js';
+import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
+import { chosenOffsetAtNode, branchSpread, fillRoadOffsets } from './engine/BranchRenderer.js';
+import { RouteMap } from './ui/RouteMap.js';
+import { drawText } from './ui/text.js';
+import { parseTrackFile } from './track/schema.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
+  LOGICAL_WIDTH, LOGICAL_HEIGHT,
 } from './constants.js';
 import type { Camera } from './types/engine.js';
 
@@ -23,42 +39,205 @@ function fit(): void {
 fit();
 window.addEventListener('resize', fit);
 
-// --- Temporary Phase 2/3 camera harness (replaced by real physics in Phase 5) ---
+// --- Phase 5: real physics behind the PlayerState seam ------------------------
+// The Vehicle implements the same PlayerState the Phase 4 harness exposed, so
+// collision, HUD, and the sprite pass consume it unchanged (spec §2).
+const { image, frames } = generateAtlas();
+const atlas = new SpriteAtlas(image, frames);
+
 const track = new TrackManager(DEFAULT_TRACK_CONFIG);
 const background = new Background();
-const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+const hud = new HUD(atlas);
+
+const trackLength = track.length * DEFAULT_TRACK_CONFIG.segmentLength;
+const cars: TrafficCar[] = [
+  { z: 4000, offset: -0.4, speed: 4000, sprite: 'car0' },
+  { z: 9000, offset: 0.4, speed: 3500, sprite: 'car1' },
+  { z: 15000, offset: 0, speed: 5000, sprite: 'car2' },
+  { z: 22000, offset: -0.5, speed: 4500, sprite: 'car3' },
+];
+const traffic = new Traffic(cars, trackLength);
+
+const save = new LocalStorageSaveBackend();
+const input = new InputManager();
+const vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
+const remap = new RemapScreen(atlas, save, input);
+const cmd = createCommand(); // pre-allocated; refilled each step (hard rule 4)
+
+// --- Phase 7: route mode — the pyramid drives which scene is loaded ----------
+let route = new RouteState(1);
+const routeMap = new RouteMap(atlas);
+function bootScene(): void {
+  const r = parseTrackFile(sceneTrack(route.currentPlan()));
+  if (r.ok) track.rebuild(r.track);
+  else console.error('[route] scene failed to parse:', r.errors);
+}
+bootScene();
+
+const editor = new EditorScreen(atlas, save, (t) => {
+  // Config-compat rule: only activate tracks matching the engine config.
+  if (t.file.segmentLength !== DEFAULT_TRACK_CONFIG.segmentLength || t.file.roadWidth !== DEFAULT_TRACK_CONFIG.roadWidth) {
+    return false; // editor surfaces "not activated" in its status line
+  }
+  track.rebuild(t);
+  return true;
+});
+void editor.loadIndex();
 
 const camera: Camera = {
   x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y,
 };
-const autoSpeed = 12000; // world units/sec — retune during the visual gate
 
-// Throwaway debug input: A/D steer, W/S change auto-speed. Removed in Phase 5.
-let steer = 0;
-let speedScale = 1;
+void loadBindings(save).then((b) => { input.setBindings(b); });
+
+// Screens see every key first (remap, then editor); leftovers drive the InputManager.
+// While a screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'a') steer = -1;
-  else if (e.key === 'd') steer = 1;
-  else if (e.key === 'w') speedScale = Math.min(3, speedScale + 0.25);
-  else if (e.key === 's') speedScale = Math.max(0, speedScale - 0.25);
+  const screenOpen = remap.open || editor.open;
+  if (screenOpen && (e.metaKey || e.ctrlKey)) return;
+  if (e.code === 'Tab' || e.code === 'F2' || input.isBound(e.code)) e.preventDefault();
+  if (remap.handleKey(e.code)) {
+    // Spec §6 mutual exclusion: opening remap closes the editor.
+    if (remap.open && editor.open) editor.handleKey('Escape');
+    return;
+  }
+  if (editor.handleKey(e.code)) return;
+  if (e.code === 'KeyM') {
+    // Toggled on: pinned forever on the ending screen, timed elsewhere.
+    routeMap.flashMs = routeMap.flashMs > 0 ? 0 : (route.finished ? Number.MAX_SAFE_INTEGER : 60_000);
+    return;
+  }
+  if (e.code === 'KeyR' && (route.expired || route.finished)) {
+    route = new RouteState(1);
+    vehicle.reset();
+    elapsedMs = 0;
+    routeMap.flashMs = 0;
+    bootScene();
+    traffic.rescope(0, track.length * DEFAULT_TRACK_CONFIG.segmentLength);
+    return;
+  }
+  input.press(e.code);
 });
-window.addEventListener('keyup', (e) => {
-  if (e.key === 'a' || e.key === 'd') steer = 0;
+// Clipboard edge for the editor (kept here so EditorScreen stays clipboard-free).
+window.addEventListener('keydown', (e) => {
+  if (!editor.open || remap.open || e.metaKey || e.ctrlKey) return;
+  if (e.code === 'KeyE') void navigator.clipboard?.writeText(editor.exportJson());
+  else if (e.code === 'KeyI') void navigator.clipboard?.readText?.().then((json) => { editor.importJson(json); });
+});
+window.addEventListener('keyup', (e) => { input.release(e.code); });
+window.addEventListener('mousemove', (e) => {
+  input.setMouseSteer(mouseSteerCurve((e.clientX / window.innerWidth) * 2 - 1));
 });
 
-const loop = createLoop({
+const padSnapshot = { steer: 0, throttle: 0, brake: 0 }; // reused; no per-step alloc
+function pollGamepad(): void {
+  const pad = navigator.getGamepads?.()[0];
+  if (!pad) { input.setGamepad(null); return; }
+  padSnapshot.steer = pad.axes[0] ?? 0;
+  padSnapshot.throttle = pad.buttons[7]?.value ?? 0; // RT
+  padSnapshot.brake = pad.buttons[6]?.value ?? 0; // LT
+  input.setGamepad(padSnapshot);
+}
+
+const cfg = {
+  roadWidth: DEFAULT_TRACK_CONFIG.roadWidth,
+  segmentLength: DEFAULT_TRACK_CONFIG.segmentLength,
+  carHalfWidthPx: 900,
+};
+let elapsedMs = 0;
+const roadCenters = [0, 0, 0]; // pre-allocated branch road centres (hard rule 4)
+
+createLoop({
   update: (dt: number): void => {
-    camera.z += autoSpeed * speedScale * dt;
-    camera.x += steer * 2000 * dt;
-  },
-  render: (_alpha: number): void => {
-    // The Renderer owns the whole frame (§7 order): clear → background → road → present.
-    const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
-    renderer.render(camera, track, backend, background, track.segment(base).curve);
-  },
-});
+    pollGamepad();
+    input.read(cmd);
+    if (remap.open || editor.open) { // pause driving while a screen is up
+      cmd.throttle = 0; cmd.brake = 0; cmd.steer = 0; cmd.handbrake = true;
+    } else if (route.expired || route.finished) {
+      cmd.throttle = 0; cmd.steer = 0; cmd.brake = 1; // roll to a stop on the end screens
+    }
 
-loop.start();
+    // Branch-aware road centre: during a split the drivable roads diverge from
+    // the track centre-line; feed the nearest road's centre to the off-road test.
+    const segIdx = Math.floor(vehicle.z / DEFAULT_TRACK_CONFIG.segmentLength);
+    const seg = track.segment(segIdx);
+    let roadCenterX = 0;
+    const liveBranch = track.activeBranch;
+    if (liveBranch) {
+      const maxSpread = DEFAULT_TRACK_CONFIG.roadWidth * Renderer.MAX_SPREAD_ROADWIDTHS;
+      const spread = branchSpread(segIdx, liveBranch, maxSpread);
+      const n = fillRoadOffsets(roadCenters, liveBranch.ways, spread);
+      roadCenterX = roadCenters[0]!;
+      for (let i = 1; i < n; i++) {
+        if (Math.abs(roadCenters[i]! - vehicle.x) < Math.abs(roadCenterX - vehicle.x)) roadCenterX = roadCenters[i]!;
+      }
+    }
+    vehicle.step(cmd, seg.curve, dt, roadCenterX);
+    elapsedMs += dt * 1000;
+    traffic.update(dt);
+
+    // Off-road drag is the Vehicle's own μ path; responseDelta applies on hits only.
+    if (hitCar(vehicle, cars, cfg) != null) {
+      const d = responseDelta({ offRoad: false, hit: true });
+      vehicle.applyCollision(d.speedFactor, (vehicle.x >= 0 ? -1 : 1) * d.xPush * dt);
+    }
+
+    // Route progression: countdown, fork hand-off, final-stage finish.
+    if (!route.finished && !route.expired && !remap.open && !editor.open) {
+      route.tick(dt * 1000);
+      const branch = track.activeBranch;
+      if (branch) {
+        const nodeZ = (branch.startSegment + branch.splitDurationSegments) * DEFAULT_TRACK_CONFIG.segmentLength;
+        if (vehicle.z >= nodeZ) {
+          const choice = resolveFork(vehicle.x, branch.ways, DEFAULT_TRACK_CONFIG.roadWidth);
+          // Parse the chosen scene BEFORE advancing route state, so a bad scene
+          // can never desync the pyramid from the world.
+          const nextRow = route.pyramid[route.stage + 1]!;
+          const destination = nextRow[nextSceneIdx(route.sceneIdx, choice, branch.ways, nextRow.length)]!;
+          const r = parseTrackFile(sceneTrack(destination));
+          if (r.ok) {
+            route.advance(choice);
+            const maxSpread = DEFAULT_TRACK_CONFIG.roadWidth * Renderer.MAX_SPREAD_ROADWIDTHS;
+            track.rebuild(r.track);
+            // Land relative to the chosen road's centre, clamped onto its surface
+            // so a centre-line straddler is never teleported off-road.
+            const chosen = chosenOffsetAtNode(choice, branch.ways, maxSpread);
+            const lateral = Math.max(-DEFAULT_TRACK_CONFIG.roadWidth * 0.8,
+              Math.min(DEFAULT_TRACK_CONFIG.roadWidth * 0.8, vehicle.x - chosen));
+            vehicle.translate(-nodeZ, lateral - vehicle.x);
+            traffic.rescope(-nodeZ, track.length * DEFAULT_TRACK_CONFIG.segmentLength);
+            routeMap.flashMs = 3000;
+          }
+        }
+      } else if (route.stage === STAGES - 1
+          && vehicle.z >= track.length * DEFAULT_TRACK_CONFIG.segmentLength) {
+        route.finish();
+        routeMap.flashMs = Number.MAX_SAFE_INTEGER; // stays up on the ending screen
+      }
+    }
+    if (routeMap.flashMs > 0 && routeMap.flashMs < Number.MAX_SAFE_INTEGER) {
+      routeMap.flashMs = Math.max(0, routeMap.flashMs - dt * 1000);
+    }
+
+    camera.z = vehicle.z;
+    camera.x = vehicle.x;
+  },
+  render: (): void => {
+    const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
+    renderer.render(camera, track, backend, background, traffic, track.segment(base).curve);
+    hud.render(vehicle, elapsedMs, track, camera, backend, route.remainingMs);
+    remap.render(backend);
+    editor.render(backend);
+    routeMap.render(route, backend);
+    if (route.expired) {
+      drawText(backend, atlas, 'time up  press r', LOGICAL_WIDTH / 2 - 56, LOGICAL_HEIGHT / 2 - 6, 3);
+    } else if (route.finished) {
+      drawText(backend, atlas, 'route complete  press r', LOGICAL_WIDTH / 2 - 80, LOGICAL_HEIGHT / 2 - 6, 3);
+    }
+    backend.present(); // HUD + screens composited onto the logical frame, then blit
+  },
+}).start();
 
 // Prove the backend wiring is live; failures here must not stall the render loop.
 void ensureAnonSession().catch((err: unknown) => {
