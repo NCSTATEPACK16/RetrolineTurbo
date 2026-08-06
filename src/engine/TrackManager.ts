@@ -36,7 +36,7 @@ export class TrackManager {
     const segments: Segment[] = [];
     const push = (count: number, curve: number, pitch: number): void => {
       for (let n = 0; n < count; n++) {
-        segments.push({ index: segments.length, z: segments.length * this.config.segmentLength, curve, pitch });
+        segments.push({ index: segments.length, z: segments.length * this.config.segmentLength, curve, pitch, sprites: [] });
       }
     };
 

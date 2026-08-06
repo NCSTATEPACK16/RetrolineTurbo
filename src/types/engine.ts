@@ -31,7 +31,24 @@ export interface Segment {
   z: number; // world depth at the segment's near edge
   curve: number; // K_i — per-segment lateral curvature delta
   pitch: number; // P_i — per-segment elevation (hill) delta
+  sprites: Sprite[]; // billboards attached to this segment (may be empty)
 }
+
+/** Read-only view of the player used by collision, HUD, and sprite render.
+ * Phase 4: implemented by the throwaway harness. Phase 5: implemented by Vehicle. */
+export interface PlayerState {
+  readonly z: number; // world depth along the track
+  readonly x: number; // world lateral position (track-centre-relative)
+  readonly speed: number; // world units / second (HUD converts to km/h)
+  readonly gear: number; // current gear index (Phase 4: stubbed at 1)
+}
+
+/** A packed sprite region in the atlas. `anchor` is the sprite-local pixel that
+ * lands on the projected road point (base-centre for a billboard). */
+export interface SpriteFrame {
+  x: number; y: number; w: number; h: number; anchorX: number; anchorY: number;
+}
+export type FrameTable = Record<string, SpriteFrame>;
 
 /** Static track geometry parameters. */
 export interface TrackConfig {
@@ -47,10 +64,11 @@ export interface Vehicle {
   speed: number; // forward speed (world units / s)
 }
 
-/** TODO(Phase 4): full billboard sprite (texture, scale, sort key). Placeholder. */
+/** A billboard placed on a segment. `offset` is in road-half-width units:
+ * ±1 sits on the road edge, >1 is off-road scenery. `name` indexes the atlas. */
 export interface Sprite {
-  xOffset: number; // lateral offset from track centre
-  z: number; // world depth (for scale + painter sort)
+  name: string;
+  offset: number;
 }
 
 /** TODO(Phase 7): full branching-track pyramid node. Placeholder. */
