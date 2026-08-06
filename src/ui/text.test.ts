@@ -23,6 +23,12 @@ describe('drawText', () => {
     expect(xs[2]).toBeGreaterThan(xs[1]!);
   });
 
+  it('renders minus signs for negative numbers', () => {
+    const b = new RecordingBackend();
+    drawText(b, atlas, '-2.5', 0, 0);
+    expect(b.sprites.length).toBe(4); // - 2 . 5
+  });
+
   it('mixes digits, letters and punctuation in one string', () => {
     const b = new RecordingBackend();
     drawText(b, atlas, 'lap 1:23.4', 0, 0);

@@ -37,5 +37,6 @@ describe('packAtlas', () => {
   it('includes the a–z letter glyphs for menu text', () => {
     const names = SPRITE_MANIFEST.map((e) => e.name);
     for (const ch of 'abcdefghijklmnopqrstuvwxyz') expect(names).toContain(`glyph_${ch}`);
+    expect(names).toContain('glyph_minus');
   });
 });

@@ -100,6 +100,8 @@ export const SPRITE_MANIFEST: SpriteEntry[] = [
   ...letterEntries(),
   { name: 'glyph_colon', w: 3, h: 5, anchorX: 1, anchorY: 2,
     ops: [{ rx: 1, ry: 1, rw: 1, rh: 1, color: '#e8e8f0' }, { rx: 1, ry: 3, rw: 1, rh: 1, color: '#e8e8f0' }] },
+  { name: 'glyph_minus', w: 3, h: 5, anchorX: 1, anchorY: 2,
+    ops: [{ rx: 0, ry: 2, rw: 3, rh: 1, color: '#e8e8f0' }] },
 ];
 
 export type { SpriteFrame };

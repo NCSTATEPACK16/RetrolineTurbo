@@ -6,6 +6,7 @@ function frameName(ch: string): string | null {
   if (ch === ' ') return null;
   if (ch >= '0' && ch <= '9') return `digit_${ch}`;
   if (ch === ':' || ch === '.') return 'glyph_colon';
+  if (ch === '-') return 'glyph_minus';
   const lower = ch.toLowerCase();
   if (lower >= 'a' && lower <= 'z') return `glyph_${lower}`;
   return null; // unknown chars advance silently (no throw in a render path)
