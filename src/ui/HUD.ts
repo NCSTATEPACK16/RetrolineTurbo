@@ -1,10 +1,8 @@
-import { LOGICAL_WIDTH } from '../constants.js';
+import { LOGICAL_WIDTH, KMH_PER_WORLD } from '../constants.js';
 import type { Camera, PlayerState } from '../types/engine.js';
 import type { RenderBackend } from '../engine/RenderBackend.js';
 import type { SpriteAtlas } from '../engine/SpriteAtlas.js';
 import type { TrackManager } from '../engine/TrackManager.js';
-
-const KMH_PER_WORLD = 0.05; // world units/s → km/h display (provisional; retuned at gate)
 
 export function speedToKmh(speed: number): number { return Math.round(speed * KMH_PER_WORLD); }
 

@@ -58,12 +58,6 @@ export interface TrackConfig {
   rumbleSegments: number; // segments per rumble-strip colour band
 }
 
-/** TODO(Phase 5): full arcade skid/recovery vehicle state. Placeholder for now. */
-export interface Vehicle {
-  z: number; // world depth along the track
-  speed: number; // forward speed (world units / s)
-}
-
 /** A billboard placed on a segment. `offset` is in road-half-width units:
  * ±1 sits on the road edge, >1 is off-road scenery. `name` indexes the atlas. */
 export interface Sprite {
