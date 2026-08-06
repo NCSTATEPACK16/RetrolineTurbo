@@ -49,6 +49,15 @@ export class TrackManager {
     const pad = this.config.drawDistance * 2 - segments.length;
     push(Math.max(pad, this.config.drawDistance), 0, 0);
 
+    // Scenery pass: alternate trees/bushes off both shoulders every few segments.
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i]!;
+      if (i % 6 === 0) seg.sprites.push({ name: i % 12 === 0 ? 'tree' : 'bush', offset: -1.6 - (i % 3) * 0.4 });
+      if (i % 6 === 3) seg.sprites.push({ name: i % 12 === 3 ? 'tree' : 'rock', offset: 1.6 + (i % 3) * 0.4 });
+    }
+    segments[60]?.sprites.push({ name: 'sign', offset: -1.3 });       // curve-entry sign
+    segments[220]?.sprites.push({ name: 'billboard', offset: 1.8 });  // run-out billboard
+
     return segments;
   }
 }

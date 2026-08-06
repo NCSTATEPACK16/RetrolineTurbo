@@ -45,3 +45,17 @@ describe('TrackManager (curves + hills)', () => {
     expect(track.segment(0).pitch).toBe(0);
   });
 });
+
+describe('TrackManager (roadside sprites)', () => {
+  it('populates segments with roadside sprites', () => {
+    const tm = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const total = tm.segments.reduce((n, s) => n + s.sprites.length, 0);
+    expect(total).toBeGreaterThan(20);
+  });
+  it('places sprites on both sides of the road', () => {
+    const tm = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const offs = tm.segments.flatMap((s) => s.sprites.map((sp) => sp.offset));
+    expect(offs.some((o) => o < -1)).toBe(true);
+    expect(offs.some((o) => o > 1)).toBe(true);
+  });
+});
