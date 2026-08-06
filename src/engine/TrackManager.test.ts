@@ -76,4 +76,18 @@ describe('TrackManager (data-driven rebuild)', () => {
     expect(tm.length).not.toBe(before);
     expect(tm.segment(10).curve).toBe(1);
   });
+
+  it('exposes the active branch and refreshes it on rebuild', () => {
+    const tm = new TrackManager(DEFAULT_TRACK_CONFIG);
+    expect(tm.activeBranch).toBeNull(); // default track has no fork
+    const r = parseTrackFile({
+      trackId: 'forked', stageName: 'Forked', segmentLength: 200, roadWidth: 2000, lanes: 3,
+      sections: [{ length: 700, curve: 0, pitch: 0 }],
+      branchPoint: { startSegment: 500, splitDurationSegments: 60, ways: 2 },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tm.rebuild(r.track);
+    expect(tm.activeBranch).toEqual({ startSegment: 500, splitDurationSegments: 60, ways: 2 });
+  });
 });

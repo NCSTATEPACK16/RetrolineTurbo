@@ -1,4 +1,4 @@
-import type { Segment } from '../types/engine.js';
+import type { BranchPoint, Segment } from '../types/engine.js';
 import { SPRITE_MANIFEST } from '../assets/spriteManifest.js';
 
 /** One scenery placement rule: put `name` at `offset` on every `every`-th
@@ -18,7 +18,7 @@ export interface TrackFile {
   lanes: number;
   colors?: Record<string, string>;
   sections: TrackSection[];
-  branchPoint?: unknown; // carried through, inert until Phase 7
+  branchPoint?: BranchPoint | null; // absent/null = no fork (an ending)
 }
 
 export interface ParsedTrack { file: TrackFile; segments: Segment[]; totalSegments: number }
@@ -28,6 +28,7 @@ const VALID_SPRITES: ReadonlySet<string> = new Set(SPRITE_MANIFEST.map((e) => e.
 const TOP_KEYS = new Set(['trackId', 'stageName', 'segmentLength', 'roadWidth', 'lanes', 'colors', 'sections', 'branchPoint', '$schema']);
 const SECTION_KEYS = new Set(['length', 'curve', 'pitch', 'sprites']);
 const RULE_KEYS = new Set(['name', 'offset', 'every']);
+const BRANCH_KEYS = new Set(['startSegment', 'splitDurationSegments', 'ways']);
 
 /** Validate anything into a ParsedTrack, or every reason it isn't one.
  * Pure; collects all errors with path-style messages so a hand-author can fix
@@ -107,6 +108,22 @@ export function parseTrackFile(input: string | unknown): ParseResult {
         });
       }
     });
+  }
+
+  const bp = t['branchPoint'];
+  if (bp !== undefined && bp !== null) {
+    if (typeof bp !== 'object' || Array.isArray(bp)) {
+      errors.push('branchPoint: expected an object or null');
+    } else {
+      const b = bp as Record<string, unknown>;
+      for (const k of Object.keys(b)) if (!BRANCH_KEYS.has(k)) errors.push(`branchPoint.${k}: unknown key`);
+      const start = b['startSegment'];
+      if (typeof start !== 'number' || !Number.isInteger(start) || start < 0) errors.push('branchPoint.startSegment: expected integer >= 0');
+      const dur = b['splitDurationSegments'];
+      if (typeof dur !== 'number' || !Number.isInteger(dur) || dur < 1) errors.push('branchPoint.splitDurationSegments: expected integer >= 1');
+      const ways = b['ways'];
+      if (ways !== 2 && ways !== 3) errors.push('branchPoint.ways: expected 2 or 3');
+    }
   }
 
   if (errors.length > 0) return { ok: false, errors };

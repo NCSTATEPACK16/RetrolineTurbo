@@ -65,8 +65,11 @@ export interface Sprite {
   offset: number;
 }
 
-/** TODO(Phase 7): full branching-track pyramid node. Placeholder. */
+/** A fork in the road. The split begins at `startSegment` and the roads are
+ * fully separated at the node (`startSegment + splitDurationSegments`), where
+ * the player's lateral position resolves the path (plan.md §7). */
 export interface BranchPoint {
-  z: number; // world depth where the split begins
+  startSegment: number; // segment index where the roads begin to diverge
   splitDurationSegments: number; // segments over which the branch diverges
+  ways: 2 | 3; // OutRun-style pair or TX-1 three-way
 }

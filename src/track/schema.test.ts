@@ -84,6 +84,27 @@ describe('parseTrackFile rejects with path-naming errors', () => {
   });
 });
 
+describe('branchPoint validation', () => {
+  const withBranch = (bp: unknown): unknown => ({ ...JSON.parse(JSON.stringify(valid)) as object, branchPoint: bp });
+  it('accepts a well-formed branchPoint and carries it through', () => {
+    const r = parseTrackFile(withBranch({ startSegment: 500, splitDurationSegments: 60, ways: 2 }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.track.file.branchPoint).toEqual({ startSegment: 500, splitDurationSegments: 60, ways: 2 });
+  });
+  it('accepts null / absent (an ending)', () => {
+    expect(parseTrackFile(withBranch(null)).ok).toBe(true);
+    expect(parseTrackFile(valid).ok).toBe(true);
+  });
+  it('rejects bad shapes with paths', () => {
+    expect(parseTrackFile(withBranch({ startSegment: -1, splitDurationSegments: 60, ways: 2 })).ok).toBe(false);
+    expect(parseTrackFile(withBranch({ startSegment: 5, splitDurationSegments: 0, ways: 2 })).ok).toBe(false);
+    expect(parseTrackFile(withBranch({ startSegment: 5, splitDurationSegments: 60, ways: 4 })).ok).toBe(false);
+    const r = parseTrackFile(withBranch({ startSegment: 5, splitDurationSegments: 60, ways: 2, extra: 1 }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/branchPoint\.extra/);
+  });
+});
+
 describe('expandSections', () => {
   it('lays segments with z = index * segmentLength across section boundaries', () => {
     const segs = expandSections(valid);
