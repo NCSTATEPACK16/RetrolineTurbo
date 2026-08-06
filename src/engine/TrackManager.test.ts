@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TrackManager } from './TrackManager.js';
 import { DEFAULT_TRACK_CONFIG } from '../constants.js';
+import { parseTrackFile } from '../track/schema.js';
 
 describe('TrackManager (straight track)', () => {
   it('builds a flat, straight track whose segments carry monotonic z and zero curve/pitch', () => {
@@ -57,5 +58,22 @@ describe('TrackManager (roadside sprites)', () => {
     const offs = tm.segments.flatMap((s) => s.sprites.map((sp) => sp.offset));
     expect(offs.some((o) => o < -1)).toBe(true);
     expect(offs.some((o) => o > 1)).toBe(true);
+  });
+});
+
+describe('TrackManager (data-driven rebuild)', () => {
+  it('rebuild swaps segments in place behind the same reference', () => {
+    const tm = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const before = tm.length;
+    const r = parseTrackFile({
+      trackId: 'tiny', stageName: 'Tiny', segmentLength: 200, roadWidth: 2000, lanes: 3,
+      sections: [{ length: 700, curve: 1, pitch: 0 }],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tm.rebuild(r.track);
+    expect(tm.length).toBe(700);
+    expect(tm.length).not.toBe(before);
+    expect(tm.segment(10).curve).toBe(1);
   });
 });
