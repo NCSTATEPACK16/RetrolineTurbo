@@ -39,12 +39,16 @@ export class EditorScreen {
   private statusLine = '';
   private savedIds: string[] = [];
   private loadCycle = 0; // 0 = default, 1 = generated, 2+ = savedIds
+  private loadToken = 0; // invalidates in-flight async loads on newer requests
   lastPersist: Promise<void> = Promise.resolve();
+  lastLoad: Promise<void> = Promise.resolve();
 
+  /** `onTrackChange` returns whether the track was activated in the world
+   * (main.ts rejects config-mismatched tracks); false surfaces in `status`. */
   constructor(
     private readonly atlas: SpriteAtlas,
     private readonly save: SaveBackend,
-    private readonly onTrackChange: (track: ParsedTrack) => void,
+    private readonly onTrackChange: (track: ParsedTrack) => boolean,
   ) {}
 
   get open(): boolean { return this.isOpen; }
@@ -55,8 +59,10 @@ export class EditorScreen {
   private notify(): void {
     const r = parseTrackFile(this.workingFile);
     if (r.ok) {
-      this.onTrackChange(r.track);
-      this.statusLine = `${r.track.totalSegments} segments`;
+      const activated = this.onTrackChange(r.track);
+      this.statusLine = activated
+        ? `${r.track.totalSegments} segments`
+        : 'not activated: config mismatch';
     } else {
       this.statusLine = r.errors[0] ?? 'invalid track';
     }
@@ -71,8 +77,10 @@ export class EditorScreen {
     this.workingFile = deepCopy(file);
     this.presetIdx = presetIdx ?? file.sections.map(() => null);
     this.selected = Math.min(this.selected, file.sections.length - 1);
-    this.onTrackChange(r.track);
-    this.statusLine = `loaded ${file.trackId} (${r.track.totalSegments} segments)`;
+    const activated = this.onTrackChange(r.track);
+    this.statusLine = activated
+      ? `loaded ${file.trackId} (${r.track.totalSegments} segments)`
+      : `loaded ${file.trackId} - not activated: config mismatch`;
     return true;
   }
 
@@ -141,8 +149,11 @@ export class EditorScreen {
     else if (field === 'curve') sec.curve = Math.round((sec.curve + dir * 0.5) * 10) / 10;
     else if (field === 'pitch') sec.pitch += dir * 5;
     else {
-      const cur = this.presetIdx[this.selected];
-      const next = ((cur ?? -1) + dir + PRESETS.length + 1) % PRESETS.length; // null → first/last
+      const cur = this.presetIdx[this.selected] ?? null;
+      // From custom (null): right enters at the first preset, left at the last.
+      const next = cur === null
+        ? (dir > 0 ? 0 : PRESETS.length - 1)
+        : (cur + dir + PRESETS.length) % PRESETS.length;
       this.presetIdx[this.selected] = next;
       const rules = PRESETS[next]!.rules;
       if (rules.length === 0) delete sec.sprites;
@@ -164,13 +175,15 @@ export class EditorScreen {
 
   private cycleLoad(): void {
     this.loadCycle = (this.loadCycle + 1) % (2 + this.savedIds.length);
+    const token = ++this.loadToken; // newer cycles invalidate in-flight loads
     if (this.loadCycle === 0) {
       this.setWorking(DEFAULT_TRACK_FILE);
     } else if (this.loadCycle === 1) {
       this.setWorking(generateTrack(this.seedValue));
     } else {
       const id = this.savedIds[this.loadCycle - 2]!;
-      this.lastPersist = this.save.get(TRACK_KEY_PREFIX + id).then((json) => {
+      this.lastLoad = this.save.get(TRACK_KEY_PREFIX + id).then((json) => {
+        if (token !== this.loadToken) return; // superseded by a newer cycle
         if (json === null || !this.importJson(json)) this.statusLine = `load failed: ${id}`;
       });
     }

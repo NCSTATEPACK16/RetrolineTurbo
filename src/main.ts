@@ -62,10 +62,10 @@ const cmd = createCommand(); // pre-allocated; refilled each step (hard rule 4)
 const editor = new EditorScreen(atlas, save, (t) => {
   // Config-compat rule: only activate tracks matching the engine config.
   if (t.file.segmentLength !== DEFAULT_TRACK_CONFIG.segmentLength || t.file.roadWidth !== DEFAULT_TRACK_CONFIG.roadWidth) {
-    console.warn('[editor] track config mismatch; not activated:', t.file.trackId);
-    return;
+    return false; // editor surfaces "not activated" in its status line
   }
   track.rebuild(t);
+  return true;
 });
 void editor.loadIndex();
 
@@ -76,15 +76,22 @@ const camera: Camera = {
 void loadBindings(save).then((b) => { input.setBindings(b); });
 
 // Screens see every key first (remap, then editor); leftovers drive the InputManager.
+// While a screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
 window.addEventListener('keydown', (e) => {
+  const screenOpen = remap.open || editor.open;
+  if (screenOpen && (e.metaKey || e.ctrlKey)) return;
   if (e.code === 'Tab' || e.code === 'F2' || input.isBound(e.code)) e.preventDefault();
-  if (remap.handleKey(e.code)) return;
+  if (remap.handleKey(e.code)) {
+    // Spec §6 mutual exclusion: opening remap closes the editor.
+    if (remap.open && editor.open) editor.handleKey('Escape');
+    return;
+  }
   if (editor.handleKey(e.code)) return;
   input.press(e.code);
 });
 // Clipboard edge for the editor (kept here so EditorScreen stays clipboard-free).
 window.addEventListener('keydown', (e) => {
-  if (!editor.open) return;
+  if (!editor.open || remap.open || e.metaKey || e.ctrlKey) return;
   if (e.code === 'KeyE') void navigator.clipboard?.writeText(editor.exportJson());
   else if (e.code === 'KeyI') void navigator.clipboard?.readText?.().then((json) => { editor.importJson(json); });
 });

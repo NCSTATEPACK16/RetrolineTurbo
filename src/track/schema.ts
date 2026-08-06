@@ -51,7 +51,7 @@ export function parseTrackFile(input: string | unknown): ParseResult {
 
   const str = (k: string): string | undefined => {
     const v = t[k];
-    if (typeof v !== 'string' || v.length === 0) { errors.push(`${k}: expected non-empty string`); return undefined; }
+    if (typeof v !== 'string' || v.trim().length === 0) { errors.push(`${k}: expected non-empty string`); return undefined; }
     return v;
   };
   const num = (k: string): number | undefined => {
@@ -110,7 +110,9 @@ export function parseTrackFile(input: string | unknown): ParseResult {
   }
 
   if (errors.length > 0) return { ok: false, errors };
-  const file = t as unknown as TrackFile;
+  const clean = { ...t };
+  delete clean['$schema']; // tolerated on input, never carried into exports/saves
+  const file = clean as unknown as TrackFile;
   const segments = expandSections(file);
   return { ok: true, track: { file, segments, totalSegments: segments.length } };
 }

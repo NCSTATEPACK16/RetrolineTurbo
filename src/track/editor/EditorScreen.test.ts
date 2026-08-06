@@ -9,10 +9,10 @@ import { DEFAULT_TRACK_FILE } from '../tracks.js';
 import { formatTrackFile, type ParsedTrack } from '../schema.js';
 
 const atlas = new SpriteAtlas({} as CanvasImageSource, packAtlas(SPRITE_MANIFEST, 256).frames);
-const make = () => {
+const make = (activate: (t: ParsedTrack) => boolean = () => true) => {
   const save = new MemorySaveBackend();
   const changes: ParsedTrack[] = [];
-  const screen = new EditorScreen(atlas, save, (t) => changes.push(t));
+  const screen = new EditorScreen(atlas, save, (t) => { changes.push(t); return activate(t); });
   return { save, screen, changes };
 };
 const opened = () => {
@@ -69,6 +69,32 @@ describe('section editing fires live rebuilds', () => {
     screen.handleKey('ArrowRight');
     expect(DEFAULT_TRACK_FILE.sections[0]!.length).toBe(60);
   });
+  it('preset cycling from custom visits every preset in order, both directions', () => {
+    const { screen } = opened();
+    // Focus the preset field (length → curve → pitch → preset).
+    screen.handleKey('BracketRight');
+    screen.handleKey('BracketRight');
+    screen.handleKey('BracketRight');
+    const spritesOf = () => screen.working.sections[0]!.sprites;
+    screen.handleKey('ArrowRight'); // custom → none
+    expect(spritesOf()).toBeUndefined();
+    screen.handleKey('ArrowRight'); // none → sparse
+    expect(spritesOf()!.map((s) => s.name)).toEqual(['tree', 'rock']);
+    screen.handleKey('ArrowRight'); // sparse → trees
+    expect(spritesOf()!.map((s) => s.name)).toEqual(['tree', 'tree']);
+    screen.handleKey('ArrowRight'); // trees → mixed
+    expect(spritesOf()!.map((s) => s.name)).toEqual(['tree', 'bush', 'rock']);
+    screen.handleKey('ArrowRight'); // mixed → wraps to none
+    expect(spritesOf()).toBeUndefined();
+    screen.handleKey('ArrowLeft'); // none → wraps back to mixed
+    expect(spritesOf()!.map((s) => s.name)).toEqual(['tree', 'bush', 'rock']);
+  });
+  it('surfaces a non-activating track in the status line', () => {
+    const { screen } = make(() => false);
+    screen.handleKey('F2');
+    screen.handleKey('ArrowRight');
+    expect(screen.status).toMatch(/not activated/);
+  });
 });
 
 describe('generator integration', () => {
@@ -110,6 +136,18 @@ describe('persistence + import/export', () => {
     expect(screen.importJson('{"trackId": 42}')).toBe(false);
     expect(screen.status).toMatch(/trackId|stageName/);
     expect(screen.working.trackId).toBe(before);
+  });
+  it('a stale in-flight saved-track load never overwrites a newer cycle choice', async () => {
+    const { screen } = opened();
+    screen.handleKey('KeyG'); // working = gen-1
+    screen.handleKey('KeyS'); // saved: 'gen-1' → cycle is default, gen, saved gen-1
+    await screen.lastPersist;
+    screen.handleKey('KeyL'); // → generated (sync)
+    screen.handleKey('KeyL'); // → saved 'gen-1' (async load in flight)
+    screen.handleKey('KeyL'); // → default (sync) — must win over the in-flight load
+    await screen.lastLoad;
+    expect(screen.working.trackId).toBe('default');
+    expect(screen.status).toMatch(/loaded default/);
   });
 });
 
