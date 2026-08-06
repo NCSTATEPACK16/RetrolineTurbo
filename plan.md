@@ -326,17 +326,40 @@ the exact detail in the two docs so nothing is lost.
   appears on a per-track leaderboard; a shared track is loadable by another user. RLS
   verified (no cross-user reads/writes).
 
-### Phase 9 — Upgrade economy & Garage
-- **Goal:** the persistent, skill-earned post-race economy.
-- **Deliverables:** `economy/upgrades.ts` mapping tiers to physics params — **Engine/Top
-  Speed→`maxSpeed`**, **Turbo/Accel→accel curve**, **Tyres/Grip→cornering + off-road
-  resistance**, **Brakes→braking**, **Nitro (capacity)**; 3–5 escalating tiers each;
-  **Credits** earned by position + objective bonuses (clean laps, drifts, collectibles);
-  `GarageScreen`; multiple car archetypes (accel vs top-speed vs handling). No loot boxes.
-- **Research anchors:** economy design research §5 (80's Overdrive/Slipstream/Horizon Chase 2);
-  anti-rubber-band note; upgrade→physics-param mapping.
-- **Done-when:** race→earn→upgrade→unlock loop is closed; costs tuned for a ~20-min/day
-  player; economy math (earn/cost curves, save/load) unit-tested; power-players capped.
+### Phase 9 — Modular economy & post-race shop
+- **Goal:** the persistent, skill-earned post-race economy — a **modular, stat-altering**
+  parts system (replaces any linear tier ladder) with a data-driven Garage shop.
+- **Model:** vehicles start at a **median baseline of 50/100** on every core metric; parts
+  add/subtract from those baselines, so high-end parts are *specializations with trade-offs*,
+  not strict upgrades. Metric→physics mapping (see §7): **Top Speed→`maxSpeed`**,
+  **Acceleration→`accel`**, **Handling→`maxSteer`**, **Grip→`centrifugal`** (skid threshold +
+  off-road resistance).
+- **Deliverables:**
+  - `types/inventory.ts` — `Part` interface (`id, name, category, cost, speedMod, accelMod,
+    handlingMod, gripMod`) + `EquippedLoadout` (one part per category).
+  - **80-part JSON catalog** — four categories × 20 items: **Engine** (biases `maxSpeed`, weight
+    penalises handling), **Transmission** (biases `accel`, short ratios cap top speed),
+    **Suspension** (biases `maxSteer`, stiff tunes cost grip off-road), **Wheels/Tires** (biases
+    `centrifugal`/grip, slicks trade a little top speed for cornering).
+  - `economy/Garage.ts` — pure loadout resolver (baseline + equipped mods → effective
+    `Vehicle` params) feeding `physics/Vehicle.ts`; owned/equipped/credits in the save.
+  - **Payout logic** (awarded at finish → Post-Race Summary): **placement** base scaled by
+    position (e.g. 1st 1000c / 2nd 750c / 3rd 500c), flat **fastest-lap bonus** (~500c) if the
+    player holds the session's best single lap, **clean-race multiplier** (~1.1×) for no
+    trackside collisions.
+  - `ui/GarageScreen` — Post-Race **Summary** (ledger breakdown: placement + bonuses = total),
+    a **horizontal carousel** of the four categories, **stat-diff UI** (red/green bars: equipped
+    part vs. hovered/selected part), and per-part state **Locked / Purchasable / Owned / Equipped**.
+  - Multiple car archetypes (accel vs top-speed vs handling) sharing the same baseline+parts model.
+  No loot boxes.
+- **Research anchors:** economy design research §5 (80's Overdrive engine/chassis/tyres taxonomy,
+  Slipstream money→upgrades, Horizon Chase 2 tokens); anti-rubber-band note; metric→physics
+  mapping §7; source spec `docs/superpowers/specs/2026-08-05-phase-9-modular-economy.md`.
+- **Done-when:** race→earn→buy→equip loop is closed and persisted; equipping a part visibly and
+  correctly shifts effective physics params via the baseline+mod resolver; the stat-diff UI
+  reflects real deltas; costs tuned for a ~20-min/day player; economy math (payout curve,
+  baseline+mod resolution, save/load round-trip) unit-tested; specialization trade-offs prevent a
+  single dominant loadout.
 
 ### Phase 10 — Audio & juice
 - **Goal:** procedural engine audio, SFX, music, optional CRT.
@@ -376,8 +399,9 @@ the exact detail in the two docs so nothing is lost.
 - **Physics (vitest):** deterministic ticks → top speed 290 km/h (High); skid triggers on
   overspeed cornering; off-road drag applied; identical result across input paths.
 - **Track loader (vitest):** valid tracks parse; malformed JSON rejected with clear errors.
-- **Economy (vitest):** earn/cost curves; tier caps; save/load round-trips; Supabase RLS
-  (no cross-user access).
+- **Economy (vitest):** payout curve (placement/fastest-lap/clean-race); baseline+mod loadout
+  resolution → effective `Vehicle` params; no single dominant loadout (trade-offs hold);
+  save/load round-trips; Supabase RLS (no cross-user access).
 - **Performance:** frame-time <16.66ms sustained on desktop and mobile web over a 10-min
   run; watch for GC pauses; branch/fork scenes stay in budget.
 
