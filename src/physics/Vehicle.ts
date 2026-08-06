@@ -32,10 +32,10 @@ export function createCommand(): Command {
  * established in Phase 4, so collision/HUD/sprite consumers are unchanged.
  */
 export class Vehicle implements PlayerState {
-  z = 0; // world depth along the track
-  x = 0; // world lateral position (track-centre-relative)
-  speedKmh = 0;
-  gear = 1; // 1 = Low, 2 = High (HUD displays this directly)
+  private posZ = 0; // world depth along the track
+  private posX = 0; // world lateral position (track-centre-relative)
+  private kmh = 0;
+  private gearIdx = 1; // 1 = Low, 2 = High (HUD displays this directly)
 
   private isSkidding = false;
   private skidDir = 0; // sign of the curvature that triggered the skid
@@ -43,9 +43,15 @@ export class Vehicle implements PlayerState {
 
   constructor(private readonly roadWidth: number) {}
 
+  // Read-only state: mutation happens only via step/applyCollision/reset.
+  get z(): number { return this.posZ; }
+  get x(): number { return this.posX; }
+  get speedKmh(): number { return this.kmh; }
+  get gear(): number { return this.gearIdx; }
+
   /** World-units-per-second speed for PlayerState consumers. */
   get speed(): number {
-    return this.speedKmh * WORLD_PER_KMH;
+    return this.kmh * WORLD_PER_KMH;
   }
 
   get skidding(): boolean {
@@ -55,31 +61,31 @@ export class Vehicle implements PlayerState {
   /** Advance one fixed step. `curvature` is the current segment's K_i. */
   step(cmd: Command, curvature: number, dt: number = STEP_S): void {
     // -- transmission -------------------------------------------------------
-    if (cmd.gearUp && this.gear < GEAR_MAX_KMH.length) this.gear++;
-    if (cmd.gearDown && this.gear > 1) this.gear--;
-    const g = this.gear - 1;
+    if (cmd.gearUp && this.gearIdx < GEAR_MAX_KMH.length) this.gearIdx++;
+    if (cmd.gearDown && this.gearIdx > 1) this.gearIdx--;
+    const g = this.gearIdx - 1;
     const gearMax = GEAR_MAX_KMH[g]!;
 
     // -- longitudinal -------------------------------------------------------
     if (cmd.handbrake) {
-      this.speedKmh -= HANDBRAKE_KMH_S * dt;
+      this.kmh -= HANDBRAKE_KMH_S * dt;
     } else if (cmd.brake > 0) {
-      this.speedKmh -= BRAKE_KMH_S * cmd.brake * dt;
-    } else if (cmd.throttle > 0 && this.speedKmh < gearMax) {
+      this.kmh -= BRAKE_KMH_S * cmd.brake * dt;
+    } else if (cmd.throttle > 0 && this.kmh < gearMax) {
       // Tapering accel curve: full torque at rest, zero at the gear cap.
-      this.speedKmh += GEAR_ACCEL_KMH_S[g]! * cmd.throttle * (1 - this.speedKmh / gearMax) * dt;
+      this.kmh += GEAR_ACCEL_KMH_S[g]! * cmd.throttle * (1 - this.kmh / gearMax) * dt;
     } else {
-      this.speedKmh -= COAST_KMH_S * dt; // engine drag (also drains an over-cap downshift)
+      this.kmh -= COAST_KMH_S * dt; // engine drag (also drains an over-cap downshift)
     }
-    if (Math.abs(this.x) > this.roadWidth && this.speedKmh > OFFROAD_MAX_KMH) {
-      this.speedKmh *= MU_OFFROAD ** dt;
+    if (Math.abs(this.posX) > this.roadWidth && this.kmh > OFFROAD_MAX_KMH) {
+      this.kmh *= MU_OFFROAD ** dt;
     }
-    if (this.isSkidding) this.speedKmh *= SKID_SPEED_DECAY ** dt;
-    if (this.speedKmh < 0) this.speedKmh = 0;
+    if (this.isSkidding) this.kmh *= SKID_SPEED_DECAY ** dt;
+    if (this.kmh < 0) this.kmh = 0;
 
     // -- skid trigger / recovery -------------------------------------------
     if (!this.isSkidding) {
-      if (Math.abs(curvature) > SKID_CURVE_THRESHOLD && this.speedKmh > SKID_SPEED_KMH) {
+      if (Math.abs(curvature) > SKID_CURVE_THRESHOLD && this.kmh > SKID_SPEED_KMH) {
         this.isSkidding = true;
         this.skidDir = Math.sign(curvature);
         this.recoverySteps = 0;
@@ -99,23 +105,23 @@ export class Vehicle implements PlayerState {
 
     // -- lateral ------------------------------------------------------------
     const grip = this.isSkidding ? SKID_GRIP : 1;
-    const authority = Math.min(1, this.speedKmh / 60); // no curb-steering at rest
-    this.x += cmd.steer * STEER_MAX_WPS * grip * authority * dt;
-    const speedRatio = this.speedKmh / GEAR_MAX_KMH[GEAR_MAX_KMH.length - 1]!;
-    this.x -= curvature * CENTRIFUGAL * speedRatio * speedRatio * dt;
+    const authority = Math.min(1, this.kmh / 60); // no curb-steering at rest
+    this.posX += cmd.steer * STEER_MAX_WPS * grip * authority * dt;
+    const speedRatio = this.kmh / GEAR_MAX_KMH[GEAR_MAX_KMH.length - 1]!;
+    this.posX -= curvature * CENTRIFUGAL * speedRatio * speedRatio * dt;
 
     // -- longitudinal advance ----------------------------------------------
-    this.z += this.speed * dt;
+    this.posZ += this.speed * dt;
   }
 
   /** Apply a Collision.responseDelta (speed multiplier + lateral shove). */
   applyCollision(speedFactor: number, xPush: number): void {
-    this.speedKmh *= speedFactor;
-    this.x += xPush;
+    this.kmh *= speedFactor;
+    this.posX += xPush;
   }
 
   reset(): void {
-    this.z = 0; this.x = 0; this.speedKmh = 0; this.gear = 1;
+    this.posZ = 0; this.posX = 0; this.kmh = 0; this.gearIdx = 1;
     this.isSkidding = false; this.skidDir = 0; this.recoverySteps = 0;
   }
 }

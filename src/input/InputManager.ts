@@ -23,12 +23,18 @@ export const DEFAULT_BINDINGS: Bindings = {
   nitro: ['KeyF'],
 };
 
-/** Pure rebind: `code` becomes primary for `action` and is removed elsewhere. */
+/** Pure rebind: `code` becomes primary for `action` and is removed elsewhere.
+ * Stealing an action's last code swaps it the rebound action's old primary, so
+ * every action always keeps ≥1 binding (parseBindings rejects empty lists —
+ * an empty action would silently reset the whole table on the next load). */
 export function rebind(b: Bindings, action: Action, code: string): Bindings {
+  const oldPrimary = b[action][0];
   const out = {} as Bindings;
   for (const a of ACTIONS) {
     const kept = b[a].filter((c) => c !== code);
-    out[a] = a === action ? [code, ...kept] : kept;
+    if (a === action) out[a] = [code, ...kept];
+    else if (kept.length === 0 && oldPrimary !== undefined && oldPrimary !== code) out[a] = [oldPrimary];
+    else out[a] = kept;
   }
   return out;
 }
@@ -93,7 +99,18 @@ export class InputManager {
       this.down.add(code);
       if (this.bindings.gearUp.includes(code)) this.gearUpArmed = true;
       if (this.bindings.gearDown.includes(code)) this.gearDownArmed = true;
+      // Last-device-wins for steering: a steer key cancels any lingering
+      // mouse-position bias (the cursor otherwise injects a constant offset).
+      if (this.bindings.steerLeft.includes(code) || this.bindings.steerRight.includes(code)) {
+        this.mouseSteer = null;
+      }
     }
+  }
+
+  /** Whether `code` is bound to any action (edge uses this to preventDefault). */
+  isBound(code: string): boolean {
+    for (const a of ACTIONS) if (this.bindings[a].includes(code)) return true;
+    return false;
   }
 
   release(code: string): void {
@@ -130,13 +147,7 @@ export class InputManager {
     this.gearDownArmed = false;
   }
 
-  /** DOM edge (untested): key events by code; mouse-X → curve → setMouseSteer. */
-  attach(target: Pick<Window, 'addEventListener'>): void {
-    target.addEventListener('keydown', (e) => { this.press((e as KeyboardEvent).code); });
-    target.addEventListener('keyup', (e) => { this.release((e as KeyboardEvent).code); });
-    target.addEventListener('mousemove', (e) => {
-      const nx = ((e as MouseEvent).clientX / window.innerWidth) * 2 - 1;
-      this.setMouseSteer(mouseSteerCurve(nx));
-    });
-  }
+  // NOTE: no `attach` convenience here on purpose — listener wiring lives in
+  // main.ts because the RemapScreen must see every keydown before driving input
+  // does; a self-attaching InputManager would bypass that gate.
 }

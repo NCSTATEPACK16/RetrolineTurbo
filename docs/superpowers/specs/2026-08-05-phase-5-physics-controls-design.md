@@ -27,8 +27,8 @@ Phase 4 established:
 ```ts
 interface PlayerState {
   readonly z: number;      // world depth along the track
-  readonly x: number;      // lateral position, road-normalized (−1..+1)
-  readonly speed: number;  // km/h
+  readonly x: number;      // world lateral position (track-centre-relative)
+  readonly speed: number;  // world units / second (HUD converts to km/h)
   readonly gear: number;   // current gear index
 }
 ```

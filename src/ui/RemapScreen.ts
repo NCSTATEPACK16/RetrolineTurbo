@@ -53,7 +53,9 @@ export class RemapScreen {
       return false;
     }
     if (this.isCapturing) {
-      if (code !== 'Escape') {
+      // Tab is reserved (main.ts routes it here before driving input, so a
+      // Tab binding could never fire); Escape cancels. Both end the capture.
+      if (code !== 'Escape' && code !== 'Tab') {
         const next = rebind(this.input.bindings, ACTIONS[this.selected]!, code);
         this.input.setBindings(next);
         this.lastPersist = this.save.set(BINDINGS_KEY, serializeBindings(next));

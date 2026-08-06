@@ -103,4 +103,30 @@ describe('rebinding', () => {
     im.press('KeyJ');
     expect(read(im).throttle).toBe(1);
   });
+
+  it('stealing a single-binding action swaps instead of leaving it empty', () => {
+    // handbrake only has Space; taking it must not orphan handbrake.
+    const b = rebind(DEFAULT_BINDINGS, 'throttle', 'Space');
+    expect(b.throttle[0]).toBe('Space');
+    expect(b.handbrake.length).toBeGreaterThan(0);
+    expect(b.handbrake[0]).toBe('KeyW'); // inherits throttle's old primary
+  });
+
+  it('every rebind output survives a serialize/parse round-trip (no silent reset)', () => {
+    let b = DEFAULT_BINDINGS;
+    // Worst case: chain-steal single-binding actions.
+    b = rebind(b, 'throttle', 'Space'); // steals handbrake's only key
+    b = rebind(b, 'brake', 'KeyF'); // steals nitro's only key
+    expect(parseBindings(serializeBindings(b))).toEqual(b);
+  });
+
+  it('a steer keypress cancels lingering mouse-steer bias (last device wins)', () => {
+    const im = new InputManager();
+    im.setMouseSteer(0.6); // cursor parked off-centre
+    expect(read(im).steer).toBe(0.6);
+    im.press('KeyA');
+    expect(read(im).steer).toBe(-1); // pure keyboard, no +0.6 bias
+    im.release('KeyA');
+    expect(read(im).steer).toBe(0); // bias stays cleared until the mouse moves again
+  });
 });

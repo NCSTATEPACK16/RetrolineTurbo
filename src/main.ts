@@ -66,7 +66,7 @@ void loadBindings(save).then((b) => { input.setBindings(b); });
 
 // RemapScreen sees every key first; unconsumed keys drive the InputManager.
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Tab') e.preventDefault(); // keep focus in the game
+  if (e.code === 'Tab' || input.isBound(e.code)) e.preventDefault(); // no scroll/focus-steal
   if (!remap.handleKey(e.code)) input.press(e.code);
 });
 window.addEventListener('keyup', (e) => { input.release(e.code); });
@@ -74,14 +74,14 @@ window.addEventListener('mousemove', (e) => {
   input.setMouseSteer(mouseSteerCurve((e.clientX / window.innerWidth) * 2 - 1));
 });
 
+const padSnapshot = { steer: 0, throttle: 0, brake: 0 }; // reused; no per-step alloc
 function pollGamepad(): void {
   const pad = navigator.getGamepads?.()[0];
   if (!pad) { input.setGamepad(null); return; }
-  input.setGamepad({
-    steer: pad.axes[0] ?? 0,
-    throttle: pad.buttons[7]?.value ?? 0, // RT
-    brake: pad.buttons[6]?.value ?? 0, // LT
-  });
+  padSnapshot.steer = pad.axes[0] ?? 0;
+  padSnapshot.throttle = pad.buttons[7]?.value ?? 0; // RT
+  padSnapshot.brake = pad.buttons[6]?.value ?? 0; // LT
+  input.setGamepad(padSnapshot);
 }
 
 const cfg = {
