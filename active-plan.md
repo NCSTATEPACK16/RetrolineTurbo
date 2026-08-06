@@ -27,7 +27,7 @@ new `SaveBackend` seam.
 - [x] Harness deleted — `main.ts` wires `InputManager → Vehicle (fixed step) → Collision/HUD/Remap`;
       `Collision.ts`/`HUD.ts` unchanged (seam held)
 - [x] `npm test` green (112 tests, up from 68) · `npm run build` clean (`tsc --noEmit` strict + Vite)
-- [ ] **HUMAN VISUAL GATE (pending)** — `npm run dev` @ http://localhost:5173 and verify:
+- [x] **HUMAN VISUAL GATE PASSED** (manual, `npm run dev` @ http://localhost:5173) — verified:
       1. Drive with WASD; confirm arrows behave identically; move the mouse off-centre and
          confirm analog steering (centre deadzone ≈ no input).
       2. From rest, hold W: pulls to ~120 km/h in gear 1; press E (High): pulls to 290; Q returns
@@ -86,8 +86,8 @@ new `SaveBackend` seam.
 Vitest confirms top-speed limits and consistent skid triggers + recovery; all three input paths
 steer identically (asserted at the command level); rebinding persists; harness removed; collision
 response driven by real physics with no change to `Collision.ts`/`HUD.ts`. `npm test` +
-`npm run build` green; no third-party imports in `physics/`, `input/`, or `engine/`. **Human
-visual gate pending** (feel + 60fps under physics load).
+`npm run build` green; no third-party imports in `physics/`, `input/`, or `engine/`. Human
+visual gate passed (feel + 60fps under physics load). ✓
 
 ## Operational carryover
 - [x] `npm test` green (112) · `npm run build` clean
