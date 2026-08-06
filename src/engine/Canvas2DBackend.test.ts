@@ -17,8 +17,13 @@ function fakeCanvas(): { canvas: HTMLCanvasElement; ops: string[] } {
     lineTo: (x: number, y: number) => ops.push(`lineTo ${x} ${y}`),
     closePath: () => ops.push('closePath'),
     fill: () => ops.push('fill'),
+    save: () => ops.push('save'),
+    restore: () => ops.push('restore'),
+    rect: (x: number, y: number, w: number, h: number) => ops.push(`rect ${x} ${y} ${w} ${h}`),
+    clip: () => ops.push('clip'),
     clearRect: () => {},
-    drawImage: () => {},
+    drawImage: (_img: unknown, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number) =>
+      ops.push(`drawImage ${sx} ${sy} ${sw} ${sh} ${dx} ${dy} ${dw} ${dh}`),
   };
   const canvas = { getContext: () => ctx } as unknown as HTMLCanvasElement;
   // The suite runs in the `node` environment (no DOM). The constructor calls
@@ -48,5 +53,31 @@ describe('Canvas2DBackend raster methods', () => {
     expect(ops).toContain('lineTo 240 150'); // bottom-right = x2 + w2
     expect(ops).toContain('lineTo 160 150'); // bottom-left  = x2 - w2
     expect(ops).toContain('fill');
+  });
+
+  it('drawSprite blits the source rect into the dest rect', () => {
+    const { canvas, ops } = fakeCanvas();
+    const b = new Canvas2DBackend(canvas);
+    const img = {} as CanvasImageSource;
+    // clipBottom below the sprite bottom ⇒ no clip region needed.
+    b.drawSprite(img, 1, 2, 8, 16, 100, 50, 16, 32, 270);
+    expect(ops).toContain('drawImage 1 2 8 16 100 50 16 32');
+    expect(ops).not.toContain('clip');
+  });
+
+  it('drawSprite honours clipBottom via save/clip/restore when the sprite crosses the crest', () => {
+    const { canvas, ops } = fakeCanvas();
+    const b = new Canvas2DBackend(canvas);
+    const img = {} as CanvasImageSource;
+    // dy + dh = 90; clipBottom 70 < 90 ⇒ must clip.
+    b.drawSprite(img, 0, 0, 8, 16, 100, 50, 16, 40, 70);
+    expect(ops).toContain('save');
+    expect(ops).toContain('rect 0 0 480 70');
+    expect(ops).toContain('clip');
+    expect(ops).toContain('drawImage 0 0 8 16 100 50 16 40');
+    expect(ops).toContain('restore');
+    // clip is set up before the blit, restore after.
+    expect(ops.indexOf('clip')).toBeLessThan(ops.indexOf('drawImage 0 0 8 16 100 50 16 40'));
+    expect(ops.indexOf('drawImage 0 0 8 16 100 50 16 40')).toBeLessThan(ops.indexOf('restore'));
   });
 });

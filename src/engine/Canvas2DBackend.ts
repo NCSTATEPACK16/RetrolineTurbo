@@ -63,14 +63,20 @@ export class Canvas2DBackend implements RenderBackend {
   }
 
   drawSprite(
-    _image: CanvasImageSource,
-    _dx: number,
-    _dy: number,
-    _dw: number,
-    _dh: number,
-    _clipBottom: number,
+    image: CanvasImageSource,
+    sx: number, sy: number, sw: number, sh: number,
+    dx: number, dy: number, dw: number, dh: number,
+    clipBottom: number,
   ): void {
-    // Phase 4: depth-scaled sprites with hill-crest bottom clipping.
+    const needsClip = clipBottom < dy + dh;
+    if (needsClip) {
+      this.ctx.save();
+      this.ctx.beginPath();
+      this.ctx.rect(0, 0, LOGICAL_WIDTH, clipBottom);
+      this.ctx.clip();
+    }
+    this.ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+    if (needsClip) this.ctx.restore();
   }
 
   // --- Present / resize -------------------------------------------------------
