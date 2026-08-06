@@ -4,6 +4,8 @@ import { ensureAnonSession } from './net/supabase.js';
 import { Renderer } from './engine/Renderer.js';
 import { TrackManager } from './engine/TrackManager.js';
 import { Background } from './engine/Background.js';
+import { generateAtlas } from './assets/generateSprites.js';
+import { SpriteAtlas } from './engine/SpriteAtlas.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
 } from './constants.js';
@@ -24,9 +26,11 @@ fit();
 window.addEventListener('resize', fit);
 
 // --- Temporary Phase 2/3 camera harness (replaced by real physics in Phase 5) ---
+const { image, frames } = generateAtlas();
+const atlas = new SpriteAtlas(image, frames);
 const track = new TrackManager(DEFAULT_TRACK_CONFIG);
 const background = new Background();
-const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
 
 const camera: Camera = {
   x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y,
@@ -54,7 +58,7 @@ const loop = createLoop({
   render: (_alpha: number): void => {
     // The Renderer owns the whole frame (§7 order): clear → background → road → present.
     const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
-    renderer.render(camera, track, backend, background, track.segment(base).curve);
+    renderer.render(camera, track, backend, background, undefined, track.segment(base).curve);
   },
 });
 

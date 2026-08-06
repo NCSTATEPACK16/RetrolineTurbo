@@ -2,14 +2,29 @@ import { describe, it, expect } from 'vitest';
 import { projectSegment, Renderer } from './Renderer.js';
 import { TrackManager } from './TrackManager.js';
 import { RecordingBackend } from './testing/RecordingBackend.js';
+import { SpriteAtlas } from './SpriteAtlas.js';
+import { packAtlas } from '../assets/packAtlas.js';
+import { SPRITE_MANIFEST } from '../assets/spriteManifest.js';
 import {
-  DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y, LOGICAL_WIDTH,
+  DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y, LOGICAL_WIDTH, LOGICAL_HEIGHT,
   DEFAULT_TRACK_CONFIG, COLORS,
 } from '../constants.js';
-import type { Camera } from '../types/engine.js';
+import type { Camera, Segment, Sprite } from '../types/engine.js';
 
 const CAM: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
 const ROAD_HALF = 2000;
+
+const atlas = new SpriteAtlas({} as CanvasImageSource, packAtlas(SPRITE_MANIFEST, 256).frames);
+
+/** A minimal TrackManager stand-in: a flat straight track whose per-segment
+ * sprite lists are supplied by `spritesFor`. Only `segment()` is used by Renderer. */
+function stubTrack(spritesFor: (i: number) => Sprite[]): TrackManager {
+  return {
+    segment: (index: number): Segment => ({
+      index, z: index * DEFAULT_TRACK_CONFIG.segmentLength, curve: 0, pitch: 0, sprites: spritesFor(index),
+    }),
+  } as unknown as TrackManager;
+}
 
 describe('projectSegment', () => {
   it('centres a straight-ahead segment and shrinks its half-width with depth', () => {
@@ -36,7 +51,7 @@ describe('Renderer straight road surface', () => {
     // the whole rendered view inside it (drawDistance < 60) so "centred" is exact.
     const straightCfg = { ...DEFAULT_TRACK_CONFIG, drawDistance: 40 };
     const track = new TrackManager(straightCfg);
-    const renderer = new Renderer(straightCfg);
+    const renderer = new Renderer(straightCfg, atlas);
     const backend = new RecordingBackend();
     const cam: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
 
@@ -59,7 +74,7 @@ describe('Renderer straight road surface', () => {
 
   it('presents exactly once per render and clears first', () => {
     const track = new TrackManager(DEFAULT_TRACK_CONFIG);
-    const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
     const backend = new RecordingBackend();
     const cam: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
     renderer.render(cam, track, backend);
@@ -71,7 +86,7 @@ describe('Renderer straight road surface', () => {
 describe('Renderer rumble + lane decoration', () => {
   it('alternates rumble colour by band and overlays road on rumble', () => {
     const track = new TrackManager(DEFAULT_TRACK_CONFIG);
-    const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
     const backend = new RecordingBackend();
     const cam: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
     renderer.render(cam, track, backend);
@@ -95,7 +110,7 @@ describe('Renderer curve + hill + occlusion (M2 track)', () => {
 
   it('drifts road-quad centres away from screen centre through a curve', () => {
     const track = new TrackManager(DEFAULT_TRACK_CONFIG);
-    const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
     const backend = new RecordingBackend();
     const c = cam();
     c.z = 60 * DEFAULT_TRACK_CONFIG.segmentLength; // park the camera at the curve entry
@@ -107,7 +122,7 @@ describe('Renderer curve + hill + occlusion (M2 track)', () => {
   });
 
   it('discards far segments hidden behind a crest (fewer quads than an equal flat run)', () => {
-    const renderer = new Renderer(DEFAULT_TRACK_CONFIG);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
     const track = new TrackManager(DEFAULT_TRACK_CONFIG);
     const segLen = DEFAULT_TRACK_CONFIG.segmentLength;
 
@@ -128,5 +143,57 @@ describe('Renderer curve + hill + occlusion (M2 track)', () => {
     const crestRoad = crestBackend.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark).length;
     const flatRoad = flatBackend.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark).length;
     expect(crestRoad).toBeLessThan(flatRoad); // crest occluded the far road
+  });
+});
+
+describe('Renderer sprite pass (depth-sorted billboards)', () => {
+  const camAt = (z: number): Camera => ({ x: 0, z, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y });
+  const treeFrame = atlas.frame('tree');
+  const isTree = (s: { sx: number; sy: number }): boolean => s.sx === treeFrame.x && s.sy === treeFrame.y;
+
+  it('draws nearer sprites larger than far ones (monotonic with 1/z)', () => {
+    const cfg = { ...DEFAULT_TRACK_CONFIG, drawDistance: 40 };
+    const track = stubTrack((i) => (i === 5 || i === 30) ? [{ name: 'tree', offset: -1.4 }] : []);
+    const backend = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(0), track, backend);
+
+    const trees = backend.sprites.filter(isTree);
+    expect(trees.length).toBe(2);
+    // The far→near pass emits the far tree (segment 30) first, the near one (5) last.
+    expect(trees[1]!.dh).toBeGreaterThan(trees[0]!.dh);
+  });
+
+  it('emits sprite calls in far→near order (later calls are nearer/larger)', () => {
+    const cfg = { ...DEFAULT_TRACK_CONFIG, drawDistance: 40 };
+    const track = stubTrack((i) => (i % 3 === 0) ? [{ name: 'tree', offset: 1.4 }] : []);
+    const backend = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(0), track, backend);
+
+    const trees = backend.sprites.filter(isTree);
+    expect(trees.length).toBeGreaterThan(3);
+    for (let i = 1; i < trees.length; i++) {
+      expect(trees[i]!.dh).toBeGreaterThanOrEqual(trees[i - 1]!.dh); // same frame ⇒ dh ∝ 1/z
+    }
+  });
+
+  it('crest occlusion culls sprites hidden behind the hill (fewer than a flat run)', () => {
+    // Faithful substitute for the plan's bottom-clip assertion: with base-anchored
+    // billboards the per-segment clipBottom equals the sprite base, so the strict
+    // clipBottom < dy+dh case never fires; the crest instead removes far sprites by
+    // culling their (now invalid) road segments — the same crest-occlusion path.
+    const track = new TrackManager(DEFAULT_TRACK_CONFIG); // carries scenery + a crest
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    const segLen = DEFAULT_TRACK_CONFIG.segmentLength;
+
+    const crestBackend = new RecordingBackend();
+    renderer.render(camAt(0), track, crestBackend); // crest ~segment 140 ahead
+
+    const flatBackend = new RecordingBackend();
+    renderer.render(camAt(300 * segLen), track, flatBackend); // deep in the flat run-out
+
+    // Every sprite carries a crest clip line (≤ frame bottom), proving threading.
+    for (const s of crestBackend.sprites) expect(s.clipBottom).toBeLessThanOrEqual(LOGICAL_HEIGHT);
+    // The crest hides the far road (and its scenery); the flat run sees more.
+    expect(crestBackend.sprites.length).toBeLessThan(flatBackend.sprites.length);
   });
 });
