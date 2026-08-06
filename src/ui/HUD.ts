@@ -21,10 +21,16 @@ export class HUD {
   private static readonly SCALE = 2;
   constructor(private readonly atlas: SpriteAtlas) {}
 
-  render(player: PlayerState, elapsedMs: number, track: TrackManager, camera: Camera, backend: RenderBackend): void {
+  render(
+    player: PlayerState, elapsedMs: number, track: TrackManager, camera: Camera,
+    backend: RenderBackend, remainingMs?: number,
+  ): void {
     this.drawString(backend, `${speedToKmh(player.speed)}`, 6, 6);          // speedo
     this.drawString(backend, `${player.gear}`, 6, 18);                       // gear
     this.drawString(backend, formatTime(elapsedMs), LOGICAL_WIDTH - 70, 6);  // timer
+    if (remainingMs !== undefined) {                                          // checkpoint countdown
+      this.drawString(backend, `time ${Math.ceil(remainingMs / 1000)}`, LOGICAL_WIDTH / 2 - 30, 6);
+    }
     this.drawMiniMap(track, camera, backend);
   }
 

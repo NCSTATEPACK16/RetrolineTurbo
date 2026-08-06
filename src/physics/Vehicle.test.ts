@@ -170,6 +170,25 @@ describe('Vehicle centrifugal + collision response + determinism', () => {
     expect(a.skidding).toBe(b.skidding);
   });
 
+  it('translate shifts the world frame without disturbing determinism', () => {
+    // Keep both cars on the road throughout: off-road drag reads |x|, so a
+    // shift that crosses the shoulder legitimately changes the trajectory.
+    const a = new Vehicle(ROAD);
+    const b = new Vehicle(ROAD);
+    run(a, 300, (c) => { c.throttle = 1; c.steer = 0.1; });
+    run(b, 300, (c) => { c.throttle = 1; c.steer = 0.1; });
+    b.translate(-5000, -100); // scene hand-off shift on b only
+    const az0 = a.z, ax0 = a.x;
+    const bz0 = b.z, bx0 = b.x;
+    run(a, 300, (c) => { c.throttle = 1; c.steer = -0.2; });
+    run(b, 300, (c) => { c.throttle = 1; c.steer = -0.2; });
+    expect(Math.abs(a.x)).toBeLessThan(ROAD); // premise: both stayed on-road
+    expect(Math.abs(b.x)).toBeLessThan(ROAD);
+    expect(b.z - bz0).toBeCloseTo(a.z - az0, 9); // identical deltas after the shift
+    expect(b.x - bx0).toBeCloseTo(a.x - ax0, 9);
+    expect(b.speedKmh).toBe(a.speedKmh);
+  });
+
   it('reset returns to the initial state', () => {
     const v = new Vehicle(ROAD);
     run(v, 120, (c) => { c.throttle = 1; c.steer = 0.5; });

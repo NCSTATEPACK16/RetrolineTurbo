@@ -114,6 +114,14 @@ export class Vehicle implements PlayerState {
     this.posZ += this.speed * dt;
   }
 
+  /** World-shift at a scene hand-off (route fork): the new track's origin
+   * replaces the old node. Pure translation — speed/gear/skid are untouched,
+   * so determinism is preserved (translation commutes with stepping). */
+  translate(dz: number, dx: number): void {
+    this.posZ += dz;
+    this.posX += dx;
+  }
+
   /** Apply a Collision.responseDelta (speed multiplier + lateral shove). */
   applyCollision(speedFactor: number, xPush: number): void {
     this.kmh *= speedFactor;

@@ -30,6 +30,14 @@ describe('HUD render', () => {
     // speed "300" (3) + timer "1:23.4" (5 digits + 1 colon) + gear "2" (1) = 10 sprite calls min
     expect(b.sprites.length).toBeGreaterThanOrEqual(9);
   });
+  it('draws the checkpoint countdown when remainingMs is supplied', () => {
+    const track = new TrackManager(DEFAULT_TRACK_CONFIG);
+    const without = new RecordingBackend();
+    new HUD(atlas).render(player, 0, track, camera, without);
+    const withCountdown = new RecordingBackend();
+    new HUD(atlas).render(player, 0, track, camera, withCountdown, 42_000);
+    expect(withCountdown.sprites.length).toBeGreaterThan(without.sprites.length); // "time 42" glyphs
+  });
   it('draws a mini-map strip via quads', () => {
     const b = new RecordingBackend();
     const track = new TrackManager(DEFAULT_TRACK_CONFIG);
