@@ -3,6 +3,7 @@ import type { Camera, PlayerState } from '../types/engine.js';
 import type { RenderBackend } from '../engine/RenderBackend.js';
 import type { SpriteAtlas } from '../engine/SpriteAtlas.js';
 import type { TrackManager } from '../engine/TrackManager.js';
+import { drawText } from './text.js';
 
 export function speedToKmh(speed: number): number { return Math.round(speed * KMH_PER_WORLD); }
 
@@ -28,14 +29,7 @@ export class HUD {
   }
 
   private drawString(backend: RenderBackend, text: string, x: number, y: number): void {
-    const S = HUD.SCALE;
-    let cx = x;
-    for (const ch of text) {
-      const name = ch === ':' ? 'glyph_colon' : ch === '.' ? 'glyph_colon' : `digit_${ch}`;
-      const f = this.atlas.frame(name);
-      backend.drawSprite(this.atlas.image, f.x, f.y, f.w, f.h, cx, y, f.w * S, f.h * S, 9999);
-      cx += (f.w + 1) * S;
-    }
+    drawText(backend, this.atlas, text, x, y, HUD.SCALE);
   }
 
   private drawMiniMap(track: TrackManager, camera: Camera, backend: RenderBackend): void {

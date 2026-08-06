@@ -33,4 +33,9 @@ describe('packAtlas', () => {
                      'digit_0', 'digit_9', 'glyph_colon'])
       expect(names).toContain(n);
   });
+
+  it('includes the a–z letter glyphs for menu text', () => {
+    const names = SPRITE_MANIFEST.map((e) => e.name);
+    for (const ch of 'abcdefghijklmnopqrstuvwxyz') expect(names).toContain(`glyph_${ch}`);
+  });
 });

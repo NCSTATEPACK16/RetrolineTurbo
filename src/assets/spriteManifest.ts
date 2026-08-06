@@ -26,6 +26,33 @@ function digitEntries(): SpriteEntry[] {
   });
 }
 
+// 3×5 uppercase letter glyphs, same row-bitmask scheme as DIGIT_ROWS.
+// Provisional face (M/N/W are compromised at 3px); retuned at the gate.
+const LETTER_ROWS: Record<string, number[]> = {
+  a: [0b010, 0b101, 0b111, 0b101, 0b101], b: [0b110, 0b101, 0b110, 0b101, 0b110],
+  c: [0b011, 0b100, 0b100, 0b100, 0b011], d: [0b110, 0b101, 0b101, 0b101, 0b110],
+  e: [0b111, 0b100, 0b110, 0b100, 0b111], f: [0b111, 0b100, 0b110, 0b100, 0b100],
+  g: [0b011, 0b100, 0b101, 0b101, 0b011], h: [0b101, 0b101, 0b111, 0b101, 0b101],
+  i: [0b111, 0b010, 0b010, 0b010, 0b111], j: [0b001, 0b001, 0b001, 0b101, 0b010],
+  k: [0b101, 0b110, 0b100, 0b110, 0b101], l: [0b100, 0b100, 0b100, 0b100, 0b111],
+  m: [0b101, 0b111, 0b111, 0b101, 0b101], n: [0b110, 0b101, 0b101, 0b101, 0b101],
+  o: [0b111, 0b101, 0b101, 0b101, 0b111], p: [0b110, 0b101, 0b110, 0b100, 0b100],
+  q: [0b111, 0b101, 0b101, 0b111, 0b001], r: [0b110, 0b101, 0b110, 0b101, 0b101],
+  s: [0b011, 0b100, 0b010, 0b001, 0b110], t: [0b111, 0b010, 0b010, 0b010, 0b010],
+  u: [0b101, 0b101, 0b101, 0b101, 0b111], v: [0b101, 0b101, 0b101, 0b101, 0b010],
+  w: [0b101, 0b101, 0b111, 0b111, 0b101], x: [0b101, 0b101, 0b010, 0b101, 0b101],
+  y: [0b101, 0b101, 0b010, 0b010, 0b010], z: [0b111, 0b001, 0b010, 0b100, 0b111],
+};
+function letterEntries(): SpriteEntry[] {
+  return Object.entries(LETTER_ROWS).map(([ch, rows]) => {
+    const ops: DrawOp[] = [];
+    rows.forEach((mask, ry) => {
+      for (let c = 0; c < 3; c++) if (mask & (0b100 >> c)) ops.push({ rx: c, ry, rw: 1, rh: 1, color: '#e8e8f0' });
+    });
+    return { name: `glyph_${ch}`, w: 3, h: 5, anchorX: 1, anchorY: 2, ops };
+  });
+}
+
 // Compact pixel-art. Palette is provisional; retuned at the visual gate.
 export const SPRITE_MANIFEST: SpriteEntry[] = [
   billboard('tree', 16, 40, [
@@ -68,8 +95,9 @@ export const SPRITE_MANIFEST: SpriteEntry[] = [
     { rx: 1, ry: 15, rw: 6, rh: 5, color: '#202024' },
     { rx: 27, ry: 15, rw: 6, rh: 5, color: '#202024' },
   ]),
-  // HUD bitmap font: digits 0–9 as 3×5 pixel glyphs, plus a colon.
+  // HUD bitmap font: digits 0–9 + a–z as 3×5 pixel glyphs, plus a colon.
   ...digitEntries(),
+  ...letterEntries(),
   { name: 'glyph_colon', w: 3, h: 5, anchorX: 1, anchorY: 2,
     ops: [{ rx: 1, ry: 1, rw: 1, rh: 1, color: '#e8e8f0' }, { rx: 1, ry: 3, rw: 1, rh: 1, color: '#e8e8f0' }] },
 ];
