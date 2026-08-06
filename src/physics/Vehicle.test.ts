@@ -120,6 +120,25 @@ describe('Vehicle skid + recovery (PRD: grip −60%)', () => {
 });
 
 describe('Vehicle off-road drag (PRD: μ = 0.85)', () => {
+  it('follows the branch road: no bleed when roadCenterX tracks the diverged road', () => {
+    const mk = (): Vehicle => {
+      const v = new Vehicle(ROAD);
+      run(v, 60 * 10, (c) => { c.throttle = 1; });
+      v.translate(0, 5000); // parked on a fully diverged branch road centre
+      return v;
+    };
+    const onBranch = mk();
+    const centreRef = mk();
+    const before = onBranch.speedKmh;
+    const cmd = createCommand();
+    for (let i = 0; i < 60; i++) {
+      cmd.throttle = 0; cmd.brake = 0; cmd.steer = 0;
+      onBranch.step(cmd, 0, STEP_S, 5000); // branch-aware: on the road
+      centreRef.step(cmd, 0, STEP_S, 0); // centre-relative: reads as off-road
+    }
+    expect(onBranch.speedKmh / before).toBeGreaterThan(centreRef.speedKmh / before);
+  });
+
   it('bleeds speed off-road faster than the same coast on-road', () => {
     const on = new Vehicle(ROAD);
     run(on, 60 * 10, (c) => { c.throttle = 1; });

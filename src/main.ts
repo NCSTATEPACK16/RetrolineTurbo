@@ -14,8 +14,8 @@ import { InputManager, mouseSteerCurve } from './input/InputManager.js';
 import { LocalStorageSaveBackend } from './economy/save.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
-import { RouteState, sceneTrack, resolveFork, STAGES } from './track/route.js';
-import { chosenOffsetAtNode } from './engine/BranchRenderer.js';
+import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
+import { chosenOffsetAtNode, branchSpread, fillRoadOffsets } from './engine/BranchRenderer.js';
 import { RouteMap } from './ui/RouteMap.js';
 import { drawText } from './ui/text.js';
 import { parseTrackFile } from './track/schema.js';
@@ -103,13 +103,18 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (editor.handleKey(e.code)) return;
-  if (e.code === 'KeyM') { routeMap.flashMs = routeMap.flashMs > 0 ? 0 : 60_000; return; }
+  if (e.code === 'KeyM') {
+    // Toggled on: pinned forever on the ending screen, timed elsewhere.
+    routeMap.flashMs = routeMap.flashMs > 0 ? 0 : (route.finished ? Number.MAX_SAFE_INTEGER : 60_000);
+    return;
+  }
   if (e.code === 'KeyR' && (route.expired || route.finished)) {
     route = new RouteState(1);
     vehicle.reset();
     elapsedMs = 0;
     routeMap.flashMs = 0;
     bootScene();
+    traffic.rescope(0, track.length * DEFAULT_TRACK_CONFIG.segmentLength);
     return;
   }
   input.press(e.code);
@@ -141,6 +146,7 @@ const cfg = {
   carHalfWidthPx: 900,
 };
 let elapsedMs = 0;
+const roadCenters = [0, 0, 0]; // pre-allocated branch road centres (hard rule 4)
 
 createLoop({
   update: (dt: number): void => {
@@ -152,8 +158,22 @@ createLoop({
       cmd.throttle = 0; cmd.steer = 0; cmd.brake = 1; // roll to a stop on the end screens
     }
 
-    const seg = track.segment(Math.floor(vehicle.z / DEFAULT_TRACK_CONFIG.segmentLength));
-    vehicle.step(cmd, seg.curve, dt);
+    // Branch-aware road centre: during a split the drivable roads diverge from
+    // the track centre-line; feed the nearest road's centre to the off-road test.
+    const segIdx = Math.floor(vehicle.z / DEFAULT_TRACK_CONFIG.segmentLength);
+    const seg = track.segment(segIdx);
+    let roadCenterX = 0;
+    const liveBranch = track.activeBranch;
+    if (liveBranch) {
+      const maxSpread = DEFAULT_TRACK_CONFIG.roadWidth * Renderer.MAX_SPREAD_ROADWIDTHS;
+      const spread = branchSpread(segIdx, liveBranch, maxSpread);
+      const n = fillRoadOffsets(roadCenters, liveBranch.ways, spread);
+      roadCenterX = roadCenters[0]!;
+      for (let i = 1; i < n; i++) {
+        if (Math.abs(roadCenters[i]! - vehicle.x) < Math.abs(roadCenterX - vehicle.x)) roadCenterX = roadCenters[i]!;
+      }
+    }
+    vehicle.step(cmd, seg.curve, dt, roadCenterX);
     elapsedMs += dt * 1000;
     traffic.update(dt);
 
@@ -171,12 +191,22 @@ createLoop({
         const nodeZ = (branch.startSegment + branch.splitDurationSegments) * DEFAULT_TRACK_CONFIG.segmentLength;
         if (vehicle.z >= nodeZ) {
           const choice = resolveFork(vehicle.x, branch.ways, DEFAULT_TRACK_CONFIG.roadWidth);
-          const plan = route.advance(choice);
-          const r = parseTrackFile(sceneTrack(plan));
+          // Parse the chosen scene BEFORE advancing route state, so a bad scene
+          // can never desync the pyramid from the world.
+          const nextRow = route.pyramid[route.stage + 1]!;
+          const destination = nextRow[nextSceneIdx(route.sceneIdx, choice, branch.ways, nextRow.length)]!;
+          const r = parseTrackFile(sceneTrack(destination));
           if (r.ok) {
+            route.advance(choice);
             const maxSpread = DEFAULT_TRACK_CONFIG.roadWidth * Renderer.MAX_SPREAD_ROADWIDTHS;
             track.rebuild(r.track);
-            vehicle.translate(-nodeZ, -chosenOffsetAtNode(choice, branch.ways, maxSpread));
+            // Land relative to the chosen road's centre, clamped onto its surface
+            // so a centre-line straddler is never teleported off-road.
+            const chosen = chosenOffsetAtNode(choice, branch.ways, maxSpread);
+            const lateral = Math.max(-DEFAULT_TRACK_CONFIG.roadWidth * 0.8,
+              Math.min(DEFAULT_TRACK_CONFIG.roadWidth * 0.8, vehicle.x - chosen));
+            vehicle.translate(-nodeZ, lateral - vehicle.x);
+            traffic.rescope(-nodeZ, track.length * DEFAULT_TRACK_CONFIG.segmentLength);
             routeMap.flashMs = 3000;
           }
         }

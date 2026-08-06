@@ -58,8 +58,11 @@ export class Vehicle implements PlayerState {
     return this.isSkidding;
   }
 
-  /** Advance one fixed step. `curvature` is the current segment's K_i. */
-  step(cmd: Command, curvature: number, dt: number = STEP_S): void {
+  /** Advance one fixed step. `curvature` is the current segment's K_i.
+   * `roadCenterX` is the nearest road centre-line's world-x (non-zero during a
+   * branch split, where the drivable roads diverge from the track centre) so
+   * the off-road test follows the actual road, not the abstract centre. */
+  step(cmd: Command, curvature: number, dt: number = STEP_S, roadCenterX = 0): void {
     // -- transmission -------------------------------------------------------
     if (cmd.gearUp && this.gearIdx < GEAR_MAX_KMH.length) this.gearIdx++;
     if (cmd.gearDown && this.gearIdx > 1) this.gearIdx--;
@@ -77,7 +80,7 @@ export class Vehicle implements PlayerState {
     } else {
       this.kmh -= COAST_KMH_S * dt; // engine drag (also drains an over-cap downshift)
     }
-    if (Math.abs(this.posX) > this.roadWidth && this.kmh > OFFROAD_MAX_KMH) {
+    if (Math.abs(this.posX - roadCenterX) > this.roadWidth && this.kmh > OFFROAD_MAX_KMH) {
       this.kmh *= MU_OFFROAD ** dt;
     }
     if (this.isSkidding) this.kmh *= SKID_SPEED_DECAY ** dt;

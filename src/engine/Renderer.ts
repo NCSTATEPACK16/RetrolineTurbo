@@ -122,6 +122,10 @@ export class Renderer {
         havePrev = false; // don't bridge a quad across the camera plane
         continue;
       }
+      // A forked track hands off at its node; drawing wrapped-around segments
+      // past the end would paint the scene's opening at full spread. End the
+      // road at the horizon instead (route mode swaps scenes before it shows).
+      if (branch && base + i >= track.length) break;
 
       // Fork geometry for this segment (single centred road when no branch).
       this.spreadFar = branch ? branchSpread(base + i, branch, maxSpread) : 0;

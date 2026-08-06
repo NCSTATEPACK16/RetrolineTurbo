@@ -104,8 +104,10 @@ export class RouteState {
     this.remainingMs += ms;
   }
 
-  /** Take the fork: record the path, enter the next stage, extend the timer. */
+  /** Take the fork: record the path, enter the next stage, extend the timer.
+   * A no-op on the final stage (endings have no forks to take). */
   advance(choice: number): ScenePlan {
+    if (this.stage >= STAGES - 1) return this.currentPlan();
     this.visited.push(this.sceneIdx);
     const next = this.stage + 1;
     // Shipped pyramid is 2-way throughout (3-way is engine-supported; spec §8).

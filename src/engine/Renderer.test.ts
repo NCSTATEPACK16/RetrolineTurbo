@@ -191,6 +191,19 @@ describe('Renderer branch pass (fork roads + median)', () => {
     expect(medians(deep)).toBeGreaterThan(medians(early));
   });
 
+  it('ends a forked road at the track end instead of wrapping at full spread', () => {
+    const nearEnd = 680 * segLen; // 20 segments left; drawDistance 40 wraps unforked
+    const forked = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(nearEnd), flatTrack(2), forked);
+    const control = new RecordingBackend();
+    new Renderer(cfg, atlas).render(camAt(nearEnd), flatTrack(null), control);
+    const topRow = (b: RecordingBackend): number =>
+      Math.min(...b.quads.filter((q) => q.color === COLORS.road || q.color === COLORS.roadDark).map((q) => q.y1));
+    // The forked road stops at the track end (higher y = farther from the
+    // horizon), while the unforked control wraps and draws all the way out.
+    expect(topRow(forked)).toBeGreaterThan(topRow(control));
+  });
+
   it('a 3-way fork renders more road quads than a 2-way at the same spot', () => {
     const two = new RecordingBackend();
     new Renderer(cfg, atlas).render(camAt(130 * segLen), flatTrack(2), two);
