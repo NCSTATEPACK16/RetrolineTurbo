@@ -1,0 +1,49 @@
+{
+  "backgrounds": [
+    {
+      "id": "city_night",
+      "name": "City Nightscape",
+      "file": "backgrounds/city_night.png",
+      "width": 960,
+      "height": 119,
+      "skyColor": "#211958",
+      "source": "City Nightscape Skyline.png",
+      "sourceCrop": {
+        "top": 338,
+        "bottom": 1234,
+        "keptFraction": 0.76
+      },
+      "bytes": 77304
+    },
+    {
+      "id": "coastal_sunset",
+      "name": "Coastal Sunset",
+      "file": "backgrounds/coastal_sunset.png",
+      "width": 960,
+      "height": 112,
+      "skyColor": "#bb0389",
+      "source": "Coastal Sunset Skyline.png",
+      "sourceCrop": {
+        "top": 338,
+        "bottom": 1233,
+        "keptFraction": 0.72
+      },
+      "bytes": 50344
+    },
+    {
+      "id": "desert_canyon",
+      "name": "Desert Canyon",
+      "file": "backgrounds/desert_canyon.png",
+      "width": 960,
+      "height": 99,
+      "skyColor": "#6228a2",
+      "source": "Desert Canyon & Sunset Skyline.png",
+      "sourceCrop": {
+        "top": 352,
+        "bottom": 1185,
+        "keptFraction": 0.7
+      },
+      "bytes": 28257
+    }
+  ]
+}

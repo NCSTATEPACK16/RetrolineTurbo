@@ -316,6 +316,30 @@ the exact detail in the two docs so nothing is lost.
 - **Done-when:** player can traverse distinct 5-stage routes; unchosen branches unload;
   median renders between roads at the fork.
 
+### Phase 7.5 — TX-1 Arcade Visuals, Hybrid Asset Pipeline & Overtake Juice (Side Phase)
+- **Goal:** transform the raw prototype into an authentic 1983 Tatsumi *TX-1* arcade racer in visual identity, HUD presentation, pre-rendered multi-angle car sprites (via Blender), pre-rendered horizon scenery, and overtake mechanics.
+- **Revised 2026-08-10** against `docs/research/2026-08-10-art-direction-asset-pipeline-research.md` and split into four sequenced specs (A→B→C→D). Three decisions changed; see the SUPERSEDED banner on `2026-08-06-sprite-asset-pipeline-spec.md` for the full comparison.
+- **Deliverables — Spec A · art direction, road surface, layout lock** (`2026-08-10-a-art-direction-road-layout.md`):
+  - **Master palette as shared data** (`src/assets/palette.json`): one 40–48 colour source of truth read by both TypeScript and the Python bake scripts. Environment ramps are **sampled from the three shipped plates**, which are saturated synthwave rather than the naturalistic ramps the research first proposed.
+  - **Road surface** (`engine/Renderer.ts`): high-contrast kerbs (`#d02020` / `#f0f0f0`), two near-identical road greys, warm lane line, a **new shoulder band** (`#5a5a66`), and a **horizon band-merge rule** that stops the kerb strobing near the vanishing point.
+  - **Screen layout** (`ui/HUD.ts`, `constants.ts`): horizon **135 → 118**, **40px** `#000088` header (shallower than the original 24px-banner design), SCORE / SPEED moved to the bottom corners, player car based at y=232.
+  - **2×2 virtual authoring grid enforced by a vitest lint** — the research's headline decision, mechanised rather than aspirational.
+- **Deliverables — Spec B · atlas engine v2** (`2026-08-10-b-atlas-engine-v2.md`):
+  - **Pre-baked 12-step scale ladder** (`math/ladder.ts`) with runtime snapping — replaces live continuous scaling, which is what causes pixel crawl. Follows OutRun's five hand-tweaked zoom copies, with a larger budget.
+  - **Anchored overlays** (`engine/SpriteComposer.ts`): normalised 0..1 anchors with automatic `x → 1−x` mirroring on flip, so 80 upgrade parts need no extra car bodies. Deliberately *not* on `RenderBackend` — see the spec's §6.
+  - **Integer-indexed frame lookup** (`engine/CarFrameSet.ts`): no per-frame string construction in the sprite path.
+  - **Optional `flipX` on `drawSprite`**; **multi-atlas async loading** (`engine/loadAtlases.ts`, cars/props/ui/effects) that never rejects, with the **procedural atlas kept permanently** as the headless and offline fallback.
+- **Deliverables — Spec C · vehicle bake pipeline** (`2026-08-10-c-vehicle-bake-pipeline.md`):
+  - **CC0 GT/tourer models** (Kenney Car Kit + RGS_Dev, both separated-wheel) with recorded provenance. ⚠️ **No vetted CC0 pack contains an open-wheel/F1 single-seater** — the GT silhouette is a deliberate, recorded deviation from this roadmap's original F1 language. F1 is queued as a follow-up model swap, not a pipeline change.
+  - **`scripts/render_car_sprites.py`** — headless Blender **5.2 LTS**, **3 authored angles (0°/15°/30°) + runtime flip** (not 5 authored angles), 12 ladder steps, body and wheels on separate passes, rendered at 2× then area-downscaled and clamped to the master palette. **Anchors projected out of the 3D scene**, not hand-authored.
+  - **`scripts/pack_atlas.py`** — POT atlas ≤2048×2048 (iOS-safe), 2px gutter + 1px edge bleed, manifest in Spec B's schema.
+  - **Renderer consumption**: ladder quantisation, steering-frame selection, overlay culling, brake lights as an overlay quad, body roll via vertical offset — **never rotation**.
+- **Deliverables — Spec D · props, parallax, effects, font** (`2026-08-10-d-props-parallax-effects.md`):
+  - Roadside props through Spec C's pipeline unchanged (lamp posts at `offset: ±1.2`, hazard median posts, grandstands, palms); a **second parallax depth layer** behind the plates; a **droppable** `effects.png` (exhaust flame, dust, speed streaks); optional Press Start 2P (OFL) baked per colour.
+- **Already complete** (Phase 7.5 prior work): TX-1 HUD header + palette-baked colour font; horizon plates via `scripts/prep_backgrounds.py` (14.7 MB source → 152 KB shipped); overtake detection feeding `economy/score.ts`.
+- **Research anchors:** `docs/research/2026-08-10-art-direction-asset-pipeline-research.md` (art direction lock, CC0 licence gate, vehicle spec, layout); specs A–D above; TX-1 reference analysis in `docs/handoff_tx1_visual_gameplay_recommendations.md` (note: its 24px header is superseded by Spec A's 40px).
+- **Done-when:** one master palette governs every gameplay element; the road does not strobe at **any** speed including crawl; screen layout matches the researched TX-1 composition; cars render from pre-baked sprites on the discrete ladder with **no pixel crawl at any speed** and overlays that stay registered **through a hard left turn**; parallax reads as depth; `npm test` + `npm run build` green.
+
 ### Phase 8 — Supabase persistence integration
 - **Goal:** swap the local save adapter for the real backend; add leaderboards + track sharing.
 - **Deliverables:** `SupabaseBackend` implementing `SaveBackend`; save sync on race end;
