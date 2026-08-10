@@ -4,6 +4,7 @@ import type { Camera, TrackConfig, SpriteFrame } from '../types/engine.js';
 import type { RenderBackend } from './RenderBackend.js';
 import type { TrackManager } from './TrackManager.js';
 import type { Background } from './Background.js';
+import type { Backdrop } from './Backdrop.js';
 import type { SpriteAtlas } from './SpriteAtlas.js';
 import type { Traffic } from './Traffic.js';
 import { branchSpread, fillRoadOffsets } from './BranchRenderer.js';
@@ -92,9 +93,10 @@ export class Renderer {
     background?: Background,
     traffic?: Traffic,
     curvatureAtCamera: number = 0,
+    backdrop?: Backdrop,
   ): void {
     backend.clear(COLORS.sky);
-    background?.render(camera, curvatureAtCamera, backend);
+    background?.render(camera, curvatureAtCamera, backend, backdrop);
 
     const { segmentLength, drawDistance, roadWidth } = this.config;
     const base = Math.floor(camera.z / segmentLength);

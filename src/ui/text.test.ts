@@ -4,6 +4,7 @@ import { SpriteAtlas } from '../engine/SpriteAtlas.js';
 import { packAtlas } from '../assets/packAtlas.js';
 import { SPRITE_MANIFEST } from '../assets/spriteManifest.js';
 import { RecordingBackend } from '../engine/testing/RecordingBackend.js';
+import { FONT_COLORS } from '../assets/spriteManifest.js';
 
 const atlas = new SpriteAtlas({} as CanvasImageSource, packAtlas(SPRITE_MANIFEST, 256).frames);
 
@@ -33,5 +34,44 @@ describe('drawText', () => {
     const b = new RecordingBackend();
     drawText(b, atlas, 'lap 1:23.4', 0, 0);
     expect(b.sprites.length).toBe(9); // l a p 1 : 2 3 . 4
+  });
+
+  it('draws the default white glyph when no colour is given', () => {
+    const b = new RecordingBackend();
+    drawText(b, atlas, 'a', 0, 0);
+    const f = atlas.frame('glyph_a');
+    expect(b.sprites[0]!.sx).toBe(f.x);
+    expect(b.sprites[0]!.sy).toBe(f.y);
+  });
+
+  it('draws letters from the requested colour variant', () => {
+    const b = new RecordingBackend();
+    drawText(b, atlas, 'a', 0, 0, 2, 'magenta');
+    const f = atlas.frame('glyph_a_magenta');
+    expect(b.sprites[0]!.sx).toBe(f.x);
+    expect(b.sprites[0]!.sy).toBe(f.y);
+  });
+
+  it('colours digits and punctuation too', () => {
+    const b = new RecordingBackend();
+    drawText(b, atlas, '1:', 0, 0, 2, 'red');
+    expect(b.sprites[0]!.sx).toBe(atlas.frame('digit_1_red').x);
+    expect(b.sprites[1]!.sx).toBe(atlas.frame('glyph_colon_red').x);
+  });
+
+  it('packs a full glyph set for every palette colour', () => {
+    for (const color of Object.keys(FONT_COLORS)) {
+      if (color === 'white') continue; // white keeps the unsuffixed names
+      expect(() => atlas.frame(`glyph_z_${color}`)).not.toThrow();
+      expect(() => atlas.frame(`digit_0_${color}`)).not.toThrow();
+    }
+  });
+
+  it('keeps glyph advance identical across colours', () => {
+    const plain = new RecordingBackend();
+    const tinted = new RecordingBackend();
+    drawText(plain, atlas, 'abc', 0, 0);
+    drawText(tinted, atlas, 'abc', 0, 0, 2, 'cyan');
+    expect(tinted.sprites.map((s) => s.dx)).toEqual(plain.sprites.map((s) => s.dx));
   });
 });

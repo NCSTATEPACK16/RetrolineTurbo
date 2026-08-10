@@ -6,6 +6,7 @@ import { SPRITE_MANIFEST } from '../assets/spriteManifest.js';
 import { RecordingBackend } from '../engine/testing/RecordingBackend.js';
 import { TrackManager } from '../engine/TrackManager.js';
 import { DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y } from '../constants.js';
+import { RouteState } from '../track/route.js';
 import type { Camera, PlayerState } from '../types/engine.js';
 
 const atlas = new SpriteAtlas({} as CanvasImageSource, packAtlas(SPRITE_MANIFEST, 256).frames);
@@ -43,5 +44,68 @@ describe('HUD render', () => {
     const track = new TrackManager(DEFAULT_TRACK_CONFIG);
     new HUD(atlas).render(player, 0, track, camera, b);
     expect(b.quads.length).toBeGreaterThan(0);
+  });
+});
+
+describe('HUD TX-1 header', () => {
+  const track = new TrackManager(DEFAULT_TRACK_CONFIG);
+  const draw = (route?: RouteState, passedCars = 0, points = 0): RecordingBackend => {
+    const b = new RecordingBackend();
+    new HUD(atlas).render(player, 0, track, camera, b, 42_000, route, passedCars, points);
+    return b;
+  };
+  const starFrames = (b: RecordingBackend, name: 'star_on' | 'star_off'): number => {
+    const f = atlas.frame(name);
+    return b.sprites.filter((s) => s.sx === f.x && s.sy === f.y).length;
+  };
+
+  it('fills a solid blue header band across the top of the frame', () => {
+    expect(draw().bands).toContainEqual({ y: 0, h: HUD.HEADER_H, color: HUD.HEADER_BG });
+  });
+
+  it('underlines the header with an accent border', () => {
+    expect(draw().bands).toContainEqual({ y: HUD.HEADER_H, h: 1, color: HUD.HEADER_EDGE });
+  });
+
+  it('draws the score value in cyan glyphs', () => {
+    const b = draw(undefined, 0, 1200);
+    const one = atlas.frame('digit_1_cyan');
+    expect(b.sprites.some((s) => s.sx === one.x && s.sy === one.y)).toBe(true);
+  });
+
+  it('draws the checkpoint countdown in red glyphs', () => {
+    const b = draw();
+    const four = atlas.frame('digit_4_red'); // "42" seconds remaining
+    expect(b.sprites.some((s) => s.sx === four.x && s.sy === four.y)).toBe(true);
+  });
+
+  it('lights one star per overtaken car and leaves the rest unlit', () => {
+    const b = draw(undefined, 3);
+    expect(starFrames(b, 'star_on')).toBe(3);
+    expect(starFrames(b, 'star_off')).toBe(HUD.STAR_SLOTS - 3);
+  });
+
+  it('caps the star gauge at its slot count', () => {
+    const b = draw(undefined, 25);
+    expect(starFrames(b, 'star_on')).toBe(HUD.STAR_SLOTS);
+    expect(starFrames(b, 'star_off')).toBe(0);
+  });
+
+  it('draws one tree node per scene in the route pyramid', () => {
+    const route = new RouteState(1);
+    const b = draw(route);
+    const nodes = b.quads.filter((q) => q.color === HUD.TREE_NODE
+      || q.color === HUD.TREE_PATH || q.color === HUD.TREE_ACTIVE);
+    expect(nodes.length).toBe(route.pyramid.flat().length); // 15 scenes
+  });
+
+  it('marks exactly one tree node as the active scene', () => {
+    const b = draw(new RouteState(1));
+    expect(b.quads.filter((q) => q.color === HUD.TREE_ACTIVE).length).toBe(1);
+  });
+
+  it('omits the tree when no route is supplied', () => {
+    const b = draw();
+    expect(b.quads.some((q) => q.color === HUD.TREE_ACTIVE)).toBe(false);
   });
 });

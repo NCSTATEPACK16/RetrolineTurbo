@@ -23,6 +23,37 @@ describe('Traffic', () => {
     expect(t.cars[0]!.z).toBe(3100); // wrap length updated (no early wrap)
   });
 
+  it('returns no overtakes on the first call — it only takes a baseline', () => {
+    const t = new Traffic([mk({ z: 100 })], 10000);
+    expect(t.countOvertakes(500)).toBe(0); // car already behind at boot: not a pass
+  });
+
+  it('counts a car that falls from ahead of the player to behind it', () => {
+    const t = new Traffic([mk({ z: 600 })], 10000);
+    t.countOvertakes(500);
+    expect(t.countOvertakes(700)).toBe(1);
+  });
+
+  it('does not count the same car twice while it stays behind', () => {
+    const t = new Traffic([mk({ z: 600 })], 10000);
+    t.countOvertakes(500);
+    t.countOvertakes(700);
+    expect(t.countOvertakes(900)).toBe(0);
+  });
+
+  it('ignores the sign flip when a car wraps past the end of the track', () => {
+    const t = new Traffic([mk({ z: 9900 })], 10000);
+    t.countOvertakes(500); // delta +9400: car far ahead
+    t.cars[0]!.z = 100; // wrapped to the start — now "behind", but never passed
+    expect(t.countOvertakes(500)).toBe(0);
+  });
+
+  it('counts each of several cars passed in the same step', () => {
+    const t = new Traffic([mk({ z: 600 }), mk({ z: 650 }), mk({ z: 5000 })], 10000);
+    t.countOvertakes(500);
+    expect(t.countOvertakes(700)).toBe(2);
+  });
+
   it('is deterministic across identical update scripts', () => {
     const script = (t: Traffic) => { for (let i = 0; i < 100; i++) t.update(1 / 60); };
     const a = new Traffic([mk({ z: 0, speed: 137 })], 10000); script(a);

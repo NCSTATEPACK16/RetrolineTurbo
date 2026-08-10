@@ -1,5 +1,6 @@
 import type { RenderBackend } from '../engine/RenderBackend.js';
 import type { SpriteAtlas } from '../engine/SpriteAtlas.js';
+import { glyphFrameName, type FontColor } from '../assets/spriteManifest.js';
 
 /** Atlas frame name for a drawable character, or null for a plain advance. */
 function frameName(ch: string): string | null {
@@ -12,15 +13,17 @@ function frameName(ch: string): string | null {
   return null; // unknown chars advance silently (no throw in a render path)
 }
 
-/** Draw `text` with the 3×5 bitmap font, top-left at (x, y), integer scale. */
+/** Draw `text` with the 3×5 bitmap font, top-left at (x, y), integer scale.
+ * `color` selects a pre-baked palette glyph set — advance is colour-independent. */
 export function drawText(
   backend: RenderBackend, atlas: SpriteAtlas, text: string, x: number, y: number, scale = 2,
+  color: FontColor = 'white',
 ): void {
   let cx = x;
   for (const ch of text) {
     const name = frameName(ch);
     if (name !== null) {
-      const f = atlas.frame(name);
+      const f = atlas.frame(glyphFrameName(name, color));
       backend.drawSprite(atlas.image, f.x, f.y, f.w, f.h, cx, y, f.w * scale, f.h * scale, 9999);
       cx += (f.w + 1) * scale;
     } else {
