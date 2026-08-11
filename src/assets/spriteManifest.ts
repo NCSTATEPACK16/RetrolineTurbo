@@ -120,44 +120,44 @@ function fontEntries(): SpriteEntry[] {
 // Compact pixel-art. Palette is provisional; retuned at the visual gate.
 export const SPRITE_MANIFEST: SpriteEntry[] = [
   billboard('tree', 16, 40, [
-    { rx: 7, ry: 24, rw: 2, rh: 16, color: '#5a3a1a' },        // trunk
+    { rx: 6, ry: 24, rw: 4, rh: 16, color: '#5a3a1a' },        // trunk
     { rx: 2, ry: 4, rw: 12, rh: 22, color: '#1e7a34' },        // canopy
     { rx: 4, ry: 0, rw: 8, rh: 8, color: '#2a9a44' },          // highlight
   ]),
   billboard('bush', 14, 12, [
     { rx: 0, ry: 4, rw: 14, rh: 8, color: '#1e7a34' },
-    { rx: 3, ry: 0, rw: 8, rh: 6, color: '#2a9a44' },
+    { rx: 2, ry: 0, rw: 10, rh: 6, color: '#2a9a44' },
   ]),
   billboard('rock', 12, 10, [
-    { rx: 0, ry: 3, rw: 12, rh: 7, color: '#7a7a82' },
-    { rx: 2, ry: 0, rw: 7, rh: 5, color: '#9a9aa2' },
+    { rx: 0, ry: 2, rw: 12, rh: 8, color: '#7a7a82' },
+    { rx: 2, ry: 0, rw: 6, rh: 6, color: '#9a9aa2' },
   ]),
   billboard('sign', 14, 22, [
     { rx: 6, ry: 8, rw: 2, rh: 14, color: '#5a3a1a' },         // post
-    { rx: 0, ry: 0, rw: 14, rh: 9, color: '#d0d0d8' },         // board
-    { rx: 2, ry: 2, rw: 10, rh: 5, color: '#c04040' },         // legend
+    { rx: 0, ry: 0, rw: 14, rh: 10, color: '#d0d0d8' },        // board
+    { rx: 2, ry: 2, rw: 10, rh: 6, color: '#c04040' },         // legend
   ]),
   billboard('billboard', 28, 24, [
     { rx: 2, ry: 14, rw: 2, rh: 10, color: '#3a3a42' },
     { rx: 24, ry: 14, rw: 2, rh: 10, color: '#3a3a42' },
     { rx: 0, ry: 0, rw: 28, rh: 14, color: '#204a8a' },
-    { rx: 3, ry: 3, rw: 22, rh: 8, color: '#f0c040' },
+    { rx: 2, ry: 2, rw: 24, rh: 8, color: '#f0c040' },
   ]),
   // Traffic cars — rear-view billboards, four liveries.
   ...(['#c83028', '#2860c8', '#28a848', '#d0a020'] as const).map((body, i) =>
     billboard(`car${i}`, 22, 14, [
-      { rx: 1, ry: 6, rw: 20, rh: 7, color: '#101014' },       // shadow/underbody
+      { rx: 0, ry: 6, rw: 22, rh: 8, color: '#101014' },       // shadow/underbody
       { rx: 2, ry: 2, rw: 18, rh: 6, color: body },            // body
-      { rx: 5, ry: 3, rw: 12, rh: 3, color: '#101830' },       // window
-      { rx: 1, ry: 11, rw: 4, rh: 3, color: '#202024' },       // wheels
-      { rx: 17, ry: 11, rw: 4, rh: 3, color: '#202024' },
+      { rx: 4, ry: 2, rw: 14, rh: 4, color: '#101830' },       // window
+      { rx: 0, ry: 10, rw: 4, rh: 4, color: '#202024' },       // wheels
+      { rx: 18, ry: 10, rw: 4, rh: 4, color: '#202024' },
     ])),
   billboard('player', 34, 20, [
-    { rx: 2, ry: 9, rw: 30, rh: 10, color: '#101014' },
-    { rx: 3, ry: 3, rw: 28, rh: 8, color: '#e03028' },
-    { rx: 9, ry: 4, rw: 16, rh: 4, color: '#101830' },
-    { rx: 1, ry: 15, rw: 6, rh: 5, color: '#202024' },
-    { rx: 27, ry: 15, rw: 6, rh: 5, color: '#202024' },
+    { rx: 2, ry: 8, rw: 30, rh: 12, color: '#101014' },
+    { rx: 4, ry: 2, rw: 26, rh: 8, color: '#e03028' },
+    { rx: 10, ry: 4, rw: 14, rh: 4, color: '#101830' },
+    { rx: 0, ry: 14, rw: 6, rh: 6, color: '#202024' },
+    { rx: 28, ry: 14, rw: 6, rh: 6, color: '#202024' },
   ]),
   // HUD "PASSED CARS" gauge: one lit + one unlit star, identical geometry.
   { name: 'star_on', w: 7, h: 7, anchorX: 3, anchorY: 3, ops: starOps(FONT_COLORS.gold) },
