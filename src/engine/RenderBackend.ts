@@ -38,6 +38,12 @@ export interface RenderBackend {
    * `flipX` mirrors horizontally — steering art is authored for three angles and
    * mirrored at runtime for the other three (research §3c), which halves the car
    * atlas against a hard 2048x2048 cap.
+   *
+   * `alpha` blends the sprite, for the small set of effects whose opacity is a
+   * function of something continuous — a dust puff's age, a speed streak's
+   * intensity — and therefore cannot be baked into the frame. Constant opacity
+   * must still be baked. Implementations set and restore `globalAlpha`; what is
+   * banned for cost is a non-`source-over` composite op, not this.
    */
   drawSprite(
     image: CanvasImageSource,
@@ -51,6 +57,7 @@ export interface RenderBackend {
     dh: number,
     clipBottom: number,
     flipX?: boolean,
+    alpha?: number,
   ): void;
 
   /** Blit the completed logical frame to the visible surface. Frame end. */

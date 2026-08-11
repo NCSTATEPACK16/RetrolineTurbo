@@ -68,6 +68,10 @@ export const KMH_PER_WORLD = 0.05; // world u/s → km/h display
 export const WORLD_PER_KMH = 1 / KMH_PER_WORLD;
 
 export const GEAR_MAX_KMH = [120, 290] as const; // Low, High top speeds
+/** Top speed in world u/s — the highest gear's ceiling, converted once. Renderer
+ * ramps the speed streaks against this rather than against a per-track number,
+ * because the streaks are a camera effect and the car's ceiling never varies. */
+export const TOP_SPEED_WORLD = GEAR_MAX_KMH[GEAR_MAX_KMH.length - 1]! * WORLD_PER_KMH;
 export const GEAR_ACCEL_KMH_S = [60, 25] as const; // zero-speed accel per gear (Low torquey)
 export const BRAKE_KMH_S = 180; // full-brake decel
 export const HANDBRAKE_KMH_S = 270; // handbrake decel

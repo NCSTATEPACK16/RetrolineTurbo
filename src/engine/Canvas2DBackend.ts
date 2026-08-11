@@ -68,7 +68,16 @@ export class Canvas2DBackend implements RenderBackend {
     dx: number, dy: number, dw: number, dh: number,
     clipBottom: number,
     flipX = false,
+    alpha?: number,
   ): void {
+    // Opaque sprites are the overwhelming majority and must not pay for the
+    // blend path at all — hence the `!== undefined && < 1` guard rather than an
+    // unconditional set/restore of globalAlpha.
+    const blend = alpha !== undefined && !(alpha >= 1); // also catches NaN
+    if (blend) {
+      const a = alpha! > 0 ? Math.min(1, alpha!) : 0; // NaN and negatives -> 0
+      this.ctx.globalAlpha = a;
+    }
     const needsClip = clipBottom < dy + dh;
     if (needsClip) {
       this.ctx.save();
@@ -88,6 +97,10 @@ export class Canvas2DBackend implements RenderBackend {
       this.ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
     }
     if (needsClip) this.ctx.restore();
+    // Restored explicitly rather than via save/restore: the clip path already
+    // owns that pair conditionally, and nesting a second one around every
+    // blended draw would double the state churn on the hottest call in the loop.
+    if (blend) this.ctx.globalAlpha = 1;
   }
 
   // --- Present / resize -------------------------------------------------------
