@@ -89,12 +89,17 @@ void loadAtlases().then((loaded) => {
   const byCar = (id: string) => cars.meta.frames.filter((f) => f.car === id);
   const body = byCar(PLAYER_CAR_ID);
   if (body.length === 0) return;
-  const wheel = byCar(`${PLAYER_CAR_ID}-wheel`);
+  // Wheels are `under` parts: they draw before the body so the bodywork occludes
+  // them, exactly as the single-pass render does.
+  const under = ['wheelBL', 'wheelBR', 'wheelFL', 'wheelFR']
+    .map((anchor) => ({ anchor, frames: byCar(`${PLAYER_CAR_ID}-${anchor}`) }))
+    .filter((o) => o.frames.length > 0)
+    .map((o) => ({ anchor: o.anchor, set: buildCarFrameSet(o.frames) }));
   const brake = byCar(`${PLAYER_CAR_ID}-brake`);
   renderer.setBakedCar({
     image: cars.image,
     body: buildCarFrameSet(body),
-    wheel: wheel.length ? buildCarFrameSet(wheel) : null,
+    under,
     brake: brake.length ? buildCarFrameSet(brake) : null,
     color: 0,
   });

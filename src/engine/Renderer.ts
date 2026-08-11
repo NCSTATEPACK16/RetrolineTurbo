@@ -41,25 +41,38 @@ export function overlaysVisible(step: number): boolean {
   return step < OVERLAY_CULL_STEP;
 }
 
+/** One overlay part and the body anchor it is pinned to. */
+export interface BakedOverlay {
+  /** Anchor name in the body frame, e.g. `wheelBL`. */
+  anchor: string;
+  set: CarFrameSet;
+}
+
 /**
  * The baked car artwork, handed over when the async atlas arrives.
  *
- * `wheel` and `brake` are separate frame sets rather than extra body variants:
- * one wheel sprite pinned to four anchors is what lets 80 upgrade parts share
- * 12 car frames instead of multiplying them (research §4b).
+ * Overlays are separate frame sets rather than extra body variants: parts pinned
+ * to anchors are what lets 80 upgrade parts share 12 car frames instead of
+ * multiplying them (research §4b).
+ *
+ * Each wheel is its OWN overlay. Reusing one wheel sprite at four anchors was
+ * tried and looks wrong — the far wheels are smaller and higher, and on a turned
+ * car they show the rim face while the near ones show tread.
+ *
+ * `under` parts are drawn BEFORE the body so the bodywork occludes them. Wheels
+ * are baked unoccluded (their pass hides the body), so drawing them on top paints
+ * a whole wheel over the arch and the car reads as sitting on stilts. Painter
+ * order is the only depth sorting available, and putting the body last restores
+ * exactly the occlusion the single-pass render has.
  */
 export interface BakedCar {
   image: CanvasImageSource;
   body: CarFrameSet;
-  wheel: CarFrameSet | null;
+  under: readonly BakedOverlay[];
   brake: CarFrameSet | null;
   /** Index into the body set's colour dimension. */
   color: number;
 }
-
-/** Anchor names the wheel overlay is pinned to. Module-level: naming them inside
- * the draw call would allocate an array every frame (hard rule 4). */
-const WHEEL_ANCHORS = ['wheelBL', 'wheelBR', 'wheelFL', 'wheelFR'] as const;
 
 /** Vertical nudge, in px, when the car is on its outermost steering frame.
  * Body roll is faked by a vertical offset: rotating the sprite is the Mode-7
@@ -360,13 +373,14 @@ export class Renderer {
     const dx = (LOGICAL_WIDTH - dw) / 2;
     const roll = choice.angle === 2 ? ROLL_OFFSET_PX : 0;
     const dy = PLAYER_CAR_BASE_Y - dh + roll;
-    backend.drawSprite(baked.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, LOGICAL_HEIGHT, choice.flipX);
+    const showOverlays = overlaysVisible(0);
 
-    if (!overlaysVisible(0)) return;
-    if (baked.wheel) {
-      const w = baked.wheel.frame(0, choice.angle, 0);
-      for (const name of WHEEL_ANCHORS) {
-        if (!baked.body.anchor(choice.angle, name, this.anchorOut)) continue;
+    // Wheels first, then the body over them: the wheel passes were baked with the
+    // body hidden, so painting them last would cover the arches.
+    if (showOverlays) {
+      for (const part of baked.under) {
+        if (!baked.body.anchor(choice.angle, part.anchor, this.anchorOut)) continue;
+        const w = part.set.frame(0, choice.angle, 0);
         overlayDest(dx, dy, dw, dh, this.anchorOut[0], this.anchorOut[1],
           w.w, w.h, choice.flipX, this.overlayRect);
         const r = this.overlayRect;
@@ -374,6 +388,10 @@ export class Renderer {
           r.dx, r.dy, r.dw, r.dh, LOGICAL_HEIGHT, choice.flipX);
       }
     }
+
+    backend.drawSprite(baked.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, LOGICAL_HEIGHT, choice.flipX);
+
+    if (!showOverlays) return;
     if (baked.brake && player?.braking && baked.body.anchor(choice.angle, 'brake', this.anchorOut)) {
       const b = baked.brake.frame(0, choice.angle, 0);
       overlayDest(dx, dy, dw, dh, this.anchorOut[0], this.anchorOut[1],

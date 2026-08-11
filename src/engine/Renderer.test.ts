@@ -427,7 +427,8 @@ describe('baked player car', () => {
   const baked = () => ({
     image: {} as CanvasImageSource,
     body: mkSet(PLAYER_CAR_WIDTH, 105, ANCHORS),
-    wheel: mkSet(12, 28),
+    under: ['wheelBL', 'wheelBR', 'wheelFL', 'wheelFR']
+      .map((anchor) => ({ anchor, set: mkSet(12, 28) })),
     brake: mkSet(80, 9),
     color: 0,
   });
@@ -443,8 +444,16 @@ describe('baked player car', () => {
     return backend;
   }
 
+  /** Split the car's draw calls by their documented order: the four wheels are
+   * drawn UNDER the body, then the body, then the brake overlay if it is lit. */
+  function parts(over: Partial<PlayerState> = {}) {
+    const all = draw(over).sprites;
+    const tail = over.braking ? all.slice(-6, -1) : all.slice(-5);
+    return { wheels: tail.slice(0, 4), body: tail[4]!, all };
+  }
+
   it('draws the straight frame centred and based at the locked row', () => {
-    const car = draw().sprites.at(-5)!; // body, then four wheels
+    const car = parts().body;
     expect(car.dw).toBe(PLAYER_CAR_WIDTH);
     expect(car.dx + car.dw / 2).toBeCloseTo(LOGICAL_WIDTH / 2, 5);
     expect(car.dy + car.dh).toBeCloseTo(PLAYER_CAR_BASE_Y, 5);
@@ -452,33 +461,28 @@ describe('baked player car', () => {
   });
 
   it('mirrors rather than baking a second set of steering frames', () => {
-    const right = draw({ steer: 0.9 }).sprites;
-    const left = draw({ steer: -0.9 }).sprites;
-    expect(right[right.length - 5]!.flipX).toBe(false);
-    expect(left[left.length - 5]!.flipX).toBe(true);
+    const right = parts({ steer: 0.9 }).body;
+    const left = parts({ steer: -0.9 }).body;
+    expect(right.flipX).toBe(false);
+    expect(left.flipX).toBe(true);
     // Same source rect: the mirror is the whole point, not a different frame.
-    expect(left[left.length - 5]!.sx).toBe(right[right.length - 5]!.sx);
+    expect(left.sx).toBe(right.sx);
   });
 
   it('keeps overlays attached when the car is mirrored — the classic failure', () => {
     // ax -> 1 - ax. If the mirror is forgotten the wheels slide off to one side
     // on left turns only, which is exactly how this bug presents in play.
-    const wheelsOf = (b: RecordingBackend) => b.sprites.slice(-4).map((s) => s.dx);
-    const right = draw({ steer: 0.9 });
-    const left = draw({ steer: -0.9 });
-    const body = right.sprites.at(-5)!;
-    const mid = body.dx + body.dw / 2;
-    const mirrored = wheelsOf(left).map((dx) => 2 * mid - dx).sort((a, b) => a - b);
-    const expected = wheelsOf(right)
-      .map((dx, i) => dx + right.sprites.slice(-4)[i]!.dw)
-      .sort((a, b) => a - b);
+    const right = parts({ steer: 0.9 });
+    const left = parts({ steer: -0.9 });
+    const mid = right.body.dx + right.body.dw / 2;
+    const mirrored = left.wheels.map((w) => 2 * mid - w.dx).sort((a, b) => a - b);
+    const expected = right.wheels.map((w) => w.dx + w.dw).sort((a, b) => a - b);
     mirrored.forEach((v, i) => expect(v).toBeCloseTo(expected[i]!, 5));
   });
 
   it('pins each wheel inside the body it belongs to', () => {
-    const b = draw();
-    const body = b.sprites.at(-5)!;
-    for (const w of b.sprites.slice(-4)) {
+    const { body, wheels } = parts();
+    for (const w of wheels) {
       expect(w.dx + w.dw / 2).toBeGreaterThan(body.dx);
       expect(w.dx + w.dw / 2).toBeLessThan(body.dx + body.dw);
       expect(w.dy + w.dh / 2).toBeGreaterThan(body.dy);
@@ -488,6 +492,14 @@ describe('baked player car', () => {
 
   it('lights the brake overlay only while braking', () => {
     expect(draw().sprites.length).toBe(draw({ braking: true }).sprites.length - 1);
+  });
+
+  it('draws the wheels UNDER the body so the arches occlude them', () => {
+    // Wheels are baked with the body hidden. Painting them last would lay a whole
+    // wheel over the arch and the car reads as sitting on stilts.
+    const { all, body, wheels } = parts();
+    const bodyIdx = all.indexOf(body);
+    for (const w of wheels) expect(all.indexOf(w)).toBeLessThan(bodyIdx);
   });
 
   it('falls back to the procedural frame when no atlas arrived', () => {

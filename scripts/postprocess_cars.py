@@ -35,7 +35,7 @@ ALPHA_CUTOFF = 128
 # Overlay parts are baked on the body's full canvas so they line up with it, then
 # cropped here — a full-canvas brake light is ~200 opaque pixels in 12,600, and
 # 36 of those would cost as much atlas area as an entire colour variant.
-OVERLAY_PART = re.compile(r"-(wheel|brake)_")
+OVERLAY_PART = re.compile(r"-(wheel[FB][LR]|brake)_")
 FRAME_NAME = re.compile(r"^(?P<car>.+)_(?P<color>[^_]+)_a(?P<angle>\d+)_s(?P<step>\d+)$")
 
 

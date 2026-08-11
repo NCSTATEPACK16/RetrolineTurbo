@@ -284,8 +284,38 @@ def build_rig(objs: list[bpy.types.Object]) -> bpy.types.Object:
     return pivot
 
 
+def nose_direction(body: bpy.types.Object, slot_names: list[str]) -> float:
+    """+1 if the car's nose points +Y, -1 if it points -Y.
+
+    Read off the headlight faces rather than assumed: the two vetted packs do not
+    agree on handedness, and getting this backwards silently swaps front and rear
+    wheels — which only shows up as overlays landing on the wrong axle.
+    """
+    ys = [
+        (body.matrix_world @ p.center).y
+        for p in body.data.polygons
+        if p.material_index < len(slot_names)
+        and "light" in slot_names[p.material_index].lower()
+        and "rear" not in slot_names[p.material_index].lower()
+        and "tail" not in slot_names[p.material_index].lower()
+    ]
+    if not ys:
+        return -1.0  # no headlights to ask; assume the pack's common -Y nose
+    return 1.0 if sum(ys) / len(ys) > 0 else -1.0
+
+
+def wheel_anchor_names(wheels: list[bpy.types.Object], nose_sign: float) -> dict[str, str]:
+    """Map each wheel object to its anchor name (wheelFL, wheelBR, ...)."""
+    out: dict[str, str] = {}
+    for w in wheels:
+        c = w.matrix_world.translation
+        front = (c.y * nose_sign) > 0
+        out[w.name] = f"wheel{'F' if front else 'B'}{'L' if c.x > 0 else 'R'}"
+    return out
+
+
 def make_anchors(pivot: bpy.types.Object, body: bpy.types.Object,
-                 wheels: list[bpy.types.Object]) -> list[bpy.types.Object]:
+                 wheels: list[bpy.types.Object], names: dict[str, str]) -> list[bpy.types.Object]:
     """Empties at every overlay attachment point, parented into the steering rig.
 
     Wheel anchors come straight out of the wheel objects' own centres, so they
@@ -304,9 +334,7 @@ def make_anchors(pivot: bpy.types.Object, body: bpy.types.Object,
 
     for w in wheels:
         c = w.matrix_world.translation
-        front = c.y < 0  # nose is -Y in the model's own space
-        left = c.x > 0
-        add(f"wheel{'F' if front else 'B'}{'L' if left else 'R'}", (c.x, c.y, c.z))
+        add(names[w.name], (c.x, c.y, c.z))
 
     corners = [body.matrix_world @ v.co for v in body.data.vertices]
     max_y = max(v.y for v in corners)
@@ -461,8 +489,12 @@ def main() -> None:
         )
     parts = [body, *wheels]
     slot_names = snapshot_slot_names(parts)
+    # The nose is wherever the headlight faces are; asking the geometry beats
+    # assuming a handedness that varies between packs.
+    nose_sign = nose_direction(body, slot_names[body.name])
+    wnames = wheel_anchor_names(wheels, nose_sign)
     pivot = build_rig(parts)
-    anchors = make_anchors(pivot, body, wheels)
+    anchors = make_anchors(pivot, body, wheels, wnames)
 
     cam = setup_camera(parts)
     setup_lighting(body.dimensions.z)
@@ -488,8 +520,6 @@ def main() -> None:
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     anchor_doc: dict[str, dict] = {}
-    front_left = next((w for w in wheels if "front" in w.name.lower()
-                       and "left" in w.name.lower()), wheels[0])
 
     for ai, angle in enumerate(ANGLES):
         pivot.rotation_euler.z = math.radians(BASE_YAW - angle)
@@ -515,9 +545,12 @@ def main() -> None:
                 assign_materials(body, wheels, color, pal, slot_names)
                 render_step(out_dir / f"{args.car}_{color}_a{ai}_s{si}.png", w, h)
 
-            # Wheel pass — one wheel, drawn at all four anchors at runtime.
-            set_visible(parts, [front_left])
-            render_step(out_dir / f"{args.car}-wheel_std_a{ai}_s{si}.png", w, h)
+            # Wheel passes — one sprite PER wheel. Reusing a single wheel at all
+            # four anchors looks wrong: the far wheels are smaller, higher, and on
+            # a turned car show the rim face while the near ones show tread.
+            for wheel in wheels:
+                set_visible(parts, [wheel])
+                render_step(out_dir / f"{args.car}-{wnames[wheel.name]}_std_a{ai}_s{si}.png", w, h)
 
             # Brake pass — the tail-light geometry alone, as an overlay quad.
             set_visible(parts, [body])
@@ -526,7 +559,7 @@ def main() -> None:
             restore_materials(body, saved)
 
     (out_dir / "anchors.json").write_text(json.dumps(anchor_doc, indent=2) + "\n")
-    total = (len(colors) + 2) * len(ANGLES) * len(steps)
+    total = (len(colors) + len(wheels) + 1) * len(ANGLES) * len(steps)
     print(f"BAKE_OK wrote {total} frames to {out_dir}")
 
 
