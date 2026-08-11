@@ -207,3 +207,60 @@ no pixel crawl at any speed, and anchored overlays stay registered in both turn 
 - [ ] **Follow-up:** Phase 9 garage screen (hero render, stat-diff bars, 80 × 16×16 part icons).
       Needs its own spec once `economy/` has a parts catalogue — today it holds only `score.ts`
       and `save.ts`.
+
+---
+
+## What's left — read this first in a new session
+
+Verified against the tree on 2026-08-11, not copied from `plan.md`.
+
+### Blocking, and cheap
+
+1. **One `npm run dev` session settles three owed visual gates at once** — Spec A (kerb strobe at
+   speed *and* at crawl), Spec C (pixel crawl; overlays through a hard left turn), Spec D
+   (parallax depth, props at 200 km/h, effects, `effects.png` blocked in DevTools). Every
+   automated gate is green; these are the only things standing between Phase 7.5 and closed.
+2. **Two manual Supabase steps, user-side, before any Phase 8 work compiles against real data:**
+   expose the `retroline` schema in Settings → API → Exposed schemas, and set
+   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in Netlify env. Auth-only calls
+   (`ensureAnonSession()`) already work without either.
+
+### Phase 8 — Supabase persistence · *partly built, more than plan.md implies*
+
+Already there: `supabase/migrations/0001_init.sql` (schema + RLS, applied), `src/net/supabase.ts`
+(client scoped to the `retroline` schema, anonymous auth, degrades to a null client when env vars
+are unset), and the `SaveBackend` seam with `MemorySaveBackend` + `LocalStorageSaveBackend`.
+
+Not there: `SupabaseBackend implements SaveBackend`; save sync on race end; `race_results` insert;
+`leaderboard_best` reads; community track publish/browse against `tracks.is_public`; anonymous →
+account upgrade. The seam means none of this should touch game logic.
+
+### Phase 9 — modular economy · *needs a spec before code*
+
+`economy/` holds only `score.ts` and `save.ts`. Everything in plan.md §10 Phase 9 is unwritten:
+`types/inventory.ts`, the 80-part JSON catalogue (4 categories × 20), `Garage.ts` as a pure
+baseline+mod resolver feeding `physics/Vehicle.ts`, payout logic, and `ui/GarageScreen`. The
+source spec is `docs/superpowers/specs/2026-08-05-phase-9-modular-economy.md`; the garage *screen*
+still needs its own spec on top of it.
+
+### Phase 10 — audio · *nothing exists*
+
+`src/audio/` is absent entirely. Greenfield.
+
+### Phases 11–12 — polish, then iOS
+
+Phase 11 needs a real frame-time baseline before anything else; two deferred items are explicitly
+waiting on one (see below). Phase 12 (Capacitor) stays off the critical path by design.
+
+### Loose threads carried across phases
+
+- **Wire `props.png` into `Renderer.drawSprites`** (Spec D's recorded gap). Needs a
+  `setBakedProps` mirroring `setBakedCar`, plus `CarFrameSet.nearestStep` at the call site —
+  that method exists and is tested but has no production caller yet.
+- **F1 open-wheel silhouette.** No vetted CC0 pack contains one. Spec C proved the pipeline on
+  GT/tourer models, so this is a model swap, not a pipeline change.
+- **Spec A's grass banding stretch item** (spec §4.4) was cut, perf-gated. Needs the frame-time
+  baseline first.
+- **WebGL/PixiJS backend** stays hypothetical: the threshold in plan.md §12 is sustained >16.6ms
+  in profiling, which nobody has measured yet. The `RenderBackend` seam is the hedge; do not
+  pre-emptively cash it.
