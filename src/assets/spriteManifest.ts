@@ -47,7 +47,7 @@ const STAR_ROWS = [
   0b0110110,
   0b1100011,
 ];
-const STAR_UNLIT = '#2a2a6a'; // dim slot on the deep-blue header
+export const STAR_UNLIT = '#2a2a6a'; // dim slot on the deep-blue header
 
 function starOps(hex: string): DrawOp[] {
   const ops: DrawOp[] = [];
