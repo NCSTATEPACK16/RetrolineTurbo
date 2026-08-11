@@ -15,6 +15,7 @@ import { LocalStorageSaveBackend } from './economy/save.js';
 import { ScoreState } from './economy/score.js';
 import { loadBackdrops } from './engine/loadBackdrops.js';
 import { backdropIdForStage, type Backdrop } from './engine/Backdrop.js';
+import { loadAtlases, ATLAS_IDS, type LoadedAtlas } from './engine/loadAtlases.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
 import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
@@ -69,6 +70,19 @@ const score = new ScoreState(); // TX-1 passed-cars / points, shown in the HUD h
 // Background falls back to its flat colour bands, so the loop never waits.
 let backdrops = new Map<string, Backdrop>();
 void loadBackdrops().then((loaded) => { backdrops = loaded; });
+
+// Sprite atlases load asynchronously; until (or unless) they arrive the game
+// draws the procedural atlas, so the loop never waits and frame 1 always paints.
+// Deliberately NOT awaited: Renderer/HUD take the atlas in their constructors
+// above, and awaiting here would delay first paint behind a network round-trip.
+let atlases = new Map<string, LoadedAtlas>();
+void loadAtlases().then((loaded) => {
+  atlases = loaded;
+  // Spec C consumes `atlases`; until then this line is the only reader, and it
+  // is what makes the fallback observable in DevTools rather than silent.
+  console.info(`[atlas] ${atlases.size}/${ATLAS_IDS.length} baked atlases loaded; the rest draw procedurally`);
+});
+
 const input = new InputManager();
 const vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
 const remap = new RemapScreen(atlas, save, input);
