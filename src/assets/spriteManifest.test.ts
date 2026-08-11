@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { SPRITE_MANIFEST, FONT_COLORS, NEW_PROPS, glyphFrameName } from './spriteManifest.js';
+import {
+  SPRITE_MANIFEST, FONT_COLORS, NEW_PROPS, DIGIT_ROWS, LETTER_ROWS, STAR_ROWS, STAR_UNLIT,
+  glyphFrameName, maskOps, type DrawOp,
+} from './spriteManifest.js';
 
 const entry = (name: string) => SPRITE_MANIFEST.find((e) => e.name === name);
 
@@ -23,6 +26,58 @@ describe('sprite manifest', () => {
   it('names white glyphs without a suffix and coloured glyphs with one', () => {
     expect(glyphFrameName('glyph_a')).toBe('glyph_a');
     expect(glyphFrameName('glyph_a', 'gold')).toBe('glyph_a_gold');
+  });
+});
+
+/**
+ * Verbatim copies of the two hardcoded expanders `maskOps` replaced, kept here
+ * as the oracle. 228 glyph frames and 2 star faces are already baked into
+ * ui.png against their output; a generalisation that shifted a single pixel
+ * would be invisible in review and obvious only on screen.
+ */
+function legacyMaskOps(rows: number[], hex: string): DrawOp[] {
+  const ops: DrawOp[] = [];
+  rows.forEach((mask, ry) => {
+    for (let c = 0; c < 3; c++) if (mask & (0b100 >> c)) ops.push({ rx: c, ry, rw: 1, rh: 1, color: hex });
+  });
+  return ops;
+}
+
+function legacyStarOps(hex: string): DrawOp[] {
+  const ops: DrawOp[] = [];
+  STAR_ROWS.forEach((mask, ry) => {
+    for (let c = 0; c < 7; c++) if (mask & (0b1000000 >> c)) ops.push({ rx: c, ry, rw: 1, rh: 1, color: hex });
+  });
+  return ops;
+}
+
+describe('generalised maskOps', () => {
+  it('reproduces the 3-column letter output bit for bit', () => {
+    for (const [ch, rows] of Object.entries(LETTER_ROWS)) {
+      expect(maskOps(rows, '#ffffff', 3), ch).toEqual(legacyMaskOps(rows, '#ffffff'));
+    }
+  });
+
+  it('reproduces the 3-column digit output bit for bit', () => {
+    for (const [d, rows] of Object.entries(DIGIT_ROWS)) {
+      expect(maskOps(rows, '#ffffff', 3), d).toEqual(legacyMaskOps(rows, '#ffffff'));
+    }
+  });
+
+  it('defaults to 3 columns, so every existing call site is unchanged', () => {
+    const rows = LETTER_ROWS['a']!;
+    expect(maskOps(rows, '#ffffff')).toEqual(maskOps(rows, '#ffffff', 3));
+  });
+
+  it('reproduces the 7-column star face it absorbed', () => {
+    expect(maskOps(STAR_ROWS, FONT_COLORS.gold, 7)).toEqual(legacyStarOps(FONT_COLORS.gold));
+    expect(maskOps(STAR_ROWS, STAR_UNLIT, 7)).toEqual(legacyStarOps(STAR_UNLIT));
+  });
+
+  it('handles an 8-column mask, which is what a wider face would need', () => {
+    const ops = maskOps([0b10000001, 0, 0, 0, 0], '#ffffff', 8);
+    expect(ops).toHaveLength(2);
+    expect(ops.map((o) => o.rx)).toEqual([0, 7]);
   });
 });
 
