@@ -77,18 +77,26 @@ baseline exists.
 
 *Depends on A. Buildable and fully testable before any PNG exists.*
 
-- [ ] `src/math/ladder.ts` — 12-step ladder, nearest-not-floor snapping, allocation-free, total
-      over degenerate input (vitest)
-- [ ] `src/engine/SpriteComposer.ts` — normalised anchor → overlay rect, with the `x → 1−x`
-      flip mirror. Deliberately **not** on `RenderBackend` (vitest)
-- [ ] `src/engine/AtlasManifest.ts` — defensive parser; never throws (vitest)
-- [ ] `src/engine/CarFrameSet.ts` — integer-indexed lookup; **no per-frame string construction** (vitest)
-- [ ] `src/engine/RenderBackend.ts` + `Canvas2DBackend.ts` + `RecordingBackend.ts` — optional
-      `flipX` via negative-scale transform (vitest)
-- [ ] `src/engine/loadAtlases.ts` — cars/props/ui/effects, never rejects, fire-and-forget in
-      `main.ts` (**no `await` before constructing `Renderer`/`HUD`**) (vitest)
-- [ ] **The six existing `SpriteAtlas` test files pass unchanged** — procedural atlas is permanent
-- [ ] **VISUAL GATE:** the game looks **identical** to before. Any visible change is a bug.
+- [x] `src/math/ladder.ts` — 12-step ladder, nearest-not-floor snapping, allocation-free, total
+      over degenerate input (vitest, 9 tests). Guards `LADDER[0] === PLAYER_CAR_WIDTH` so Spec C
+      can draw the player at a native step.
+- [x] `src/engine/SpriteComposer.ts` — normalised anchor → overlay rect, with the `x → 1−x`
+      flip mirror. Deliberately **not** on `RenderBackend` (vitest, 6 tests)
+- [x] `src/engine/AtlasManifest.ts` — defensive parser; never throws (vitest, 6 tests)
+- [x] `src/engine/CarFrameSet.ts` — integer-indexed lookup; **no per-frame string construction**
+      (vitest, 5 tests)
+- [x] `src/engine/RenderBackend.ts` + `Canvas2DBackend.ts` + `RecordingBackend.ts` — optional
+      `flipX` via negative-scale transform (vitest, 4 tests). `SpriteCall` gains `flipX`.
+- [x] `src/engine/loadAtlases.ts` — cars/props/ui/effects, never rejects, fire-and-forget in
+      `main.ts` (**no `await` before constructing `Renderer`/`HUD`**) (vitest, 5 tests).
+      Covers the real miss path: Vite/Netlify answer a missing manifest **200 with index.html**,
+      so `res.ok` is true and only the JSON parse reveals it.
+- [x] **The six existing `SpriteAtlas` test files pass unchanged** — procedural atlas is permanent.
+      None of the six is in the Spec B diff at all.
+- [x] **VISUAL GATE:** `Renderer.ts` and all of `src/ui/` are untouched by Spec B; the only
+      render-path edit is `Canvas2DBackend.drawSprite`, whose `flipX = false` default takes the
+      byte-identical branch. Every RecordingBackend geometry assertion passes unmodified.
+      ⚠️ Not yet done: the interactive before/after screenshot diff (needs a browser).
 
 ## M-checklist — Spec C · vehicle bake pipeline
 
