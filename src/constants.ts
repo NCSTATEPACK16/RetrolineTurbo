@@ -30,7 +30,19 @@ export const MAX_FRAME_MS = 250;
  */
 export const DEFAULT_FOCAL_LENGTH = 0.84; // d_screen (screen-plane distance)
 export const DEFAULT_CAMERA_HEIGHT = 1000; // h_camera above the road plane (world units)
-export const HORIZON_Y = LOGICAL_HEIGHT / 2; // Y_horizon = 135; vanishing row for a level camera
+
+/**
+ * Screen layout (research §5a). The horizon sits just above vertical centre so
+ * the road gets the bottom ~56% — correct proportions for a racer. Moving this
+ * moves the vanishing point for every projected segment; retune
+ * DEFAULT_FOCAL_LENGTH alongside it if the road reads wrong.
+ */
+export const HORIZON_Y = 118; // Y_horizon; vanishing row for a level camera
+export const HEADER_H = 40; // TX-1 blue header depth
+export const HUD_MARGIN = 6; // safe inset from every edge (iOS notch)
+export const HUD_ROW_Y = 248; // baseline row for the SCORE / SPEED corner readouts
+export const PLAYER_CAR_BASE_Y = 232; // player car bottom edge
+export const PLAYER_CAR_WIDTH = 120; // player car drawn width (~1/4 screen)
 
 /**
  * Provisional track geometry (Jake Gordon's proven seed values). `roadWidth` is

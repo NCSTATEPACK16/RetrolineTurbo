@@ -1,5 +1,8 @@
 import { scaleFor, projectX, projectY, accumulateSegment, clipToCrest } from '../math/projection.js';
-import { LOGICAL_WIDTH, LOGICAL_HEIGHT, COLORS, DEFAULT_CAMERA_HEIGHT } from '../constants.js';
+import {
+  LOGICAL_WIDTH, LOGICAL_HEIGHT, COLORS, DEFAULT_CAMERA_HEIGHT,
+  PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y,
+} from '../constants.js';
 import type { Camera, TrackConfig, SpriteFrame } from '../types/engine.js';
 import type { RenderBackend } from './RenderBackend.js';
 import type { TrackManager } from './TrackManager.js';
@@ -257,9 +260,12 @@ export class Renderer {
 
   private drawPlayerCar(backend: RenderBackend): void {
     const f = this.atlas.frame('player');
-    const dw = f.w * 3, dh = f.h * 3;                         // fixed foreground scale (provisional)
+    // Layout-locked size and position (research §5a). Spec C swaps the artwork
+    // behind this without re-deriving where the car sits.
+    const dw = PLAYER_CAR_WIDTH;
+    const dh = dw * (f.h / f.w);
     const dx = (LOGICAL_WIDTH - dw) / 2;
-    const dy = LOGICAL_HEIGHT - dh - 6;
+    const dy = PLAYER_CAR_BASE_Y - dh;
     backend.drawSprite(this.atlas.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, LOGICAL_HEIGHT);
   }
 }

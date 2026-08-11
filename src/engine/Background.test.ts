@@ -55,12 +55,25 @@ describe('Background with a backdrop plate', () => {
   });
 
   it('fills the gap above a short plate with the plate sky colour', () => {
+    // Must be genuinely shorter than the horizon to leave a gap at all. The
+    // shared 119px fixture is the tallest shipped plate and now exceeds
+    // HORIZON_Y (118) — see the tall-plate case below.
+    const short = { ...backdrop, height: 90 };
     const backend = new RecordingBackend();
-    new Background().render(CAM, 0, backend, backdrop);
-    const sky = backend.bands.find((b) => b.color === backdrop.skyColor);
+    new Background().render(CAM, 0, backend, short);
+    const sky = backend.bands.find((b) => b.color === short.skyColor);
     expect(sky).toBeDefined();
     expect(sky!.y).toBe(0);
-    expect(sky!.h).toBeCloseTo(HORIZON_Y - backdrop.height, 6);
+    expect(sky!.h).toBeCloseTo(HORIZON_Y - short.height, 6);
+  });
+
+  it('fills no gap band when the plate is taller than the horizon', () => {
+    // At HORIZON_Y = 118 the 119px city_night plate overhangs the top of the
+    // sky band; it is the header that overpaints it, not a fill.
+    expect(backdrop.height).toBeGreaterThan(HORIZON_Y);
+    const backend = new RecordingBackend();
+    new Background().render(CAM, 0, backend, backdrop);
+    expect(backend.bands.some((b) => b.color === backdrop.skyColor)).toBe(false);
   });
 
   it('still fills the ground band below the horizon', () => {

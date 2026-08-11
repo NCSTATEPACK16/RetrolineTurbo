@@ -62,9 +62,9 @@ describe('projectX / projectY', () => {
 
 describe('horizon collapse (z → ∞)', () => {
   it('a ground point converges to Y_horizon as depth grows', () => {
-    const near = projectY(0, H_CAM, scaleFor(D, 10));
-    const far = projectY(0, H_CAM, scaleFor(D, 1e6));
-    const veryFar = projectY(0, H_CAM, scaleFor(D, 1e12));
+    const near = projectY(0, H_CAM, scaleFor(D, 10), LOGICAL_HEIGHT, HORIZON_Y);
+    const far = projectY(0, H_CAM, scaleFor(D, 1e6), LOGICAL_HEIGHT, HORIZON_Y);
+    const veryFar = projectY(0, H_CAM, scaleFor(D, 1e12), LOGICAL_HEIGHT, HORIZON_Y);
     // Monotonically approaching the horizon from below (larger y → smaller y).
     expect(near).toBeGreaterThan(far);
     expect(far).toBeGreaterThan(veryFar);
@@ -73,7 +73,7 @@ describe('horizon collapse (z → ∞)', () => {
   });
 
   it('equals Y_horizon exactly in the scale → 0 limit', () => {
-    expect(projectY(0, H_CAM, 0)).toBe(HORIZON_Y);
+    expect(projectY(0, H_CAM, 0, LOGICAL_HEIGHT, HORIZON_Y)).toBe(HORIZON_Y);
   });
 });
 
@@ -81,7 +81,7 @@ describe('zAtScanline (z-map)', () => {
   it('round-trips the forward projection across several depths', () => {
     const cam = levelCamera();
     for (const z of [50, 200, 840, 5000, 10000]) {
-      const screenY = projectY(0, cam.height, scaleFor(cam.focalLength, z));
+      const screenY = projectY(0, cam.height, scaleFor(cam.focalLength, z), LOGICAL_HEIGHT, cam.horizon);
       expect(zAtScanline(screenY, cam)).toBeCloseTo(z, 6);
     }
   });

@@ -7,7 +7,7 @@ import { packAtlas } from '../assets/packAtlas.js';
 import { SPRITE_MANIFEST } from '../assets/spriteManifest.js';
 import {
   DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y, LOGICAL_WIDTH, LOGICAL_HEIGHT,
-  DEFAULT_TRACK_CONFIG, COLORS,
+  DEFAULT_TRACK_CONFIG, COLORS, PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y,
 } from '../constants.js';
 import type { Camera, Segment, Sprite } from '../types/engine.js';
 import { parseTrackFile } from '../track/schema.js';
@@ -310,4 +310,13 @@ describe('road surface', () => {
     // Every merged band uses the light phase — no alternation at the horizon.
     for (const q of tiny) expect(q.color).toBe(COLORS.rumbleLight);
   });
+});
+
+it('centres the player car and bases it at the locked row', () => {
+  const backend = new RecordingBackend();
+  new Renderer(DEFAULT_TRACK_CONFIG, atlas).render(camAt(0), stubTrack(() => []), backend);
+  const car = backend.sprites.at(-1)!; // player car is drawn last
+  expect(car.dw).toBe(PLAYER_CAR_WIDTH);
+  expect(car.dx + car.dw / 2).toBeCloseTo(LOGICAL_WIDTH / 2, 5);
+  expect(car.dy + car.dh).toBeCloseTo(PLAYER_CAR_BASE_Y, 5);
 });
