@@ -1,10 +1,11 @@
-import { LOGICAL_WIDTH, KMH_PER_WORLD } from '../constants.js';
+import { LOGICAL_WIDTH, KMH_PER_WORLD, HEADER_H, HUD_MARGIN, HUD_ROW_Y } from '../constants.js';
+import { PALETTE } from '../assets/palette.js';
 import type { Camera, PlayerState } from '../types/engine.js';
 import type { RenderBackend } from '../engine/RenderBackend.js';
 import type { SpriteAtlas } from '../engine/SpriteAtlas.js';
 import type { TrackManager } from '../engine/TrackManager.js';
 import type { RouteState } from '../track/route.js';
-import { drawText } from './text.js';
+import { drawText, textWidth } from './text.js';
 
 export function speedToKmh(speed: number): number { return Math.round(speed * KMH_PER_WORLD); }
 
@@ -26,56 +27,82 @@ export function formatTime(ms: number): string {
  * the atlas (see FONT_COLORS), so coloured text costs the same as white text.
  */
 export class HUD {
-  static readonly HEADER_H = 24;
-  static readonly HEADER_BG = '#000088';
-  static readonly HEADER_EDGE = '#3333ff';
+  static readonly HEADER_H = HEADER_H;
+  static readonly HEADER_BG = PALETTE.ui.header;
+  static readonly HEADER_EDGE = PALETTE.ui.headerEdge;
   static readonly STAR_SLOTS = 10;
-  static readonly TREE_NODE = '#5060c0'; // scene not on the taken path
-  static readonly TREE_PATH = '#ffcc00'; // scene already visited (TX-1 yellow route line)
-  static readonly TREE_ACTIVE = '#40e0e0'; // scene being driven now
+  static readonly TREE_NODE = PALETTE.ui.treeNode; // scene not on the taken path
+  static readonly TREE_PATH = PALETTE.ui.gold; // scene already visited (TX-1 yellow route line)
+  static readonly TREE_ACTIVE = PALETTE.ui.cyan; // scene being driven now
 
   private static readonly LABEL = 1; // scale for the small magenta/cyan captions
   private static readonly VALUE = 2; // scale for the big readouts
+
+  /** Star gauge width: STAR_SLOTS slots of a 7px face on an 8px pitch. */
+  private static readonly STARS_W = 10 * 8;
+  /** Header anchors, right-aligned inward from the safe margin. */
+  private static readonly STARS_X = LOGICAL_WIDTH - HUD_MARGIN - HUD.STARS_W;
+  private static readonly TIME_X = HUD.STARS_X - 76;
 
   constructor(private readonly atlas: SpriteAtlas) {}
 
   /** `route`, `passedCars` and `points` are optional so pre-route callers (and
    * the editor harness) can render the bare header. */
+  /**
+   * TX-1 composition (research §5a): everything that is *status* lives in the
+   * shallow header band; the two readouts you watch while driving — SCORE and
+   * SPEED — drop to the bottom corners where they never cross the road or the
+   * backdrop plate.
+   *
+   * `_track` / `_camera` are unused now that the mini-map is gone, but stay in
+   * the signature: Spec D wants the camera back for effect emission and
+   * changing the shape would ripple into `main.ts` for no gain.
+   */
   render(
-    player: PlayerState, elapsedMs: number, track: TrackManager, camera: Camera,
+    player: PlayerState, elapsedMs: number, _track: TrackManager, _camera: Camera,
     backend: RenderBackend, remainingMs?: number,
     route?: RouteState, passedCars = 0, points = 0,
   ): void {
     backend.fillBand(0, HUD.HEADER_H, HUD.HEADER_BG);
     backend.fillBand(HUD.HEADER_H, 1, HUD.HEADER_EDGE);
 
+    // ── Header band ────────────────────────────────────────────────────────
+    // stage — blue caption, white value, hard left against the safe margin
+    this.label(backend, 'stage', HUD_MARGIN, 6, 'blue');
+    this.value(backend, `${(route?.stage ?? 0) + 1}`, HUD_MARGIN, 16, 'white');
+
+    // the 5-stage route pyramid, centred
     if (route) this.drawRouteTree(route, backend);
 
-    // your score — magenta caption, cyan value
-    this.label(backend, 'your score', 72, 4, 'magenta');
-    this.value(backend, `${points}`, 72, 12, 'cyan');
-
-    // stage — blue caption, white value
-    this.label(backend, 'stage', 150, 4, 'blue');
-    this.value(backend, `${(route?.stage ?? 0) + 1}`, 150, 12, 'white');
-
-    // time — magenta caption, big red countdown; elapsed rides underneath it
-    this.label(backend, 'time', 186, 4, 'magenta');
+    // time — magenta caption, big red countdown, elapsed riding underneath
+    this.label(backend, 'time', HUD.TIME_X, 6, 'magenta');
     if (remainingMs !== undefined) {
-      this.value(backend, `${Math.ceil(remainingMs / 1000)}`, 186, 12, 'red');
+      this.value(backend, `${Math.ceil(remainingMs / 1000)}`, HUD.TIME_X, 16, 'red');
     }
-    this.label(backend, formatTime(elapsedMs), 186, 19, 'white');
+    this.label(backend, formatTime(elapsedMs), HUD.TIME_X, 30, 'white');
 
-    // speed — cyan caption and value, with the gear digit alongside
-    this.label(backend, 'speed', 244, 4, 'cyan');
-    this.value(backend, `${speedToKmh(player.speed)}`, 244, 12, 'cyan');
-    this.label(backend, `gear ${player.gear}`, 244, 19, 'white');
+    // passed cars — magenta caption over the gold star gauge, right-aligned
+    this.label(backend, 'passed cars', HUD.STARS_X, 6, 'magenta');
+    this.drawStarGauge(passedCars, HUD.STARS_X, 16, backend);
 
-    // passed cars — magenta caption over the gold star gauge
-    this.label(backend, 'passed cars', 320, 4, 'magenta');
-    this.drawStarGauge(passedCars, 320, 11, backend);
+    // ── Bottom corners ─────────────────────────────────────────────────────
+    // score, left — magenta caption over a cyan value
+    this.label(backend, 'score', HUD_MARGIN, HUD_ROW_Y - 7, 'magenta');
+    this.value(backend, `${points}`, HUD_MARGIN, HUD_ROW_Y, 'cyan');
 
-    this.drawMiniMap(track, camera, backend);
+    // gear then speed, right — both flush to the safe margin
+    const gearText = `gear ${player.gear}`;
+    this.label(
+      backend, gearText,
+      LOGICAL_WIDTH - HUD_MARGIN - textWidth(this.atlas, gearText, HUD.LABEL),
+      HUD_ROW_Y - 7, 'white',
+    );
+    const speedText = `${speedToKmh(player.speed)}`;
+    this.value(
+      backend, speedText,
+      LOGICAL_WIDTH - HUD_MARGIN - textWidth(this.atlas, speedText, HUD.VALUE),
+      HUD_ROW_Y, 'cyan',
+    );
   }
 
   private label(backend: RenderBackend, text: string, x: number, y: number, color: 'magenta' | 'cyan' | 'blue' | 'white'): void {
@@ -98,27 +125,17 @@ export class HUD {
   /** The 5-stage pyramid as a compact node diagram: stage 1 at the top-left,
    * widening down, with the visited path and current scene picked out. */
   private drawRouteTree(route: RouteState, backend: RenderBackend): void {
-    const x0 = 6, y0 = 3, pitchX = 5, pitchY = 4, half = 1;
+    const cx0 = LOGICAL_WIDTH / 2, y0 = 6, pitchX = 5, pitchY = 5, half = 1;
     for (let s = 0; s < route.pyramid.length; s++) {
       const row = route.pyramid[s]!;
       const y = y0 + s * pitchY;
       for (let i = 0; i < row.length; i++) {
-        const cx = x0 + (i - (row.length - 1) / 2) * pitchX + 24;
+        const cx = cx0 + (i - (row.length - 1) / 2) * pitchX;
         const active = s === route.stage && i === route.sceneIdx;
         const visited = s < route.stage && route.visited[s] === i;
         const color = active ? HUD.TREE_ACTIVE : visited ? HUD.TREE_PATH : HUD.TREE_NODE;
         backend.drawQuad(cx, y, half, cx, y + 2, half, color);
       }
-    }
-  }
-
-  private drawMiniMap(track: TrackManager, camera: Camera, backend: RenderBackend): void {
-    const base = Math.floor(camera.z / 200);
-    const x0 = LOGICAL_WIDTH - 40, y0 = HUD.HEADER_H + 8;
-    for (let i = 0; i < 20; i++) {
-      const seg = track.segment(base + i * 4);
-      const cx = x0 + seg.curve * 2;
-      backend.drawQuad(cx, y0 + i * 2, 2, cx, y0 + i * 2 + 1, 2, '#e8e8f0');
     }
   }
 }

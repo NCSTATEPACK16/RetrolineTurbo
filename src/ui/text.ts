@@ -31,3 +31,18 @@ export function drawText(
     }
   }
 }
+
+/**
+ * Rendered width of `text` at `scale`. Mirrors drawText's advance, including the
+ * trailing 1px inter-glyph gap after the final character — so right-aligning to
+ * this leaves a `scale`-pixel optical margin, which is what we want against the
+ * screen edge anyway.
+ */
+export function textWidth(atlas: SpriteAtlas, text: string, scale = 2): number {
+  let w = 0;
+  for (const ch of text) {
+    const name = frameName(ch);
+    w += name !== null ? (atlas.frame(glyphFrameName(name)).w + 1) * scale : 4 * scale;
+  }
+  return w;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drawText } from './text.js';
+import { drawText, textWidth } from './text.js';
 import { SpriteAtlas } from '../engine/SpriteAtlas.js';
 import { packAtlas } from '../assets/packAtlas.js';
 import { SPRITE_MANIFEST } from '../assets/spriteManifest.js';
@@ -73,5 +73,31 @@ describe('drawText', () => {
     drawText(plain, atlas, 'abc', 0, 0);
     drawText(tinted, atlas, 'abc', 0, 0, 2, 'cyan');
     expect(tinted.sprites.map((s) => s.dx)).toEqual(plain.sprites.map((s) => s.dx));
+  });
+});
+
+describe('textWidth', () => {
+  it('matches drawText\'s advance for a digit run', () => {
+    // Each glyph advances (f.w + 1) * scale, trailing gap included.
+    const w = atlas.frame('digit_0').w;
+    expect(textWidth(atlas, '300', 2)).toBe(3 * (w + 1) * 2);
+  });
+
+  it('advances 4 * scale for a space', () => {
+    expect(textWidth(atlas, ' ', 3)).toBe(12);
+    expect(textWidth(atlas, 'a a', 1) - textWidth(atlas, 'aa', 1)).toBe(4);
+  });
+
+  it('advances unknown characters exactly like a space, without throwing', () => {
+    expect(() => textWidth(atlas, '#', 2)).not.toThrow();
+    expect(textWidth(atlas, '#', 2)).toBe(textWidth(atlas, ' ', 2));
+  });
+
+  it('right-aligning by it keeps the drawn glyphs inside the anchor', () => {
+    const b = new RecordingBackend();
+    const text = '300';
+    const right = 474;
+    drawText(b, atlas, text, right - textWidth(atlas, text, 2), 0, 2);
+    expect(Math.max(...b.sprites.map((s) => s.dx + s.dw))).toBeLessThanOrEqual(right);
   });
 });
