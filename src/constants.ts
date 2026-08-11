@@ -43,6 +43,8 @@ export const HUD_MARGIN = 6; // safe inset from every edge (iOS notch)
 export const HUD_ROW_Y = 248; // baseline row for the SCORE / SPEED corner readouts
 export const PLAYER_CAR_BASE_Y = 232; // player car bottom edge
 export const PLAYER_CAR_WIDTH = 120; // player car drawn width (~1/4 screen)
+/** Car id the bake pipeline writes into cars.json; selects the player's body frames. */
+export const PLAYER_CAR_ID = 'sports';
 
 /**
  * Provisional track geometry (Jake Gordon's proven seed values). `roadWidth` is

@@ -46,6 +46,8 @@ export interface PlayerState {
   readonly steer: number;
   /** True while the car is in a skid — selects the skid sprite frame. */
   readonly skidding: boolean;
+  /** True while the driver is on the brakes — lights the brake-light overlay. */
+  readonly braking: boolean;
 }
 
 /** A packed sprite region in the atlas. `anchor` is the sprite-local pixel that

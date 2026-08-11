@@ -20,6 +20,33 @@ export const LADDER = [120, 96, 76, 60, 48, 38, 30, 24, 19, 15, 12, 10] as const
 export const OVERLAY_CULL_STEP = 6;
 
 /**
+ * Ratio between adjacent steps. LADDER is 120 x 0.8^k, rounded to whole pixels.
+ */
+const LADDER_RATIO = 0.8;
+const LOG_RATIO = Math.log(LADDER_RATIO);
+
+/**
+ * Snap an arbitrary sprite width to the ladder's geometric series.
+ *
+ * `ladderStepFor` answers "which baked car frame?", and so clamps to the twelve
+ * frames that exist. This answers "how wide do I draw it?" for any sprite, and
+ * must NOT clamp: roadside props project from ~32px right down to half a pixel
+ * across the draw distance, and pinning them to the ladder's 10px floor would
+ * draw a tree 300 segments away exactly as large as one 30 segments away —
+ * flattening the depth cue the projection exists to create.
+ *
+ * Inside the baked range it returns the LADDER entry verbatim, so cars still
+ * draw at the exact width their frames were rendered at.
+ */
+export function quantisedWidth(idealWidthPx: number): number {
+  if (!(idealWidthPx > 0)) return 1; // also catches NaN
+  if (!Number.isFinite(idealWidthPx)) return LADDER[0]!;
+  const k = Math.round(Math.log(idealWidthPx / LADDER[0]!) / LOG_RATIO);
+  if (k >= 0 && k < LADDER.length) return LADDER[k]!;
+  return Math.max(1, Math.round(LADDER[0]! * LADDER_RATIO ** k));
+}
+
+/**
  * Index of the ladder step nearest `idealWidthPx`. Nearest, not floor —
  * flooring biases every sprite small. Clamps at both ends; NaN and negatives
  * clamp to the smallest step, because the render loop must never throw.

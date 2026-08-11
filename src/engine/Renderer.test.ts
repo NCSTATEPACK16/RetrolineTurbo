@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { projectSegment, Renderer } from './Renderer.js';
+import { projectSegment, Renderer, selectCarFrame, overlaysVisible } from './Renderer.js';
+import { LADDER, OVERLAY_CULL_STEP, quantisedWidth } from '../math/ladder.js';
 import { TrackManager } from './TrackManager.js';
 import { RecordingBackend } from './testing/RecordingBackend.js';
 import { SpriteAtlas } from './SpriteAtlas.js';
@@ -9,7 +10,8 @@ import {
   DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y, LOGICAL_WIDTH, LOGICAL_HEIGHT,
   DEFAULT_TRACK_CONFIG, COLORS, PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y,
 } from '../constants.js';
-import type { Camera, Segment, Sprite } from '../types/engine.js';
+import type { Camera, PlayerState, Segment, Sprite } from '../types/engine.js';
+import { buildCarFrameSet } from './CarFrameSet.js';
 import { parseTrackFile } from '../track/schema.js';
 import { MIN_BAND_ROWS } from './roadBanding.js';
 
@@ -319,4 +321,183 @@ it('centres the player car and bases it at the locked row', () => {
   expect(car.dw).toBe(PLAYER_CAR_WIDTH);
   expect(car.dx + car.dw / 2).toBeCloseTo(LOGICAL_WIDTH / 2, 5);
   expect(car.dy + car.dh).toBeCloseTo(PLAYER_CAR_BASE_Y, 5);
+});
+
+describe('scale ladder quantisation', () => {
+  const treeFrame = atlas.frame('tree');
+  const isTree = (s: { sx: number; sy: number }): boolean =>
+    s.sx === treeFrame.x && s.sy === treeFrame.y;
+
+  it('holds one sprite width over a run of camera positions — the anti-shimmer property', () => {
+    // The plan probed this with two fixed segments, but adjacent far segments
+    // differ in z by ~5% while a ladder step is 25%, so whether a given pair
+    // shares a step is luck. Approaching the sprite continuously — which is what
+    // the player actually does — tests the real property: the drawn width must be
+    // piecewise constant, not a new value every frame.
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    const track = stubTrack((i) => (i === 40 ? [{ name: 'tree', offset: -1.4 }] : []));
+    const widths: number[] = [];
+    // Segment 40 sits at z = 8000; drive most of the way to it so the sprite
+    // sweeps a real size range instead of sitting at one sub-pixel width.
+    for (let z = 0; z < 7600; z += 40) {
+      const backend = new RecordingBackend();
+      renderer.render(camAt(z), track, backend);
+      const tree = backend.sprites.filter(isTree)[0];
+      if (tree) widths.push(tree.dw);
+    }
+    expect(widths.length).toBeGreaterThan(50);
+    const changes = widths.filter((w, i) => i > 0 && w !== widths[i - 1]).length;
+    expect(changes).toBeGreaterThan(0); // it does still resize with depth
+    expect(changes).toBeLessThan(widths.length / 8); // but rarely — long flat runs
+  });
+
+  it('still draws a much nearer sprite on a larger step', () => {
+    const backend = new RecordingBackend();
+    // Segments 5 and 60 are far enough apart to straddle several ladder steps.
+    const track = stubTrack((i) => (i === 5 || i === 60 ? [{ name: 'tree', offset: -1.4 }] : []));
+    new Renderer({ ...DEFAULT_TRACK_CONFIG, drawDistance: 80 }, atlas).render(camAt(0), track, backend);
+    const trees = backend.sprites.filter(isTree);
+    expect(trees).toHaveLength(2);
+    expect(trees[1]!.dw).toBeGreaterThan(trees[0]!.dw);
+  });
+
+  it('only ever emits widths that sit on the quantiser series', () => {
+    const backend = new RecordingBackend();
+    const track = stubTrack((i) => (i % 4 === 0 ? [{ name: 'tree', offset: 1.4 }] : []));
+    new Renderer(DEFAULT_TRACK_CONFIG, atlas).render(camAt(0), track, backend);
+    const trees = backend.sprites.filter(isTree);
+    expect(trees.length).toBeGreaterThan(4);
+    // Every emitted width is a fixed point of the quantiser — nothing continuous
+    // slipped through. LADDER itself is only the car-sized window of that series.
+    for (const t of trees) expect(quantisedWidth(t.dw)).toBe(t.dw);
+  });
+});
+
+describe('player steering frames', () => {
+  const cases: [number, boolean, number, boolean][] = [
+    // steer, skidding, expectedAngleIdx, expectedFlipX
+    [0, false, 0, false],
+    [0.3, false, 1, false],
+    [0.9, false, 2, false],
+    [-0.3, false, 1, true],
+    [-0.9, false, 2, true],
+  ];
+  it.each(cases)('steer=%s skid=%s -> angle %s flip %s', (steer, skid, angle, flip) => {
+    expect(selectCarFrame(steer, skid)).toEqual({ angle, flipX: flip, skid });
+  });
+
+  it('flags the skid frame without losing the steering angle', () => {
+    expect(selectCarFrame(0.9, true).skid).toBe(true);
+    expect(selectCarFrame(0.9, true).angle).toBe(2);
+  });
+
+  it('treats NaN steer as straight ahead rather than throwing', () => {
+    expect(selectCarFrame(Number.NaN, false)).toEqual({ angle: 0, flipX: false, skid: false });
+  });
+});
+
+describe('overlay culling', () => {
+  it('drops overlays once the car is too small to show them', () => {
+    expect(overlaysVisible(OVERLAY_CULL_STEP - 1)).toBe(true);
+    expect(overlaysVisible(OVERLAY_CULL_STEP)).toBe(false);
+    expect(overlaysVisible(OVERLAY_CULL_STEP + 1)).toBe(false);
+  });
+});
+
+describe('baked player car', () => {
+  /** Build a CarFrameSet from synthetic manifest frames, the same path the real
+   * atlas takes through buildCarFrameSet. */
+  const mkSet = (w: number, h: number, anchors: Record<string, [number, number]> = {}) =>
+    buildCarFrameSet([0, 1, 2].flatMap((angle) =>
+      Array.from({ length: LADDER.length }, (_, step) => ({
+        id: `c_red_a${angle}_s${step}`, x: angle * 10, y: step * 10,
+        w: Math.max(1, Math.round(w * (1 + angle * 0.4))), h,
+        car: 'c', color: 'red', angle, step, anchors,
+      }))));
+
+  // The real 30-degree anchors out of the bake. They must be ASYMMETRIC: a
+  // symmetric set maps onto itself under mirroring, so a test using one would
+  // pass whether or not `overlayDest` mirrors at all.
+  const ANCHORS: Record<string, [number, number]> = {
+    wheelFL: [0.4866, 0.5356], wheelFR: [0.7517, 0.5893],
+    wheelBL: [0.2175, 0.697], wheelBR: [0.5171, 0.7745],
+    brake: [0.278, 0.5676],
+  };
+
+  const baked = () => ({
+    image: {} as CanvasImageSource,
+    body: mkSet(PLAYER_CAR_WIDTH, 105, ANCHORS),
+    wheel: mkSet(12, 28),
+    brake: mkSet(80, 9),
+    color: 0,
+  });
+
+  const state = (over: Partial<PlayerState> = {}): PlayerState =>
+    ({ z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, braking: false, ...over });
+
+  function draw(over: Partial<PlayerState> = {}) {
+    const backend = new RecordingBackend();
+    const r = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    r.setBakedCar(baked());
+    r.render(camAt(0), stubTrack(() => []), backend, undefined, undefined, 0, undefined, state(over));
+    return backend;
+  }
+
+  it('draws the straight frame centred and based at the locked row', () => {
+    const car = draw().sprites.at(-5)!; // body, then four wheels
+    expect(car.dw).toBe(PLAYER_CAR_WIDTH);
+    expect(car.dx + car.dw / 2).toBeCloseTo(LOGICAL_WIDTH / 2, 5);
+    expect(car.dy + car.dh).toBeCloseTo(PLAYER_CAR_BASE_Y, 5);
+    expect(car.flipX).toBe(false);
+  });
+
+  it('mirrors rather than baking a second set of steering frames', () => {
+    const right = draw({ steer: 0.9 }).sprites;
+    const left = draw({ steer: -0.9 }).sprites;
+    expect(right[right.length - 5]!.flipX).toBe(false);
+    expect(left[left.length - 5]!.flipX).toBe(true);
+    // Same source rect: the mirror is the whole point, not a different frame.
+    expect(left[left.length - 5]!.sx).toBe(right[right.length - 5]!.sx);
+  });
+
+  it('keeps overlays attached when the car is mirrored — the classic failure', () => {
+    // ax -> 1 - ax. If the mirror is forgotten the wheels slide off to one side
+    // on left turns only, which is exactly how this bug presents in play.
+    const wheelsOf = (b: RecordingBackend) => b.sprites.slice(-4).map((s) => s.dx);
+    const right = draw({ steer: 0.9 });
+    const left = draw({ steer: -0.9 });
+    const body = right.sprites.at(-5)!;
+    const mid = body.dx + body.dw / 2;
+    const mirrored = wheelsOf(left).map((dx) => 2 * mid - dx).sort((a, b) => a - b);
+    const expected = wheelsOf(right)
+      .map((dx, i) => dx + right.sprites.slice(-4)[i]!.dw)
+      .sort((a, b) => a - b);
+    mirrored.forEach((v, i) => expect(v).toBeCloseTo(expected[i]!, 5));
+  });
+
+  it('pins each wheel inside the body it belongs to', () => {
+    const b = draw();
+    const body = b.sprites.at(-5)!;
+    for (const w of b.sprites.slice(-4)) {
+      expect(w.dx + w.dw / 2).toBeGreaterThan(body.dx);
+      expect(w.dx + w.dw / 2).toBeLessThan(body.dx + body.dw);
+      expect(w.dy + w.dh / 2).toBeGreaterThan(body.dy);
+      expect(w.dy + w.dh / 2).toBeLessThan(body.dy + body.dh);
+    }
+  });
+
+  it('lights the brake overlay only while braking', () => {
+    expect(draw().sprites.length).toBe(draw({ braking: true }).sprites.length - 1);
+  });
+
+  it('falls back to the procedural frame when no atlas arrived', () => {
+    const backend = new RecordingBackend();
+    new Renderer(DEFAULT_TRACK_CONFIG, atlas)
+      .render(camAt(0), stubTrack(() => []), backend, undefined, undefined, 0, undefined, state());
+    expect(backend.sprites.at(-1)!.dw).toBe(PLAYER_CAR_WIDTH);
+  });
+
+  it('survives a player state the physics never produces', () => {
+    expect(() => draw({ steer: Number.NaN })).not.toThrow();
+  });
 });

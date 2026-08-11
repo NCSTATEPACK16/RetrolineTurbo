@@ -16,6 +16,7 @@ import { ScoreState } from './economy/score.js';
 import { loadBackdrops } from './engine/loadBackdrops.js';
 import { backdropIdForStage, type Backdrop } from './engine/Backdrop.js';
 import { loadAtlases, ATLAS_IDS, type LoadedAtlas } from './engine/loadAtlases.js';
+import { buildCarFrameSet } from './engine/CarFrameSet.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
 import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
@@ -25,7 +26,7 @@ import { drawText } from './ui/text.js';
 import { parseTrackFile } from './track/schema.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
-  LOGICAL_WIDTH, LOGICAL_HEIGHT,
+  LOGICAL_WIDTH, LOGICAL_HEIGHT, PLAYER_CAR_ID,
 } from './constants.js';
 import type { Camera } from './types/engine.js';
 
@@ -56,10 +57,10 @@ const hud = new HUD(atlas);
 
 const trackLength = track.length * DEFAULT_TRACK_CONFIG.segmentLength;
 const cars: TrafficCar[] = [
-  { z: 4000, offset: -0.4, speed: 4000, sprite: 'car0' },
-  { z: 9000, offset: 0.4, speed: 3500, sprite: 'car1' },
-  { z: 15000, offset: 0, speed: 5000, sprite: 'car2' },
-  { z: 22000, offset: -0.5, speed: 4500, sprite: 'car3' },
+  { z: 4000, offset: -0.4, speed: 4000, sprite: 'car0', variant: 0 },
+  { z: 9000, offset: 0.4, speed: 3500, sprite: 'car1', variant: 1 },
+  { z: 15000, offset: 0, speed: 5000, sprite: 'car2', variant: 2 },
+  { z: 22000, offset: -0.5, speed: 4500, sprite: 'car3', variant: 3 },
 ];
 const traffic = new Traffic(cars, trackLength);
 
@@ -78,9 +79,25 @@ void loadBackdrops().then((loaded) => { backdrops = loaded; });
 let atlases = new Map<string, LoadedAtlas>();
 void loadAtlases().then((loaded) => {
   atlases = loaded;
-  // Spec C consumes `atlases`; until then this line is the only reader, and it
-  // is what makes the fallback observable in DevTools rather than silent.
   console.info(`[atlas] ${atlases.size}/${ATLAS_IDS.length} baked atlases loaded; the rest draw procedurally`);
+  const cars = atlases.get('cars');
+  if (!cars) return; // no baked car: the procedural placeholder keeps drawing
+
+  // Partition by car id once, here, rather than per frame. `<car>-wheel` and
+  // `<car>-brake` are overlay parts pinned to the body's anchors, not extra
+  // body variants (see Renderer.BakedCar).
+  const byCar = (id: string) => cars.meta.frames.filter((f) => f.car === id);
+  const body = byCar(PLAYER_CAR_ID);
+  if (body.length === 0) return;
+  const wheel = byCar(`${PLAYER_CAR_ID}-wheel`);
+  const brake = byCar(`${PLAYER_CAR_ID}-brake`);
+  renderer.setBakedCar({
+    image: cars.image,
+    body: buildCarFrameSet(body),
+    wheel: wheel.length ? buildCarFrameSet(wheel) : null,
+    brake: brake.length ? buildCarFrameSet(brake) : null,
+    color: 0,
+  });
 });
 
 const input = new InputManager();
@@ -252,7 +269,7 @@ createLoop({
   render: (): void => {
     const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
     const backdrop = backdrops.get(backdropIdForStage(route.stage));
-    renderer.render(camera, track, backend, background, traffic, track.segment(base).curve, backdrop);
+    renderer.render(camera, track, backend, background, traffic, track.segment(base).curve, backdrop, vehicle);
     hud.render(vehicle, elapsedMs, track, camera, backend, route.remainingMs,
       route, score.passedCars, score.points);
     remap.render(backend);

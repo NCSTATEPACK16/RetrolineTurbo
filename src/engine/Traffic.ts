@@ -1,4 +1,9 @@
-export interface TrafficCar { z: number; offset: number; speed: number; sprite: string; }
+/**
+ * `sprite` stays for the procedural fallback and for track-file compatibility;
+ * `variant` is the integer index into the baked car atlas's colour dimension, so
+ * the draw path never builds a frame name string per car per frame (hard rule 4).
+ */
+export interface TrafficCar { z: number; offset: number; speed: number; sprite: string; variant: number; }
 
 /** A fixed pool of AI cars moving down-track at constant speed. Deterministic;
  * `update` mutates each car in place (no allocation). Phase 4: constant-speed
