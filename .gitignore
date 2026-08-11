@@ -22,8 +22,10 @@ coverage/
 .venv/
 
 # Downloaded CC0 3D model packs (large binaries; provenance recorded in
-# art/models/LICENSES.md). Re-download from the source URLs listed there.
+# art/models/LICENSES.md). Re-download from the source URLs listed there —
+# both the unpacked trees and the archives they came out of.
 art/models/*/
+art/models/*.zip
 
 # Intermediate bake output. Only the packed atlas under public/assets/sprites/
 # is committed; these are reproducible with `npm run bake:cars`.

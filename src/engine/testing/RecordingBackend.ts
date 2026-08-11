@@ -7,6 +7,8 @@ export interface SpriteCall {
   dx: number; dy: number; dw: number; dh: number;
   clipBottom: number;
   flipX: boolean;
+  /** Undefined for the opaque majority; a number only for blended effects. */
+  alpha: number | undefined;
 }
 
 /**
@@ -39,8 +41,9 @@ export class RecordingBackend implements RenderBackend {
     dx: number, dy: number, dw: number, dh: number,
     clipBottom: number,
     flipX = false,
+    alpha?: number,
   ): void {
-    this.sprites.push({ sx, sy, sw, sh, dx, dy, dw, dh, clipBottom, flipX });
+    this.sprites.push({ sx, sy, sw, sh, dx, dy, dw, dh, clipBottom, flipX, alpha });
   }
 
   present(): void {

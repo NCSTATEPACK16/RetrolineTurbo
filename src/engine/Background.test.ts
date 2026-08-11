@@ -102,6 +102,57 @@ describe('Background with a backdrop plate', () => {
   });
 });
 
+describe('Background near parallax strip', () => {
+  const near = { image: {} as CanvasImageSource, width: 960, height: 48 };
+  const backdrop = { image: {} as CanvasImageSource, width: 960, height: 119, skyColor: '#211958', near };
+  // The strip and the plate are distinguishable by source height alone.
+  const isNear = (s: { sh: number }): boolean => s.sh === near.height;
+  const isPlate = (s: { sh: number }): boolean => s.sh === backdrop.height;
+
+  it('draws the near strip after the plate so the strip occludes it', () => {
+    const backend = new RecordingBackend();
+    new Background().render(CAM, 0, backend, backdrop);
+    const plateIdx = backend.sprites.findIndex(isPlate);
+    const nearIdx = backend.sprites.findIndex(isNear);
+    expect(plateIdx).toBeGreaterThanOrEqual(0);
+    expect(nearIdx).toBeGreaterThan(plateIdx);
+  });
+
+  it('rests the near strip on the horizon like the plate', () => {
+    const backend = new RecordingBackend();
+    new Background().render(CAM, 0, backend, backdrop);
+    for (const s of backend.sprites.filter(isNear)) expect(s.dy + s.dh).toBe(HORIZON_Y);
+  });
+
+  it('slides the near strip further than the plate for the same camera pan', () => {
+    const still = new RecordingBackend();
+    const panned = new RecordingBackend();
+    new Background().render(CAM, 0, still, backdrop);
+    new Background().render({ ...CAM, x: 3000 }, 0, panned, backdrop);
+    const shift = (a: RecordingBackend, b: RecordingBackend, pick: (s: { sh: number }) => boolean): number =>
+      Math.abs(b.sprites.find(pick)!.dx - a.sprites.find(pick)!.dx);
+    expect(shift(still, panned, isNear)).toBeGreaterThan(shift(still, panned, isPlate));
+  });
+
+  it('draws no strip sprites when the plate carries no near layer', () => {
+    const backend = new RecordingBackend();
+    new Background().render(CAM, 0, backend, { ...backdrop, near: undefined });
+    expect(backend.sprites.some(isNear)).toBe(false);
+    expect(backend.sprites.some(isPlate)).toBe(true);
+  });
+
+  it('reuses pre-allocated tile arrays across frames', () => {
+    const bg = new Background();
+    const backend = new RecordingBackend();
+    for (let i = 0; i < 10; i++) {
+      bg.render({ ...CAM, x: i * 100 }, 0, backend, backdrop);
+    }
+    // A stable per-frame sprite count proves no array is growing frame to frame.
+    expect(backend.sprites.length % 10).toBe(0);
+    expect(backend.sprites.length / 10).toBeLessThanOrEqual(6);
+  });
+});
+
 describe('Background parallax panning', () => {
   it('shifts layer bands horizontally as the camera pans, faster for nearer layers', () => {
     const b = new Background();

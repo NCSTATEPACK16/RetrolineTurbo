@@ -27,6 +27,13 @@ function fakeCanvas(): { canvas: HTMLCanvasElement; ops: string[] } {
     drawImage: (_img: unknown, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number) =>
       ops.push(`drawImage ${sx} ${sy} ${sw} ${sh} ${dx} ${dy} ${dw} ${dh}`),
   };
+  // globalAlpha needs a recording setter, not a plain field: the point of the
+  // alpha tests is that the backend RESTORES it, which a field cannot show.
+  let alpha = 1;
+  Object.defineProperty(ctx, 'globalAlpha', {
+    get: () => alpha,
+    set: (v: number) => { alpha = v; ops.push(`globalAlpha ${v}`); },
+  });
   const canvas = { getContext: () => ctx } as unknown as HTMLCanvasElement;
   // The suite runs in the `node` environment (no DOM). The constructor calls
   // `document.createElement('canvas')` for the offscreen buffer; stub a minimal
@@ -104,5 +111,53 @@ describe('Canvas2DBackend raster methods', () => {
     b.drawSprite(img, 0, 0, 8, 16, 100, 50, 16, 40, 9999, false);
     expect(ops).not.toContain('scale -1 1');
     expect(ops).toContain('drawImage 0 0 8 16 100 50 16 40');
+  });
+});
+
+describe('Canvas2DBackend alpha-blended draws', () => {
+  const img = {} as CanvasImageSource;
+
+  it('restores globalAlpha after an alpha-blended draw', () => {
+    // Leaking a partial alpha would fade every subsequent sprite in the frame.
+    const { canvas, ops } = fakeCanvas();
+    const b = new Canvas2DBackend(canvas);
+    ops.length = 0;
+    b.drawSprite(img, 0, 0, 8, 8, 0, 0, 8, 8, 9999, false, 0.5);
+    expect(ops).toContain('globalAlpha 0.5');
+    expect(ops.at(-1)).toBe('globalAlpha 1');
+  });
+
+  it('touches globalAlpha at all only when an alpha was asked for', () => {
+    // Opaque sprites are the overwhelming majority; they must not pay for this.
+    const { canvas, ops } = fakeCanvas();
+    const b = new Canvas2DBackend(canvas);
+    ops.length = 0;
+    b.drawSprite(img, 0, 0, 8, 8, 0, 0, 8, 8, 9999);
+    b.drawSprite(img, 0, 0, 8, 8, 0, 0, 8, 8, 9999, false, 1);
+    expect(ops.some((o) => o.startsWith('globalAlpha'))).toBe(false);
+  });
+
+  it('composes alpha with a flip, restoring both', () => {
+    const { canvas, ops } = fakeCanvas();
+    const b = new Canvas2DBackend(canvas);
+    ops.length = 0;
+    b.drawSprite(img, 0, 0, 8, 8, 10, 20, 8, 8, 9999, true, 0.25);
+    expect(ops).toContain('globalAlpha 0.25');
+    expect(ops).toContain('scale -1 1');
+    expect(ops.at(-1)).toBe('globalAlpha 1');
+  });
+
+  it('clamps a bogus alpha rather than handing canvas a NaN', () => {
+    const { canvas, ops } = fakeCanvas();
+    const b = new Canvas2DBackend(canvas);
+    ops.length = 0;
+    b.drawSprite(img, 0, 0, 8, 8, 0, 0, 8, 8, 9999, false, NaN);
+    b.drawSprite(img, 0, 0, 8, 8, 0, 0, 8, 8, 9999, false, -3);
+    for (const op of ops.filter((o) => o.startsWith('globalAlpha'))) {
+      const v = Number(op.split(' ')[1]);
+      expect(Number.isFinite(v)).toBe(true);
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
   });
 });

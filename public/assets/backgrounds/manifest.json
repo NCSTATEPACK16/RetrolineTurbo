@@ -13,7 +13,14 @@
         "bottom": 1234,
         "keptFraction": 0.76
       },
-      "bytes": 77304
+      "bytes": 77304,
+      "near": {
+        "file": "backgrounds/city_night_near.png",
+        "width": 540,
+        "height": 48,
+        "source": "BackgroundMountain_01.png",
+        "bytes": 976
+      }
     },
     {
       "id": "coastal_sunset",
@@ -28,7 +35,14 @@
         "bottom": 1233,
         "keptFraction": 0.72
       },
-      "bytes": 50344
+      "bytes": 50344,
+      "near": {
+        "file": "backgrounds/coastal_sunset_near.png",
+        "width": 540,
+        "height": 48,
+        "source": "BackgroundMuntain02.png",
+        "bytes": 1017
+      }
     },
     {
       "id": "desert_canyon",
@@ -43,7 +57,14 @@
         "bottom": 1185,
         "keptFraction": 0.7
       },
-      "bytes": 28257
+      "bytes": 28257,
+      "near": {
+        "file": "backgrounds/desert_canyon_near.png",
+        "width": 540,
+        "height": 48,
+        "source": "BackgroundMountain_01.png",
+        "bytes": 979
+      }
     }
   ]
 }

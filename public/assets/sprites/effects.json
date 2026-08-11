@@ -1,0 +1,92 @@
+{
+  "id": "effects",
+  "file": "sprites/effects.png",
+  "width": 64,
+  "height": 64,
+  "frames": [
+    {
+      "id": "dust_std_a0_s0",
+      "car": "dust",
+      "color": "std",
+      "angle": 0,
+      "step": 0,
+      "w": 8,
+      "h": 8,
+      "anchors": {},
+      "x": 1,
+      "y": 1
+    },
+    {
+      "id": "dust_std_a0_s1",
+      "car": "dust",
+      "color": "std",
+      "angle": 0,
+      "step": 1,
+      "w": 12,
+      "h": 12,
+      "anchors": {},
+      "x": 13,
+      "y": 1
+    },
+    {
+      "id": "dust_std_a0_s2",
+      "car": "dust",
+      "color": "std",
+      "angle": 0,
+      "step": 2,
+      "w": 14,
+      "h": 14,
+      "anchors": {},
+      "x": 29,
+      "y": 1
+    },
+    {
+      "id": "flame_std_a0_s0",
+      "car": "flame",
+      "color": "std",
+      "angle": 0,
+      "step": 0,
+      "w": 10,
+      "h": 6,
+      "anchors": {},
+      "x": 47,
+      "y": 1
+    },
+    {
+      "id": "flame_std_a0_s1",
+      "car": "flame",
+      "color": "std",
+      "angle": 0,
+      "step": 1,
+      "w": 8,
+      "h": 5,
+      "anchors": {},
+      "x": 1,
+      "y": 19
+    },
+    {
+      "id": "flame_std_a0_s2",
+      "car": "flame",
+      "color": "std",
+      "angle": 0,
+      "step": 2,
+      "w": 6,
+      "h": 4,
+      "anchors": {},
+      "x": 13,
+      "y": 19
+    },
+    {
+      "id": "streak_std_a0_s0",
+      "car": "streak",
+      "color": "std",
+      "angle": 0,
+      "step": 0,
+      "w": 2,
+      "h": 20,
+      "anchors": {},
+      "x": 23,
+      "y": 19
+    }
+  ]
+}

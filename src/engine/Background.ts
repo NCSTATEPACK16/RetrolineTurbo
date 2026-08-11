@@ -1,7 +1,7 @@
 import { COLORS, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../constants.js';
 import type { Camera } from '../types/engine.js';
 import type { RenderBackend } from './RenderBackend.js';
-import { backdropPan, backdropTiles, type Backdrop } from './Backdrop.js';
+import { BACKDROP_NEAR_SPEED, backdropPan, backdropTiles, type Backdrop } from './Backdrop.js';
 
 /**
  * Horizontal parallax shift for a layer (§7): camera pan scaled by the layer
@@ -19,6 +19,9 @@ export function layerOffset(cameraX: number, curvature: number, speed: number): 
 export class Background {
   /** Pre-allocated plate x-positions — at most 2 copies cover the screen. */
   private readonly tileXs = [0, 0, 0];
+  /** Same, for the near ridge. A second array rather than a shared one because
+   * both layers are mid-blit within a single frame. */
+  private readonly nearTileXs = [0, 0, 0];
 
   render(camera: Camera, curvatureAtCamera: number, backend: RenderBackend, backdrop?: Backdrop): void {
     const horizon = camera.horizon;
@@ -39,9 +42,14 @@ export class Background {
 
   /**
    * Blit the horizon plate: sky colour above it, the plate resting on the
-   * horizon, ground below. The plate is drawn at native scale (no filtering,
-   * so the pixel art stays crisp) and wrapped by drawing at most two copies —
-   * seamless because the prep script mirrors each plate onto itself.
+   * horizon, then the near ridge over the top, then ground below. Both layers
+   * draw at native scale (no filtering, so the pixel art stays crisp) and wrap
+   * by drawing at most two copies — seamless because the prep script mirrors
+   * each one onto itself.
+   *
+   * The ridge pans faster than the plate and is drawn after it. That ordering is
+   * forced: the plates are opaque, so the only place a second layer can be seen
+   * is in front.
    */
   private renderBackdrop(
     camera: Camera, curvature: number, backend: RenderBackend, backdrop: Backdrop, horizon: number,
@@ -56,6 +64,19 @@ export class Background {
         backdrop.image, 0, 0, backdrop.width, backdrop.height,
         this.tileXs[i]!, top, backdrop.width, backdrop.height, horizon,
       );
+    }
+
+    const near = backdrop.near;
+    if (near) {
+      const nearTop = horizon - near.height;
+      const nearPan = backdropPan(camera.x, curvature, near.width, BACKDROP_NEAR_SPEED);
+      const m = backdropTiles(nearPan, near.width, LOGICAL_WIDTH, this.nearTileXs);
+      for (let i = 0; i < m; i++) {
+        backend.drawSprite(
+          near.image, 0, 0, near.width, near.height,
+          this.nearTileXs[i]!, nearTop, near.width, near.height, horizon,
+        );
+      }
     }
 
     backend.fillBand(horizon, LOGICAL_HEIGHT - horizon, COLORS.groundDark);

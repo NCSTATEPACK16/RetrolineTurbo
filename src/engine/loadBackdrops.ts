@@ -31,8 +31,17 @@ export async function loadBackdrops(base = '/assets/'): Promise<Map<string, Back
   }
 
   await Promise.all(metas.map(async (m) => {
-    const image = await loadImage(`${base}${m.file}`);
-    if (image) plates.set(m.id, { image, width: m.width, height: m.height, skyColor: m.skyColor });
+    // The ridge is decoration; fetch it alongside the plate but never gate the
+    // plate on it, so a missing near strip costs only the depth cue.
+    const [image, nearImage] = await Promise.all([
+      loadImage(`${base}${m.file}`),
+      m.near ? loadImage(`${base}${m.near.file}`) : Promise.resolve(null),
+    ]);
+    if (!image) return;
+    const near = nearImage && m.near
+      ? { image: nearImage, width: m.near.width, height: m.near.height }
+      : undefined;
+    plates.set(m.id, { image, width: m.width, height: m.height, skyColor: m.skyColor, near });
   }));
   return plates;
 }

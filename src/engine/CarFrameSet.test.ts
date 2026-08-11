@@ -49,3 +49,46 @@ describe('CarFrameSet', () => {
     expect(() => set.frame(0, 0, 0)).not.toThrow();
   });
 });
+
+describe('CarFrameSet sparse ladders', () => {
+  // Props bake every other rung — a tree is seen briefly across a narrow
+  // distance range, so 12 steps would be atlas spent on frames nobody sees.
+  const SPARSE = [0, 2, 4, 6, 8, 10];
+  const sparse = buildCarFrameSet(
+    SPARSE.map((s) => meta('std', 0, s, s * 10)),
+  );
+
+  it('lands on a step that actually exists for every rung of the dense ladder', () => {
+    for (let want = 0; want < 12; want++) {
+      expect(SPARSE, `want=${want}`).toContain(sparse.nearestStep(0, 0, want));
+    }
+  });
+
+  it('picks an immediate neighbour rather than any old present step', () => {
+    expect([2, 4]).toContain(sparse.nearestStep(0, 0, 3));
+    expect(sparse.nearestStep(0, 0, 2)).toBe(2); // exact hits stay put
+    expect(sparse.nearestStep(0, 0, 8)).toBe(8);
+  });
+
+  it('clamps past both ends of the baked range', () => {
+    expect(sparse.nearestStep(0, 0, -5)).toBe(0);
+    expect(sparse.nearestStep(0, 0, 99)).toBe(10);
+  });
+
+  it('resolves to a real frame, never the 1x1 empty one', () => {
+    for (let want = 0; want < 12; want++) {
+      const f = sparse.frame(0, 0, sparse.nearestStep(0, 0, want));
+      expect(f.w, `want=${want}`).toBeGreaterThan(1);
+    }
+  });
+
+  it('is a no-op on a dense ladder', () => {
+    const set = buildCarFrameSet(frames);
+    for (let want = 0; want < 3; want++) expect(set.nearestStep(0, 0, want)).toBe(want);
+  });
+
+  it('returns the requested step unchanged when the set is empty', () => {
+    // Nothing to snap to; the caller's own clamping in frame() takes over.
+    expect(() => buildCarFrameSet([]).nearestStep(0, 0, 4)).not.toThrow();
+  });
+});

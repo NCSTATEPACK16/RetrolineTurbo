@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BACKDROP_LAYER_SPEED, BACKDROP_NEAR_SPEED,
   backdropIdForStage, backdropPan, backdropTiles, parseBackdropManifest, STAGE_BACKDROP_IDS,
 } from './Backdrop.js';
 import { LOGICAL_WIDTH } from '../constants.js';
@@ -34,6 +35,29 @@ describe('backdropPan', () => {
 
   it('adds a curvature term on top of the camera pan', () => {
     expect(backdropPan(0, 4, 960)).not.toBe(backdropPan(0, 0, 960));
+  });
+});
+
+describe('parallax depth', () => {
+  it('pans the near strip faster than the plate — that lead IS the depth cue', () => {
+    expect(BACKDROP_NEAR_SPEED).toBeGreaterThan(BACKDROP_LAYER_SPEED);
+  });
+
+  it('wraps the near strip seamlessly like the plate', () => {
+    const w = 960;
+    for (const x of [0, 1234, -5678, 1e6]) {
+      const pan = backdropPan(x, 0, w, BACKDROP_NEAR_SPEED);
+      expect(pan).toBeGreaterThanOrEqual(0);
+      expect(pan).toBeLessThan(w);
+    }
+  });
+
+  it('moves the near strip further than the plate for the same camera pan', () => {
+    const w = 960;
+    // Compared before the wrap so the modulo can't mask the difference.
+    const plate = Math.abs(backdropPan(1000, 0, w) - backdropPan(0, 0, w));
+    const near = Math.abs(backdropPan(1000, 0, w, BACKDROP_NEAR_SPEED) - backdropPan(0, 0, w, BACKDROP_NEAR_SPEED));
+    expect(near).toBeGreaterThan(plate);
   });
 });
 
@@ -82,5 +106,26 @@ describe('parseBackdropManifest', () => {
     expect(parseBackdropManifest(null)).toEqual([]);
     expect(parseBackdropManifest({})).toEqual([]);
     expect(parseBackdropManifest('nope')).toEqual([]);
+  });
+
+  it('reads the optional near-strip block when the prep script emits one', () => {
+    const withNear = {
+      backgrounds: [{
+        ...good.backgrounds[0],
+        near: { file: 'backgrounds/city_night_near.png', width: 960, height: 48 },
+      }],
+    };
+    const near = parseBackdropManifest(withNear)[0]!.near;
+    expect(near).toBeDefined();
+    expect(near!.file).toBe('backgrounds/city_night_near.png');
+    expect(near!.height).toBe(48);
+  });
+
+  it('keeps the plate but drops a malformed near block', () => {
+    // The near strip is decoration; losing it must never cost us the plate.
+    const bad = { backgrounds: [{ ...good.backgrounds[0], near: { file: 'x' } }] };
+    const metas = parseBackdropManifest(bad);
+    expect(metas).toHaveLength(1);
+    expect(metas[0]!.near).toBeUndefined();
   });
 });

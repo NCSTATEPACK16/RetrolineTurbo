@@ -513,3 +513,32 @@ describe('baked player car', () => {
     expect(() => draw({ steer: Number.NaN })).not.toThrow();
   });
 });
+
+describe('effects atlas is droppable', () => {
+  const player: PlayerState =
+    { z: 0, x: 0, speed: 900, gear: 3, steer: 0, skidding: true, braking: false };
+
+  it('stays fully playable when the effects atlas is missing', () => {
+    const backend = new RecordingBackend();
+    const r = new Renderer(DEFAULT_TRACK_CONFIG, atlas); // no effects atlas at all
+    expect(() => r.render(camAt(0), stubTrack(() => []), backend, undefined, undefined, 0, undefined, player))
+      .not.toThrow();
+    expect(backend.quads.length).toBeGreaterThan(0); // road still drew
+  });
+
+  it('draws no effect sprites at all until an effects atlas is handed over', () => {
+    const r = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    const before = new RecordingBackend();
+    r.render(camAt(0), stubTrack(() => []), before, undefined, undefined, 0, undefined, player);
+    // Only the procedural player car; nothing alpha-blended.
+    expect(before.sprites.every((s) => s.alpha === undefined)).toBe(true);
+  });
+
+  it('accepts a null effects atlas as an explicit "it failed to load"', () => {
+    const r = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    expect(() => r.setEffects(null)).not.toThrow();
+    const backend = new RecordingBackend();
+    expect(() => r.render(camAt(0), stubTrack(() => []), backend, undefined, undefined, 0, undefined, player))
+      .not.toThrow();
+  });
+});

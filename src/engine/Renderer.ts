@@ -1,7 +1,7 @@
 import { scaleFor, projectX, projectY, accumulateSegment, clipToCrest } from '../math/projection.js';
 import {
   LOGICAL_WIDTH, LOGICAL_HEIGHT, COLORS, DEFAULT_CAMERA_HEIGHT,
-  PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y,
+  PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y, TOP_SPEED_WORLD,
 } from '../constants.js';
 import type { Camera, TrackConfig, SpriteFrame, PlayerState } from '../types/engine.js';
 import type { RenderBackend } from './RenderBackend.js';
@@ -15,6 +15,7 @@ import { bandMerges } from './roadBanding.js';
 import { OVERLAY_CULL_STEP, quantisedWidth } from '../math/ladder.js';
 import { overlayDest, type Rect } from './SpriteComposer.js';
 import type { CarFrameSet } from './CarFrameSet.js';
+import { Effects, type EffectSet } from './Effects.js';
 
 /** Which baked car frame to draw: one of three authored angles, optionally mirrored. */
 export interface CarFrameChoice { angle: number; flipX: boolean; skid: boolean }
@@ -155,6 +156,11 @@ export class Renderer {
   private bakedCar: BakedCar | null = null;
   private readonly anchorOut: [number, number] = [0, 0];
   private readonly overlayRect: Rect = { dx: 0, dy: 0, dw: 0, dh: 0 };
+  // Alpha-blended extras. `effects` stays null until (and unless) the droppable
+  // atlas arrives; the pool itself is always live so a late atlas has something
+  // to draw immediately rather than starting empty.
+  private readonly effectPool = new Effects();
+  private effects: EffectSet | null = null;
 
   constructor(private readonly config: TrackConfig, private readonly atlas: SpriteAtlas) {
     this.records = Array.from({ length: config.drawDistance }, () => (
@@ -290,6 +296,10 @@ export class Renderer {
 
     this.drawSprites(camera, track, backend, traffic);
     this.drawPlayerCar(backend, player);
+    // Effects last: dust and flame belong in front of the car that threw them,
+    // and streaks are a camera effect over the whole scene. No-ops without the
+    // atlas, which is the droppable one.
+    this.effectPool.render(backend, this.effects, player, TOP_SPEED_WORLD);
     // NOTE: present() is the caller's responsibility so the HUD can composite
     // onto the same logical frame before the blit (see main.ts render step).
   }
@@ -347,6 +357,20 @@ export class Renderer {
    * rather than the loop. */
   setBakedCar(car: BakedCar | null): void {
     this.bakedCar = car;
+  }
+
+  /** Hand over the effects artwork. Null is the normal state, not an error path:
+   * `effects.png` is the droppable atlas, and the game is fully playable without
+   * it. Nothing downstream may treat its absence as a failure. */
+  setEffects(set: EffectSet | null): void {
+    this.effects = set;
+  }
+
+  /** Advance the effect pool. Separate from `render` because effects are
+   * time-driven and the render pass may run at a different rate than physics —
+   * and because a paused frame must not age a dust puff. */
+  updateEffects(dt: number, player?: PlayerState): void {
+    this.effectPool.update(dt, player);
   }
 
   private drawPlayerCar(backend: RenderBackend, player?: PlayerState): void {

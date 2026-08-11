@@ -17,6 +17,7 @@ import { loadBackdrops } from './engine/loadBackdrops.js';
 import { backdropIdForStage, type Backdrop } from './engine/Backdrop.js';
 import { loadAtlases, ATLAS_IDS, type LoadedAtlas } from './engine/loadAtlases.js';
 import { buildCarFrameSet } from './engine/CarFrameSet.js';
+import { buildEffectSet } from './engine/Effects.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
 import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
@@ -80,6 +81,11 @@ let atlases = new Map<string, LoadedAtlas>();
 void loadAtlases().then((loaded) => {
   atlases = loaded;
   console.info(`[atlas] ${atlases.size}/${ATLAS_IDS.length} baked atlases loaded; the rest draw procedurally`);
+  // Effects first, and on its own: it is the DROPPABLE atlas, so its absence is
+  // routine and must not be reached through an early return taken for the car.
+  const fx = atlases.get('effects');
+  if (fx) renderer.setEffects(buildEffectSet(fx.image, fx.meta.frames));
+
   const cars = atlases.get('cars');
   if (!cars) return; // no baked car: the procedural placeholder keeps drawing
 
@@ -270,6 +276,10 @@ createLoop({
 
     camera.z = vehicle.z;
     camera.x = vehicle.x;
+
+    // Effects age on the physics clock, not the render clock, so a dropped frame
+    // does not skip a dust puff. No-ops entirely until effects.png arrives.
+    renderer.updateEffects(dt, vehicle);
   },
   render: (): void => {
     const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);

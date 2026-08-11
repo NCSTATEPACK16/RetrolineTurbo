@@ -1,4 +1,5 @@
 import type { SpriteFrame } from '../types/engine.js';
+import { PALETTE } from './palette.js';
 
 export interface DrawOp { rx: number; ry: number; rw: number; rh: number; color: string; }
 export interface SpriteEntry {
@@ -30,7 +31,7 @@ export function glyphFrameName(base: string, color: FontColor = 'white'): string
 }
 
 // 3×5 digit fonts as row bitmasks (bit 2..0 = left..right pixel per row).
-const DIGIT_ROWS: Record<string, number[]> = {
+export const DIGIT_ROWS: Record<string, number[]> = {
   '0': [0b111, 0b101, 0b101, 0b101, 0b111], '1': [0b010, 0b110, 0b010, 0b010, 0b111],
   '2': [0b111, 0b001, 0b111, 0b100, 0b111], '3': [0b111, 0b001, 0b111, 0b001, 0b111],
   '4': [0b101, 0b101, 0b111, 0b001, 0b001], '5': [0b111, 0b100, 0b111, 0b001, 0b111],
@@ -38,7 +39,7 @@ const DIGIT_ROWS: Record<string, number[]> = {
   '8': [0b111, 0b101, 0b111, 0b101, 0b111], '9': [0b111, 0b101, 0b111, 0b001, 0b111],
 };
 /** 7×7 star face for the "PASSED CARS" gauge, as row bitmasks (bit 6..0). */
-const STAR_ROWS = [
+export const STAR_ROWS = [
   0b0001000,
   0b0011100,
   0b1111111,
@@ -49,20 +50,22 @@ const STAR_ROWS = [
 ];
 export const STAR_UNLIT = '#2a2a6a'; // dim slot on the deep-blue header
 
-function starOps(hex: string): DrawOp[] {
+/**
+ * Expand row bitmasks into 1×1 draw ops. `width` columns, MSB = leftmost.
+ *
+ * Generalised from a hardcoded 3 so the 7-column star face shares it instead of
+ * keeping a near-duplicate copy. The default of 3 keeps every existing call
+ * site — and every one of the 228 baked glyph frames — bit-for-bit identical;
+ * `spriteManifest.test.ts` pins that against a copy of the original.
+ */
+export function maskOps(rows: readonly number[], hex: string, width = 3): DrawOp[] {
   const ops: DrawOp[] = [];
-  STAR_ROWS.forEach((mask, ry) => {
-    for (let c = 0; c < 7; c++) if (mask & (0b1000000 >> c)) ops.push({ rx: c, ry, rw: 1, rh: 1, color: hex });
-  });
-  return ops;
-}
-
-/** Expand a row-bitmask face into 1×1 pixel ops in the given colour. */
-function maskOps(rows: number[], hex: string): DrawOp[] {
-  const ops: DrawOp[] = [];
-  rows.forEach((mask, ry) => {
-    for (let c = 0; c < 3; c++) if (mask & (0b100 >> c)) ops.push({ rx: c, ry, rw: 1, rh: 1, color: hex });
-  });
+  const msb = 1 << (width - 1);
+  for (const [ry, row] of rows.entries()) {
+    for (let c = 0; c < width; c++) {
+      if (row & (msb >> c)) ops.push({ rx: c, ry, rw: 1, rh: 1, color: hex });
+    }
+  }
   return ops;
 }
 
@@ -75,7 +78,7 @@ function digitEntries(color: FontColor): SpriteEntry[] {
 
 // 3×5 uppercase letter glyphs, same row-bitmask scheme as DIGIT_ROWS.
 // Provisional face (M/N/W are compromised at 3px); retuned at the gate.
-const LETTER_ROWS: Record<string, number[]> = {
+export const LETTER_ROWS: Record<string, number[]> = {
   a: [0b010, 0b101, 0b111, 0b101, 0b101], b: [0b110, 0b101, 0b110, 0b101, 0b110],
   c: [0b011, 0b100, 0b100, 0b100, 0b011], d: [0b110, 0b101, 0b101, 0b101, 0b110],
   e: [0b111, 0b100, 0b110, 0b100, 0b111], f: [0b111, 0b100, 0b110, 0b100, 0b100],
@@ -117,6 +120,62 @@ function fontEntries(): SpriteEntry[] {
   return out;
 }
 
+/**
+ * Roadside props added in Spec D. Registering the *name* here is the load-bearing
+ * part: `src/track/schema.ts` builds `VALID_SPRITES` from this manifest, so a prop
+ * that exists only as a frame in `props.png` fails every track that places it.
+ * The procedural art below is the fallback the headless/no-atlas path draws; the
+ * baked frame supersedes its appearance, never its registration.
+ */
+export const NEW_PROPS = ['lamp_post', 'median_post', 'grandstand', 'palm', 'billboard_sponsor'] as const;
+
+const { chrome, foliage, trunk, kerb, ui } = PALETTE;
+
+/** Every prop on the 2x2 grid — sizes and op rects alike (Spec A Task 7). */
+function propEntries(): SpriteEntry[] {
+  return [
+    // Lit at offset +/-1.2, so it reads as roadside furniture rather than a hazard.
+    billboard('lamp_post', 8, 36, [
+      { rx: 2, ry: 0, rw: 4, rh: 2, color: ui.gold },        // lamp
+      { rx: 0, ry: 2, rw: 8, rh: 4, color: chrome[2]! },     // head
+      { rx: 2, ry: 6, rw: 4, rh: 30, color: chrome[1]! },    // post
+    ]),
+    // Hazard-striped, placed at fork splits — the one prop that has to be read as
+    // a warning at full throttle, so it is pure kerb red/white and nothing else.
+    billboard('median_post', 8, 24, [
+      { rx: 2, ry: 0, rw: 4, rh: 20, color: kerb.white },
+      { rx: 2, ry: 2, rw: 4, rh: 4, color: kerb.red },
+      { rx: 2, ry: 10, rw: 4, rh: 4, color: kerb.red },
+      { rx: 0, ry: 20, rw: 8, rh: 4, color: chrome[0]! },    // base
+    ]),
+    billboard('grandstand', 48, 28, [
+      { rx: 0, ry: 0, rw: 48, rh: 6, color: chrome[2]! },    // roof
+      { rx: 2, ry: 6, rw: 2, rh: 4, color: chrome[0]! },     // supports
+      { rx: 44, ry: 6, rw: 2, rh: 4, color: chrome[0]! },
+      { rx: 0, ry: 10, rw: 48, rh: 14, color: chrome[1]! },  // seating
+      { rx: 4, ry: 12, rw: 40, rh: 2, color: ui.magenta },   // crowd bands — two
+      { rx: 4, ry: 16, rw: 40, rh: 2, color: ui.cyan },      // rows is enough at speed
+      { rx: 0, ry: 24, rw: 48, rh: 4, color: chrome[0]! },   // skirt
+    ]),
+    billboard('palm', 20, 44, [
+      { rx: 6, ry: 2, rw: 8, rh: 6, color: foliage[2]! },    // crown
+      { rx: 2, ry: 6, rw: 8, rh: 4, color: foliage[1]! },    // upper fronds
+      { rx: 10, ry: 6, rw: 8, rh: 4, color: foliage[1]! },
+      { rx: 0, ry: 10, rw: 10, rh: 4, color: foliage[0]! },  // lower fronds
+      { rx: 10, ry: 10, rw: 10, rh: 4, color: foliage[0]! },
+      { rx: 8, ry: 16, rw: 4, rh: 28, color: trunk },
+    ]),
+    billboard('billboard_sponsor', 32, 28, [
+      { rx: 4, ry: 16, rw: 4, rh: 12, color: chrome[0]! },   // posts
+      { rx: 24, ry: 16, rw: 4, rh: 12, color: chrome[0]! },
+      { rx: 0, ry: 0, rw: 32, rh: 18, color: ui.header },    // board
+      { rx: 0, ry: 0, rw: 32, rh: 2, color: ui.headerEdge }, // top rail
+      { rx: 4, ry: 4, rw: 24, rh: 6, color: ui.gold },       // sponsor legend
+      { rx: 4, ry: 12, rw: 16, rh: 4, color: ui.white },
+    ]),
+  ];
+}
+
 // Compact pixel-art. Palette is provisional; retuned at the visual gate.
 export const SPRITE_MANIFEST: SpriteEntry[] = [
   billboard('tree', 16, 40, [
@@ -152,6 +211,7 @@ export const SPRITE_MANIFEST: SpriteEntry[] = [
       { rx: 0, ry: 10, rw: 4, rh: 4, color: '#202024' },       // wheels
       { rx: 18, ry: 10, rw: 4, rh: 4, color: '#202024' },
     ])),
+  ...propEntries(),
   billboard('player', 34, 20, [
     { rx: 2, ry: 8, rw: 30, rh: 12, color: '#101014' },
     { rx: 4, ry: 2, rw: 26, rh: 8, color: '#e03028' },
@@ -160,8 +220,8 @@ export const SPRITE_MANIFEST: SpriteEntry[] = [
     { rx: 28, ry: 14, rw: 6, rh: 6, color: '#202024' },
   ]),
   // HUD "PASSED CARS" gauge: one lit + one unlit star, identical geometry.
-  { name: 'star_on', w: 7, h: 7, anchorX: 3, anchorY: 3, ops: starOps(FONT_COLORS.gold) },
-  { name: 'star_off', w: 7, h: 7, anchorX: 3, anchorY: 3, ops: starOps(STAR_UNLIT) },
+  { name: 'star_on', w: 7, h: 7, anchorX: 3, anchorY: 3, ops: maskOps(STAR_ROWS, FONT_COLORS.gold, 7) },
+  { name: 'star_off', w: 7, h: 7, anchorX: 3, anchorY: 3, ops: maskOps(STAR_ROWS, STAR_UNLIT, 7) },
   // HUD bitmap font: digits 0–9, a–z, colon and minus as 3×5 pixel glyphs,
   // one full set per FONT_COLORS palette entry.
   ...fontEntries(),
