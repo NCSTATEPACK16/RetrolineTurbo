@@ -29,4 +29,7 @@ def test_quantise_adaptive_picks_its_own_palette():
 def test_load_palette_flattens_nested_ramps():
     hexes = load_palette("src/assets/palette.json")
     assert all(h.startswith("#") and len(h) == 7 for h in hexes)
-    assert 40 <= len(hexes) <= 52
+    # 51 entries today; upper bound matches src/assets/palette.ts's PALETTE_BUDGET (52).
+    # A later Spec C task raises PALETTE_BUDGET to 84 for added body hues — widen this
+    # bound again when that lands, not before.
+    assert 48 <= len(hexes) <= 52
