@@ -43,24 +43,35 @@ ladder with anchored overlays — so the 80-part Phase 9 economy has somewhere t
 
 *No asset dependency. Ships visible value on its own.*
 
-- [ ] `src/assets/palette.json` + `palette.ts` — 40–48 colour master palette, shared with the
+- [x] `src/assets/palette.json` + `palette.ts` — 40–48 colour master palette, shared with the
       Python bake scripts; `ui.*` provably identical to the shipped `FONT_COLORS` (vitest)
-- [ ] `src/constants.ts` — `COLORS` derived from the palette; kerbs to `#d02020`/`#f0f0f0`;
+      → 51 colours stored, core 26/28, budget 52. `STAR_UNLIT` exported to be guarded.
+- [x] `src/constants.ts` — `COLORS` derived from the palette; kerbs to `#d02020`/`#f0f0f0`;
       new `shoulder` (vitest)
-- [ ] `src/engine/roadBanding.ts` — anti-strobe band merge at the horizon, pure + unit-tested (vitest)
-- [ ] `src/engine/Renderer.ts` — shoulder quad at 1.22× drawn widest-first; merged bands; lane
+- [x] `src/engine/roadBanding.ts` — anti-strobe band merge at the horizon, pure + unit-tested (vitest)
+- [x] `src/engine/Renderer.ts` — shoulder quad at 1.22× drawn widest-first; merged bands; lane
       dash suppressed on merged bands (vitest)
-- [ ] `src/constants.ts` — layout lock: `HORIZON_Y` 135→118, `HEADER_H` 40, `HUD_ROW_Y` 248,
+- [x] `src/math/projection.ts` — `projectY` made horizon-aware *(added task, not in the original
+      checklist)*. It hardcoded `height / 2`, so moving `HORIZON_Y` alone would have slid the
+      backdrop without moving the road. Landed first as a pure refactor with a green suite.
+- [x] `src/constants.ts` — layout lock: `HORIZON_Y` 135→118, `HEADER_H` 40, `HUD_ROW_Y` 248,
       `PLAYER_CAR_BASE_Y` 232, `PLAYER_CAR_WIDTH` 120 (vitest)
       ⚠️ highest-risk change — moving the horizon shifts every projected segment and sprite
-- [ ] `src/ui/HUD.ts` — 40px header; SCORE bottom-left / SPEED bottom-right; `textWidth` helper
-      for right-alignment; the 9 existing tests rewritten against the new layout (vitest)
-- [ ] `src/assets/spriteManifest.ts` — 2×2 grid lint with explicit exemptions (font, stars);
+- [x] `src/ui/HUD.ts` — 40px header; SCORE bottom-left / SPEED bottom-right; `textWidth` helper
+      for right-alignment (vitest). Only the mini-map test needed deleting; the other 13 HUD
+      tests reference `HUD.HEADER_H` symbolically and passed 24→40 unchanged.
+- [x] `src/assets/spriteManifest.ts` — 2×2 grid lint with explicit exemptions (font, stars);
       non-compliant entries rounded to the grid. **No renames** — `track/schema.ts` `VALID_SPRITES`
-      depends on the names (vitest)
-- [ ] `scripts/sample_palette.py` + `scripts/requirements.txt` (Pillow — none declared today)
+      depends on the names (vitest). No `w`/`h` changed, so the packed atlas is byte-identical.
+- [x] `scripts/sample_palette.py` + `scripts/requirements.txt` (Pillow — none declared today)
 - [ ] **VISUAL GATE:** no kerb strobe at full speed **or at crawl**; road greys read as texture;
       kerb red does not vibrate against foliage green
+      → **still owed — requires a human at `npm run dev`.** Automated gates are green:
+        **281 tests / 33 files** (was 243/30), `npm run build` clean.
+
+**Cut from Spec A:** the grass banding stretch item (spec §4.4) has no task and was not
+implemented. It is perf-gated in the spec and should be attempted only after a frame-time
+baseline exists.
 
 ## M-checklist — Spec B · atlas engine v2
 
