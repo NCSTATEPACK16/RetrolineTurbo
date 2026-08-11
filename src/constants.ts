@@ -3,6 +3,7 @@
  * cadence are single-sourced.
  */
 
+import { PALETTE } from './assets/palette.js';
 import type { TrackConfig } from './types/engine.js';
 
 /** Fixed logical framebuffer (research §4 / plan §2.4). Nearest-neighbour upscaled. */
@@ -67,14 +68,19 @@ export const SKID_GRIP = 0.4; // steering grip while skidding (−60%)
 export const SKID_SPEED_DECAY = 0.9; // per-second speed retention while skidding
 export const SKID_RECOVERY_STEPS = 12; // consecutive counter-steer steps to recover
 
-/** Provisional retro palette. Retuned when the look locks in Phase 4. */
+/**
+ * Retro palette, derived from the shared master palette (`assets/palette.json`)
+ * so the engine and the offline bake scripts clamp to identical values.
+ * Key names are unchanged from the provisional set so no call site moves.
+ */
 export const COLORS = {
-  sky: '#3a1a5a',
-  groundLight: '#1d6b2e',
-  groundDark: '#175a26',
-  road: '#4a4a52',
-  roadDark: '#42424a',
-  rumbleLight: '#d0d0d8',
-  rumbleDark: '#c04040',
-  lane: '#d8d8e0',
+  sky: PALETTE.sky.night[0]!,
+  groundLight: PALETTE.foliage[1]!,
+  groundDark: PALETTE.foliage[0]!,
+  road: PALETTE.road.surfaceA,
+  roadDark: PALETTE.road.surfaceB,
+  shoulder: PALETTE.road.shoulder,
+  rumbleLight: PALETTE.kerb.white,
+  rumbleDark: PALETTE.kerb.red,
+  lane: PALETTE.lane,
 } as const;
