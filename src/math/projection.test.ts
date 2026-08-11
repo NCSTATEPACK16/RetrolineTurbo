@@ -167,3 +167,30 @@ describe('clipToCrest (painter crest occlusion; screen-y grows downward)', () =>
     expect(clip).toBe(40); // ends at the highest crest seen
   });
 });
+
+describe('a horizon that is not the vertical centre', () => {
+  const OFF = 118; // Spec A's target, deliberately != LOGICAL_HEIGHT / 2
+
+  it('collapses to the given horizon in the scale -> 0 limit', () => {
+    expect(projectY(0, H_CAM, 0, LOGICAL_HEIGHT, OFF)).toBe(OFF);
+  });
+
+  it('keeps ground below the horizon and rising toward it with depth', () => {
+    const near = projectY(0, H_CAM, scaleFor(D, 10), LOGICAL_HEIGHT, OFF);
+    const far = projectY(0, H_CAM, scaleFor(D, 1e6), LOGICAL_HEIGHT, OFF);
+    expect(near).toBeGreaterThan(far);
+    expect(far).toBeGreaterThan(OFF);
+  });
+
+  it('stays an exact inverse of zAtScanline — the invariant that was silently broken', () => {
+    const cam: Camera = { x: 0, z: 0, height: H_CAM, focalLength: D, horizon: OFF };
+    for (const z of [50, 200, 840, 5000, 10000]) {
+      const y = projectY(0, cam.height, scaleFor(cam.focalLength, z), LOGICAL_HEIGHT, cam.horizon);
+      expect(zAtScanline(y, cam)).toBeCloseTo(z, 6);
+    }
+  });
+
+  it('defaults to the vertical centre when no horizon is supplied', () => {
+    expect(projectY(0, H_CAM, 0)).toBe(LOGICAL_HEIGHT / 2);
+  });
+});

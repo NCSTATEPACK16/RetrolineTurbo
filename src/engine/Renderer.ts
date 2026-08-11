@@ -35,7 +35,7 @@ export function projectSegment(
   const scale = scaleFor(camera.focalLength, relZ);
   return {
     x: projectX(worldXCenter, camera.x, scale, width),
-    y: projectY(worldY, camera.height, scale, height),
+    y: projectY(worldY, camera.height, scale, height, camera.horizon),
     w: scale * roadHalfWidth * (width / 2),
   };
 }
@@ -224,7 +224,7 @@ export class Renderer {
   ): void {
     const scale = scaleFor(camera.focalLength, relZ);
     out.x = projectX(worldXCenter, camera.x, scale, LOGICAL_WIDTH);
-    out.y = projectY(worldY, camera.height, scale, LOGICAL_HEIGHT);
+    out.y = projectY(worldY, camera.height, scale, LOGICAL_HEIGHT, camera.horizon);
     out.w = scale * roadHalfWidth * (LOGICAL_WIDTH / 2);
   }
 
