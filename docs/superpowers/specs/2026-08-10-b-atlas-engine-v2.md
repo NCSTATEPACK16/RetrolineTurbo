@@ -31,7 +31,12 @@ Three capabilities land here:
 
 ## 2. The problem being fixed
 
-`Renderer.blit` (`src/engine/Renderer.ts:238-246`) computes a continuous destination width:
+⚠️ **Line numbers in this spec were taken before Spec A.** Spec A adds a shoulder quad, band
+merging, and horizon threading to `Renderer.ts`, so everything below `:145` shifts by roughly
++10 lines. Anchor on the **symbol names** (`Renderer.blit`, `Renderer.drawPlayerCar`,
+`Renderer.drawSprites`), not the line numbers.
+
+`Renderer.blit` (`src/engine/Renderer.ts:238-246`, pre-Spec-A) computes a continuous destination width:
 
 ```ts
 const scale = scaleFor(camera.focalLength, rec.relZ);
@@ -58,6 +63,10 @@ are masked by road motion, and every step is a clean image.
 ```ts
 /** Pre-baked sprite widths, largest first. Research §3b. */
 export const LADDER = [120, 96, 76, 60, 48, 38, 30, 24, 19, 15, 12, 10] as const;
+
+// LADDER[0] === PLAYER_CAR_WIDTH (Spec A §5.4). Spec C draws the player at its
+// largest native step, so the two must not drift. Assert it in ladder.test.ts:
+//   expect(LADDER[0]).toBe(PLAYER_CAR_WIDTH);
 
 /** Index of the ladder step nearest `idealWidthPx`. Clamps at both ends. */
 export function ladderStepFor(idealWidthPx: number): number;
@@ -263,6 +272,9 @@ upgrade in place.
   `new SpriteAtlas({} as CanvasImageSource, packAtlas(SPRITE_MANIFEST, 256).frames)`
   (`Renderer.test.ts:18`, `HUD.test.ts:12`, `text.test.ts:9`, `RouteMap.test.ts:10`,
   `RemapScreen.test.ts:10`, `EditorScreen.test.ts:11`). **All six must still pass unchanged.**
+  ⚠️ "Unchanged" means **unchanged by Spec B**, measured against their post-Spec-A state. Spec A
+  legitimately edits `Renderer.test.ts` (shoulder quad, band merge, horizon) and `HUD.test.ts`
+  (40px header, corner readouts, mini-map cut). Take the baseline after Spec A lands, not before.
 - the **offline / CDN-failure path**;
 - the **boot-before-load path** for frame 1.
 

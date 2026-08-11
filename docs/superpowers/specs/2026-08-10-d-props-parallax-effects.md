@@ -85,7 +85,11 @@ seam-free wrapping plates; the far layer is just another entry in its `ASSETS` l
 
 ⚠️ Two constraints the far layer must respect:
 - **It must sit above the header and below the horizon.** With Spec A's layout that is the band
-  y=40..118 — only 78 rows. Crop accordingly.
+  y=40..118 — only 78 rows. Crop accordingly. ✅ Confirmed against Spec A as amended: `HORIZON_Y`
+  is now the *road's* vanishing row as well as the backdrop's (Spec A §5.0 made `projectY`
+  horizon-aware), so 118 is a single number both layers agree on. Note the near plates are
+  taller than 78 (119/112/99) and deliberately run under the header; **the far layer must not** —
+  it has no plate above it to hide the overlap.
 - **Each plate gets its own adaptive 48-colour palette** (per Spec A §2), so a far layer must be
   quantised *against the plate it sits behind*, or the two will clash. Sample first.
 
@@ -151,9 +155,11 @@ character with no tinting.
 1. **`maskOps` is hardcoded to 3 columns** (`spriteManifest.ts:61`: `c < 3`, `0b100 >> c`), with a
    separate 7-column copy for stars (`starOps`, line 52). Press Start 2P is 8px. Generalise
    `maskOps` to an arbitrary width rather than adding a third near-duplicate.
-2. **Glyph metrics change.** `drawText` advances `(f.w + 1) * scale` (`text.ts:29`); every HUD
+2. **Glyph metrics change.** `drawText` advances `(f.w + 1) * scale` (`text.ts:28`); every HUD
    column position in `HUD.ts` was laid out against a 3×5 face. Expect the whole HUD layout to
-   need re-measuring against Spec A's coordinates.
+   need re-measuring against Spec A's coordinates. Spec A adds `textWidth` to `text.ts` for
+   right-alignment — it derives from the same advance, so it re-measures for free, but the
+   *fixed* header column positions do not.
 3. **The procedural font must survive** as the headless/fallback path — Spec B §9. The PNG font
    augments it; it does not replace it. All six `SpriteAtlas` test files must still pass.
 
@@ -236,7 +242,13 @@ The 3×5 face is legible and shipped.
 - **6 ladder steps for props is an estimate.** If props pop visibly, add rungs at the large end;
   as with cars, **never interpolate**.
 - **The far parallax layer's crop band (y=40..118, 78 rows) depends on Spec A's `HORIZON_Y = 118`**,
-  itself flagged as inference. If the horizon moves, re-crop the far layer.
+  itself flagged as inference. If the horizon moves, re-crop the far layer. Since Spec A §5.0 the
+  horizon also drives the road's vanishing row, so a retune there is more consequential than it
+  looks — it will most likely arrive paired with a `DEFAULT_FOCAL_LENGTH` change.
+- **New prop entries must be authored on the 2×2 grid** (Spec A §6) — the lint runs over the whole
+  of `SPRITE_MANIFEST`, so every prop registered here is subject to it. Exemptions are pinned by
+  count in `spriteManifest.test.ts`; adding a prop is not a reason to widen them. If §6's font
+  work ships, the generalised `maskOps` must emit even-aligned ops for anything non-exempt.
 - **Press Start 2P at 8px is more than 2× the current 3×5 face.** It may simply not fit the HUD
   regions Spec A locks. Measure before baking 228 frames — this is why §6 is the first cut.
 - The research could not verify a **citeable Chrome-Android per-dimension canvas limit**; 2048
