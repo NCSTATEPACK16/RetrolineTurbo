@@ -17,3 +17,10 @@ coverage/
 
 # Local git worktrees
 .worktrees/
+
+# Python venv for asset bake scripts
+.venv/
+
+# Downloaded CC0 3D model packs (large binaries; provenance recorded in
+# art/models/LICENSES.md). Re-download from the source URLs listed there.
+art/models/*/
