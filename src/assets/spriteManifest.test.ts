@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SPRITE_MANIFEST, FONT_COLORS, glyphFrameName } from './spriteManifest.js';
+import { SPRITE_MANIFEST, FONT_COLORS, NEW_PROPS, glyphFrameName } from './spriteManifest.js';
 
 const entry = (name: string) => SPRITE_MANIFEST.find((e) => e.name === name);
 
@@ -23,6 +23,29 @@ describe('sprite manifest', () => {
   it('names white glyphs without a suffix and coloured glyphs with one', () => {
     expect(glyphFrameName('glyph_a')).toBe('glyph_a');
     expect(glyphFrameName('glyph_a', 'gold')).toBe('glyph_a_gold');
+  });
+});
+
+describe('prop registration', () => {
+  it('registers every new prop name in the manifest', () => {
+    const names = new Set(SPRITE_MANIFEST.map((e) => e.name));
+    for (const n of NEW_PROPS) expect(names.has(n), n).toBe(true);
+  });
+
+  it('names the props the TX-1 handoff still lists unchecked', () => {
+    // Pinned by name: NEW_PROPS is what src/track/schema.ts validates track JSON
+    // against, so silently shrinking the list would silently break tracks.
+    expect([...NEW_PROPS]).toEqual(
+      ['lamp_post', 'median_post', 'grandstand', 'palm', 'billboard_sponsor'],
+    );
+  });
+
+  it('anchors every new prop at base centre so it stands on the road plane', () => {
+    for (const n of NEW_PROPS) {
+      const e = entry(n)!;
+      expect(e.anchorX, `${n}.anchorX`).toBe(Math.floor(e.w / 2));
+      expect(e.anchorY, `${n}.anchorY`).toBe(e.h);
+    }
   });
 });
 

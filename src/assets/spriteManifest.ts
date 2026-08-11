@@ -1,4 +1,5 @@
 import type { SpriteFrame } from '../types/engine.js';
+import { PALETTE } from './palette.js';
 
 export interface DrawOp { rx: number; ry: number; rw: number; rh: number; color: string; }
 export interface SpriteEntry {
@@ -117,6 +118,62 @@ function fontEntries(): SpriteEntry[] {
   return out;
 }
 
+/**
+ * Roadside props added in Spec D. Registering the *name* here is the load-bearing
+ * part: `src/track/schema.ts` builds `VALID_SPRITES` from this manifest, so a prop
+ * that exists only as a frame in `props.png` fails every track that places it.
+ * The procedural art below is the fallback the headless/no-atlas path draws; the
+ * baked frame supersedes its appearance, never its registration.
+ */
+export const NEW_PROPS = ['lamp_post', 'median_post', 'grandstand', 'palm', 'billboard_sponsor'] as const;
+
+const { chrome, foliage, trunk, kerb, ui } = PALETTE;
+
+/** Every prop on the 2x2 grid — sizes and op rects alike (Spec A Task 7). */
+function propEntries(): SpriteEntry[] {
+  return [
+    // Lit at offset +/-1.2, so it reads as roadside furniture rather than a hazard.
+    billboard('lamp_post', 8, 36, [
+      { rx: 2, ry: 0, rw: 4, rh: 2, color: ui.gold },        // lamp
+      { rx: 0, ry: 2, rw: 8, rh: 4, color: chrome[2]! },     // head
+      { rx: 2, ry: 6, rw: 4, rh: 30, color: chrome[1]! },    // post
+    ]),
+    // Hazard-striped, placed at fork splits — the one prop that has to be read as
+    // a warning at full throttle, so it is pure kerb red/white and nothing else.
+    billboard('median_post', 8, 24, [
+      { rx: 2, ry: 0, rw: 4, rh: 20, color: kerb.white },
+      { rx: 2, ry: 2, rw: 4, rh: 4, color: kerb.red },
+      { rx: 2, ry: 10, rw: 4, rh: 4, color: kerb.red },
+      { rx: 0, ry: 20, rw: 8, rh: 4, color: chrome[0]! },    // base
+    ]),
+    billboard('grandstand', 48, 28, [
+      { rx: 0, ry: 0, rw: 48, rh: 6, color: chrome[2]! },    // roof
+      { rx: 2, ry: 6, rw: 2, rh: 4, color: chrome[0]! },     // supports
+      { rx: 44, ry: 6, rw: 2, rh: 4, color: chrome[0]! },
+      { rx: 0, ry: 10, rw: 48, rh: 14, color: chrome[1]! },  // seating
+      { rx: 4, ry: 12, rw: 40, rh: 2, color: ui.magenta },   // crowd bands — two
+      { rx: 4, ry: 16, rw: 40, rh: 2, color: ui.cyan },      // rows is enough at speed
+      { rx: 0, ry: 24, rw: 48, rh: 4, color: chrome[0]! },   // skirt
+    ]),
+    billboard('palm', 20, 44, [
+      { rx: 6, ry: 2, rw: 8, rh: 6, color: foliage[2]! },    // crown
+      { rx: 2, ry: 6, rw: 8, rh: 4, color: foliage[1]! },    // upper fronds
+      { rx: 10, ry: 6, rw: 8, rh: 4, color: foliage[1]! },
+      { rx: 0, ry: 10, rw: 10, rh: 4, color: foliage[0]! },  // lower fronds
+      { rx: 10, ry: 10, rw: 10, rh: 4, color: foliage[0]! },
+      { rx: 8, ry: 16, rw: 4, rh: 28, color: trunk },
+    ]),
+    billboard('billboard_sponsor', 32, 28, [
+      { rx: 4, ry: 16, rw: 4, rh: 12, color: chrome[0]! },   // posts
+      { rx: 24, ry: 16, rw: 4, rh: 12, color: chrome[0]! },
+      { rx: 0, ry: 0, rw: 32, rh: 18, color: ui.header },    // board
+      { rx: 0, ry: 0, rw: 32, rh: 2, color: ui.headerEdge }, // top rail
+      { rx: 4, ry: 4, rw: 24, rh: 6, color: ui.gold },       // sponsor legend
+      { rx: 4, ry: 12, rw: 16, rh: 4, color: ui.white },
+    ]),
+  ];
+}
+
 // Compact pixel-art. Palette is provisional; retuned at the visual gate.
 export const SPRITE_MANIFEST: SpriteEntry[] = [
   billboard('tree', 16, 40, [
@@ -152,6 +209,7 @@ export const SPRITE_MANIFEST: SpriteEntry[] = [
       { rx: 0, ry: 10, rw: 4, rh: 4, color: '#202024' },       // wheels
       { rx: 18, ry: 10, rw: 4, rh: 4, color: '#202024' },
     ])),
+  ...propEntries(),
   billboard('player', 34, 20, [
     { rx: 2, ry: 8, rw: 30, rh: 12, color: '#101014' },
     { rx: 4, ry: 2, rw: 26, rh: 8, color: '#e03028' },

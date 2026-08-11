@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bake:cars": "bash scripts/bake_cars.sh"
+    "bake:cars": "bash scripts/bake_cars.sh",
+    "bake:props": "bash scripts/bake_props.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4"

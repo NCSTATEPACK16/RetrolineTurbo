@@ -85,10 +85,14 @@ def main() -> None:
     if not frames:
         raise SystemExit(f"no PNGs in {src_dir}")
 
+    # Anchors are required exactly when there is something to anchor. The car bake
+    # emits overlay parts and cannot place them without anchors.json; the prop bake
+    # (Spec D) emits plain billboards and legitimately has none.
+    has_overlays = any(OVERLAY_PART.search(p.name) for p in frames)
     anchors_path = src_dir / "anchors.json"
-    if not anchors_path.is_file():
+    if has_overlays and not anchors_path.is_file():
         raise SystemExit("anchors.json missing — the packer cannot place overlays")
-    anchors = json.loads(anchors_path.read_text())
+    anchors = json.loads(anchors_path.read_text()) if anchors_path.is_file() else {}
 
     # Crop centres are scale-invariant, so the largest step of each angle is the
     # one measured: it has the most pixels and therefore the least rounding error.

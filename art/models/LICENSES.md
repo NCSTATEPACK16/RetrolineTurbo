@@ -1,11 +1,36 @@
 # Third-party 3D model licences
 
+2D source art is recorded separately in [`../LICENSES.md`](../LICENSES.md).
+
 | Pack | Source URL | Licence | Downloaded | Attribution |
 |---|---|---|---|---|
 | Kenney Car Kit | https://kenney.nl/assets/car-kit | CC0 1.0 | 2026-08-11 | Not required |
 | RGS_Dev Free Low Poly Vehicles | https://rgsdev.itch.io/free-low-poly-vehicles-pack | CC0 1.0 | 2026-08-11 | Not required ("Credit is not needed") |
+| Kenney Racing Kit | https://kenney.nl/assets/racing-kit | CC0 1.0 | 2026-08-11 | Not required |
+| Kenney Nature Kit | https://kenney.nl/assets/nature-kit | CC0 1.0 | 2026-08-11 | Not required |
+
+### What Spec D bakes from the two prop packs
+
+`scripts/render_props.py` pins the exact source model per sprite name:
+
+| Sprite | Pack | Model |
+|---|---|---|
+| `lamp_post` | Racing Kit | `lightPostLarge.obj` |
+| `median_post` | Racing Kit | `pylon.obj` |
+| `grandstand` | Racing Kit | `grandStandAwning.obj` |
+| `billboard_sponsor` | Racing Kit | `billboard.obj` |
+| `palm` | Nature Kit | `tree_palm.obj` |
+
+No source texture reaches the build: every material slot is repainted from
+`src/assets/palette.json` before rendering, so props clamp to the same master
+palette as the cars.
 
 ## Rejected sources — do not substitute
+- **Quaternius Ultimate Nature** — CC0, but distributed only through a Google
+  Drive folder (quaternius.com) or itch.io, neither of which gives a stable
+  scriptable URL. Kenney's Nature Kit is CC0 from a direct kenney.nl zip and
+  carries the palms Spec D needed, so it was used instead. Not a licence
+  objection — a reproducibility one.
 - **Quaternius Cars Bundle** — CC0 on the bundle page, but some individual
   poly.pizza pages serve CC-BY 3.0. Only acceptable via the itch/OpenGameArt CC0
   listing, verified per file.

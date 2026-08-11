@@ -38,6 +38,35 @@ export class CarFrameSet {
     return bySteps[clamp(step, bySteps.length)] ?? EMPTY_FRAME;
   }
 
+  /**
+   * Nearest step that actually exists in this set — props bake a sparse ladder.
+   *
+   * Cars bake all 12 rungs, but a prop is only seen across a narrow distance
+   * range, so baking every rung spends atlas on frames nobody looks at. A sparse
+   * set leaves holes in the step array, and `frame()` would resolve a hole to the
+   * 1x1 empty frame — a prop that silently vanishes at some distances. Snap the
+   * request onto a baked rung first.
+   *
+   * Allocation-free and called at most once per sprite per frame (hard rule 4);
+   * the scan is over ~12 entries, so a precomputed map would cost more than it saves.
+   */
+  nearestStep(color: number, angle: number, want: number): number {
+    const bySteps = this.table[clamp(color, this.table.length)]?.[
+      clamp(angle, this.table[clamp(color, this.table.length)]?.length ?? 0)
+    ];
+    if (!bySteps) return want;
+    const target = Number.isFinite(want) ? want : 0;
+    let best = -1;
+    let bestGap = Infinity;
+    for (let i = 0; i < bySteps.length; i++) {
+      if (!bySteps[i]) continue;
+      const gap = Math.abs(i - target);
+      if (gap < bestGap) { best = i; bestGap = gap; }
+      if (gap === 0) break; // sorted ascending, so an exact hit is final
+    }
+    return best < 0 ? want : best;
+  }
+
   /** Writes the normalised anchor into `out`. False when the name is unknown. */
   anchor(angle: number, name: string, out: [number, number]): boolean {
     const pt = this.anchorsByAngle[clamp(angle, this.anchorsByAngle.length)]?.[name];

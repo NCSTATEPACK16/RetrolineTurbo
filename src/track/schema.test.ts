@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseTrackFile, expandSections, formatTrackFile, type TrackFile } from './schema.js';
+import { NEW_PROPS } from '../assets/spriteManifest.js';
 
 const valid: TrackFile = {
   trackId: 'test-track', stageName: 'Test', segmentLength: 200, roadWidth: 2000, lanes: 3,
@@ -23,6 +24,21 @@ describe('parseTrackFile accepts', () => {
   it('formatTrackFile round-trips through parse', () => {
     const r = parseTrackFile(formatTrackFile(valid));
     expect(r.ok).toBe(true);
+  });
+});
+
+describe('parseTrackFile accepts every registered prop', () => {
+  // VALID_SPRITES is built from SPRITE_MANIFEST, so a prop that exists only in
+  // props.png and never in the manifest fails here rather than at track load.
+  it('accepts a track that places every new prop', () => {
+    for (const name of NEW_PROPS) {
+      const doc: TrackFile = {
+        ...valid,
+        sections: [{ length: 4, curve: 0, pitch: 0, sprites: [{ name, offset: 1.2, every: 2 }] }],
+      };
+      const r = parseTrackFile(doc);
+      expect(r.ok, `${name}: ${r.ok ? '' : r.errors.join()}`).toBe(true);
+    }
   });
 });
 
