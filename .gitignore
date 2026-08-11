@@ -14,3 +14,6 @@ dist-ssr/
 coverage/
 .idea/
 .vscode/
+
+# Local git worktrees
+.worktrees/
