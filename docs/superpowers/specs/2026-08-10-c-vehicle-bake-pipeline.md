@@ -125,6 +125,12 @@ Note the `--` separator; args after it go to the script, not Blender.
    `prep_backgrounds.py` documents for the plates (*nearest "would alias it into noise at this
    ratio"*).
 2. **Fixed-palette clamp** against `palette.json`.
+   ⚠️ This spec adds the remaining ~6 body hues (8 total × 5 steps = 40 `body` entries, up from
+   Spec A's 10). That takes the stored palette from 51 to **81**, so **raise `PALETTE_BUDGET`
+   from 52 to 84** in `src/assets/palette.ts` as part of this work — one line, in the same commit
+   as the new ramps, so the reason is on the record. **Do not touch `CORE_MAX`**: body ramps are
+   a variable role and none of this changes the always-on-screen core (26). If a car needs a
+   colour that is *not* a body ramp, that is a `CORE_MAX` conversation, not a budget bump.
 3. Render **body and wheels as separate passes** so overlays register independently. Both packs
    ship separated wheels; keep them parented but on their own collection.
 
@@ -178,8 +184,8 @@ Conflating them silently re-palettes the plates. Keep the functions distinct.
   colour, with that car's overlays immediately following its bodies. Frames drawn together end up
   physically adjacent, which helps texture-cache locality.
 
-**`scripts/requirements.txt`** — Pillow. None exists today; Pillow 12.3.0 is installed but
-undeclared.
+**`scripts/requirements.txt`** — Pillow. **Created by Spec A (Task 9)**; amend it here only if
+this spec needs a package Spec A did not declare.
 
 ---
 
@@ -211,7 +217,14 @@ tests). Never to per-frame compositing.
 
 ## 8. Renderer consumption
 
-1. **`blit`** (`Renderer.ts:238-246`): compute the ideal width as today, then
+⚠️ **`Renderer.ts` line numbers in this section predate Spec A**, which adds a shoulder quad,
+band merging, and horizon threading. Anchor on symbol names. Two specifics: `drawPlayerCar`
+already takes its size and position from `PLAYER_CAR_WIDTH` / `PLAYER_CAR_BASE_Y` after Spec A,
+so this spec swaps the *artwork* only — do not re-derive the placement. And
+`PLAYER_CAR_WIDTH === LADDER[0] === 120`, which is why the player draws at its largest native
+step with no scaling at all.
+
+1. **`blit`** (`Renderer.blit`, `Renderer.ts:238-246` pre-Spec-A): compute the ideal width as today, then
    `ladderStepFor(idealWidth)`, then draw that step's frame **at its native size**. The magic
    `roadHalfWidth / DEFAULT_CAMERA_HEIGHT` term (flagged *"provisional, retuned at gate"* in the
    source) feeds the ideal width only; it no longer scales the blit.
@@ -263,7 +276,8 @@ fallback path stays intact by design (Spec B §9).
 
 ## 10. Known test breakage — expect this, do not paper over it
 
-`Renderer.test.ts:230` asserts:
+`Renderer.test.ts:230` (pre-Spec-A; Spec A adds a `road surface` block above it, so search for the
+assertion rather than the line) asserts:
 
 ```ts
 expect(trees[1]!.dh).toBeGreaterThan(trees[0]!.dh);   // segment 5 vs segment 30

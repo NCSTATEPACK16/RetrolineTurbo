@@ -67,6 +67,7 @@ export class Canvas2DBackend implements RenderBackend {
     sx: number, sy: number, sw: number, sh: number,
     dx: number, dy: number, dw: number, dh: number,
     clipBottom: number,
+    flipX = false,
   ): void {
     const needsClip = clipBottom < dy + dh;
     if (needsClip) {
@@ -75,7 +76,17 @@ export class Canvas2DBackend implements RenderBackend {
       this.ctx.rect(0, 0, LOGICAL_WIDTH, clipBottom);
       this.ctx.clip();
     }
-    this.ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+    if (flipX) {
+      // Mirror about the sprite's own right edge, then draw at the origin.
+      // Three ctx ops, zero allocation, no compositing.
+      this.ctx.save();
+      this.ctx.translate(dx + dw, dy);
+      this.ctx.scale(-1, 1);
+      this.ctx.drawImage(image, sx, sy, sw, sh, 0, 0, dw, dh);
+      this.ctx.restore();
+    } else {
+      this.ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+    }
     if (needsClip) this.ctx.restore();
   }
 

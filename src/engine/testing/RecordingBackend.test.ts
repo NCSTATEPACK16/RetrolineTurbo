@@ -19,6 +19,13 @@ describe('RecordingBackend', () => {
     const b = new RecordingBackend();
     const img = {} as CanvasImageSource;
     b.drawSprite(img, 1, 2, 8, 16, 10, 20, 8, 16, 200);
-    expect(b.sprites).toEqual([{ sx: 1, sy: 2, sw: 8, sh: 16, dx: 10, dy: 20, dw: 8, dh: 16, clipBottom: 200 }]);
+    expect(b.sprites).toEqual([{ sx: 1, sy: 2, sw: 8, sh: 16, dx: 10, dy: 20, dw: 8, dh: 16, clipBottom: 200, flipX: false }]);
+  });
+
+  it('records the flip flag so composition tests can assert mirroring', () => {
+    const b = new RecordingBackend();
+    const img = {} as CanvasImageSource;
+    b.drawSprite(img, 1, 2, 8, 16, 10, 20, 8, 16, 200, true);
+    expect(b.sprites[0]!.flipX).toBe(true);
   });
 });

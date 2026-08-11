@@ -34,6 +34,10 @@ export interface RenderBackend {
    * atlas image; destination rect (`dx,dy,dw,dh`) places it in the logical
    * framebuffer. `clipBottom` is the lowest logical scanline the sprite is
    * allowed to occupy (hill occlusion); rows below it are not drawn.
+   *
+   * `flipX` mirrors horizontally — steering art is authored for three angles and
+   * mirrored at runtime for the other three (research §3c), which halves the car
+   * atlas against a hard 2048x2048 cap.
    */
   drawSprite(
     image: CanvasImageSource,
@@ -46,6 +50,7 @@ export interface RenderBackend {
     dw: number,
     dh: number,
     clipBottom: number,
+    flipX?: boolean,
   ): void;
 
   /** Blit the completed logical frame to the visible surface. Frame end. */

@@ -21,6 +21,8 @@ function fakeCanvas(): { canvas: HTMLCanvasElement; ops: string[] } {
     restore: () => ops.push('restore'),
     rect: (x: number, y: number, w: number, h: number) => ops.push(`rect ${x} ${y} ${w} ${h}`),
     clip: () => ops.push('clip'),
+    translate: (x: number, y: number) => ops.push(`translate ${x} ${y}`),
+    scale: (x: number, y: number) => ops.push(`scale ${x} ${y}`),
     clearRect: () => {},
     drawImage: (_img: unknown, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number) =>
       ops.push(`drawImage ${sx} ${sy} ${sw} ${sh} ${dx} ${dy} ${dw} ${dh}`),
@@ -79,5 +81,28 @@ describe('Canvas2DBackend raster methods', () => {
     // clip is set up before the blit, restore after.
     expect(ops.indexOf('clip')).toBeLessThan(ops.indexOf('drawImage 0 0 8 16 100 50 16 40'));
     expect(ops.indexOf('drawImage 0 0 8 16 100 50 16 40')).toBeLessThan(ops.indexOf('restore'));
+  });
+
+  it('flips horizontally with a negative-scale transform, not a second draw', () => {
+    const { canvas, ops } = fakeCanvas();
+    const b = new Canvas2DBackend(canvas);
+    const img = {} as CanvasImageSource;
+    ops.length = 0;
+    b.drawSprite(img, 0, 0, 8, 16, 100, 50, 16, 40, 9999, true);
+    expect(ops).toContain('save');
+    expect(ops).toContain('translate 116 50'); // dx + dw, dy
+    expect(ops).toContain('scale -1 1');
+    expect(ops).toContain('drawImage 0 0 8 16 0 0 16 40');
+    expect(ops).toContain('restore');
+  });
+
+  it('does not transform when flipX is false', () => {
+    const { canvas, ops } = fakeCanvas();
+    const b = new Canvas2DBackend(canvas);
+    const img = {} as CanvasImageSource;
+    ops.length = 0;
+    b.drawSprite(img, 0, 0, 8, 16, 100, 50, 16, 40, 9999, false);
+    expect(ops).not.toContain('scale -1 1');
+    expect(ops).toContain('drawImage 0 0 8 16 100 50 16 40');
   });
 });

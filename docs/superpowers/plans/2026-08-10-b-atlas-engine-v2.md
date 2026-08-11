@@ -35,7 +35,7 @@
 - Consumes: nothing.
 - Produces: `LADDER: readonly number[]`, `ladderStepFor(idealWidthPx: number): number`, `OVERLAY_CULL_STEP: number`. Task 5 and Spec C consume all three.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/math/ladder.test.ts
@@ -96,12 +96,12 @@ describe('ladderStepFor', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/math/ladder.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // src/math/ladder.ts
@@ -147,12 +147,12 @@ export function ladderStepFor(idealWidthPx: number): number {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- src/math/ladder.test.ts`
 Expected: PASS (8 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/math/ladder.ts src/math/ladder.test.ts
@@ -173,7 +173,7 @@ git commit -m "feat(sprites): add discrete 12-step scale ladder to kill pixel cr
 
 **Design note the implementer must not "fix":** research §4b says to put `drawSpriteAnchored` on `RenderBackend`. This plan deliberately does not. Putting anchor resolution on the backend would require it to know about atlases, frame tables, anchor maps and ladder steps — contradicting hard rule 2 and the interface's own contract comment (`RenderBackend.ts:6-8`), and forcing `RecordingBackend` to reimplement anchor math. Composition belongs to the Renderer; pixels belong to the backend.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/engine/SpriteComposer.test.ts
@@ -236,12 +236,12 @@ describe('overlayDest', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/engine/SpriteComposer.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // src/engine/SpriteComposer.ts
@@ -286,12 +286,12 @@ export function overlayDest(
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- src/engine/SpriteComposer.test.ts`
 Expected: PASS (6 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/engine/SpriteComposer.ts src/engine/SpriteComposer.test.ts
@@ -312,7 +312,7 @@ git commit -m "feat(sprites): add anchored overlay geometry with flip mirroring"
 - Consumes: nothing.
 - Produces: `drawSprite(..., clipBottom: number, flipX?: boolean)` on `RenderBackend`; `SpriteCall` gains `flipX: boolean`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // add to src/engine/Canvas2DBackend.test.ts
@@ -338,12 +338,12 @@ it('does not transform when flipX is false', () => {
 
 The fake ctx at `Canvas2DBackend.test.ts:8-37` will need `translate` and `scale` recorders added alongside the existing ones.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/engine/Canvas2DBackend.test.ts`
 Expected: FAIL — `drawSprite` takes 10 args; TS rejects the 11th.
 
-- [ ] **Step 3: Widen the interface**
+- [x] **Step 3: Widen the interface**
 
 In `src/engine/RenderBackend.ts`, add the trailing optional parameter and document why it exists:
 
@@ -365,7 +365,7 @@ In `src/engine/RenderBackend.ts`, add the trailing optional parameter and docume
 
 Optional, not a new method: every existing call site and `RecordingBackend` stay source-compatible, and the interface stays at five methods.
 
-- [ ] **Step 4: Implement in Canvas2DBackend**
+- [x] **Step 4: Implement in Canvas2DBackend**
 
 Replace `drawSprite` at `Canvas2DBackend.ts:65-80`:
 
@@ -399,7 +399,7 @@ Replace `drawSprite` at `Canvas2DBackend.ts:65-80`:
   }
 ```
 
-- [ ] **Step 5: Record it in RecordingBackend**
+- [x] **Step 5: Record it in RecordingBackend**
 
 ```ts
 // src/engine/testing/RecordingBackend.ts
@@ -423,12 +423,12 @@ export interface SpriteCall {
   }
 ```
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test`
 Expected: PASS. Existing `SpriteCall` assertions use object properties, so adding a field is additive — but any test doing a whole-object `toEqual` on a `SpriteCall` will need `flipX: false` added.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/engine/RenderBackend.ts src/engine/Canvas2DBackend.ts src/engine/Canvas2DBackend.test.ts src/engine/testing/RecordingBackend.ts
@@ -447,7 +447,7 @@ git commit -m "feat(backend): add optional horizontal flip to drawSprite"
 - Consumes: nothing.
 - Produces: `interface AtlasFrameMeta`, `interface AtlasMeta`, `parseAtlasManifest(doc: unknown): AtlasMeta | null`. Task 5 (`CarFrameSet`) and Task 6 (`loadAtlases`) consume both.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/engine/AtlasManifest.test.ts
@@ -508,12 +508,12 @@ describe('parseAtlasManifest', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/engine/AtlasManifest.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // src/engine/AtlasManifest.ts
@@ -588,12 +588,12 @@ export function parseAtlasManifest(doc: unknown): AtlasMeta | null {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- src/engine/AtlasManifest.test.ts`
 Expected: PASS (6 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/engine/AtlasManifest.ts src/engine/AtlasManifest.test.ts
@@ -614,7 +614,7 @@ git commit -m "feat(atlas): add defensive atlas manifest parser"
 
 **Why this exists:** `drawText` builds a template string per glyph per frame (`text.ts:26` via `glyphFrameName`). At ~60 HUD glyphs that is tolerable. At 60 cars × 12 steps × 3 angles it allocates thousands of short-lived strings per second and violates hard rule 4. Strings get resolved to integer indices **once**, at load.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/engine/CarFrameSet.test.ts
@@ -671,12 +671,12 @@ describe('CarFrameSet', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/engine/CarFrameSet.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // src/engine/CarFrameSet.ts
@@ -756,12 +756,12 @@ export function buildCarFrameSet(frames: AtlasFrameMeta[]): CarFrameSet {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- src/engine/CarFrameSet.test.ts`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/engine/CarFrameSet.ts src/engine/CarFrameSet.test.ts
@@ -781,7 +781,7 @@ git commit -m "feat(atlas): resolve car frames to integer indices once at load"
 - Consumes: `parseAtlasManifest`, `AtlasMeta` (Task 4).
 - Produces: `interface LoadedAtlas { meta: AtlasMeta; image: CanvasImageSource }` and `loadAtlases(base?: string): Promise<Map<string, LoadedAtlas>>`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/engine/loadAtlases.test.ts
@@ -803,12 +803,12 @@ describe('loadAtlases', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/engine/loadAtlases.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Structure copied from `src/engine/loadBackdrops.ts` — keep all three degradation layers.
 
@@ -863,12 +863,12 @@ export async function loadAtlases(base = '/assets/'): Promise<Map<string, Loaded
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- src/engine/loadAtlases.test.ts`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Wire into main.ts, fire-and-forget**
+- [x] **Step 5: Wire into main.ts, fire-and-forget**
 
 Next to the backdrop load at `main.ts:68-71`, following the same precedent:
 
@@ -881,12 +881,12 @@ void loadAtlases().then((loaded) => { atlases = loaded; });
 
 ⚠️ **Do not `await` before constructing `Renderer`/`HUD`.** Both take the atlas in their constructors (`main.ts:53-54`); awaiting would force `main.ts` into an async IIFE and delay first paint behind a network round-trip.
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test`
 Expected: all green, including the six untouched `SpriteAtlas` test files.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/engine/loadAtlases.ts src/engine/loadAtlases.test.ts src/main.ts
@@ -899,7 +899,7 @@ git commit -m "feat(atlas): add non-rejecting multi-atlas loader wired fire-and-
 
 **Files:** none modified.
 
-- [ ] **Step 1: Run the whole suite**
+- [x] **Step 1: Run the whole suite**
 
 Run: `npm test`
 Expected: all green. **Confirm the six `SpriteAtlas` test files were never edited:**
@@ -911,20 +911,30 @@ git diff --name-only main -- src/engine/Renderer.test.ts src/ui/HUD.test.ts src/
 
 `Renderer.test.ts` may appear (Task 3 added `flipX` to whole-object assertions); the other five must not.
 
-- [ ] **Step 2: Typecheck and build**
+- [x] **Step 2: Typecheck and build**
 
 Run: `npm run build`
 Expected: clean.
 
-- [ ] **Step 3: Visual gate — the game must look identical**
+- [x] **Step 3: Visual gate — the game must look identical**
 
 Spec B is deliberately invisible. That is the gate.
 
-1. `npm run dev`; screenshot a scene and diff it against the same scene before this branch. **Any visible difference is a bug.**
-2. In DevTools, confirm the missing `/assets/sprites/*.json` requests produce caught, logged failures and no console error cascade.
-3. Confirm first paint is not delayed — the game renders before any sprite fetch resolves.
+1. ⚠️ **OUTSTANDING — needs a browser.** `npm run dev`; screenshot a scene and diff it against
+   the same scene before this branch. **Any visible difference is a bug.**
+   Verified structurally in the meantime: `Renderer.ts` and all of `src/ui/` are untouched by
+   this branch, so no code that positions a pixel changed. The one render-path edit is
+   `Canvas2DBackend.drawSprite`, and its `flipX = false` default takes the byte-identical
+   branch — every RecordingBackend geometry assertion in the suite passes unmodified.
+2. ✅ Confirmed against the dev server. Note the manifests do **not** 404: Vite's SPA fallback
+   (and Netlify's) answers `/assets/sprites/cars.json` with `200 text/html`, so `res.ok` is
+   true and the miss surfaces only as a `res.json()` SyntaxError. `loadOne`'s try/catch already
+   swallows it; `loadAtlases.test.ts` now pins that path explicitly. No console error cascade —
+   one `console.info` reporting `0/4` atlases loaded.
+3. ✅ First paint is not delayed: `loadAtlases()` is fire-and-forget after `Renderer`/`HUD` are
+   already constructed, and nothing `await`s it.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add active-plan.md

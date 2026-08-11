@@ -6,6 +6,7 @@ export interface SpriteCall {
   sx: number; sy: number; sw: number; sh: number;
   dx: number; dy: number; dw: number; dh: number;
   clipBottom: number;
+  flipX: boolean;
 }
 
 /**
@@ -37,8 +38,9 @@ export class RecordingBackend implements RenderBackend {
     sx: number, sy: number, sw: number, sh: number,
     dx: number, dy: number, dw: number, dh: number,
     clipBottom: number,
+    flipX = false,
   ): void {
-    this.sprites.push({ sx, sy, sw, sh, dx, dy, dw, dh, clipBottom });
+    this.sprites.push({ sx, sy, sw, sh, dx, dy, dw, dh, clipBottom, flipX });
   }
 
   present(): void {
