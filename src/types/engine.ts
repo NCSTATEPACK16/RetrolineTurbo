@@ -41,6 +41,13 @@ export interface PlayerState {
   readonly x: number; // world lateral position (track-centre-relative)
   readonly speed: number; // world units / second (HUD converts to km/h)
   readonly gear: number; // current gear index (Phase 4: stubbed at 1)
+  /** Normalised steering input, -1 (full left) .. 1 (full right).
+   * Selects which of the three baked steering frames the car draws. */
+  readonly steer: number;
+  /** True while the car is in a skid — selects the skid sprite frame. */
+  readonly skidding: boolean;
+  /** True while the driver is on the brakes — lights the brake-light overlay. */
+  readonly braking: boolean;
 }
 
 /** A packed sprite region in the atlas. `anchor` is the sprite-local pixel that

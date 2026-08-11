@@ -17,3 +17,15 @@ coverage/
 
 # Local git worktrees
 .worktrees/
+
+# Python venv for asset bake scripts
+.venv/
+
+# Downloaded CC0 3D model packs (large binaries; provenance recorded in
+# art/models/LICENSES.md). Re-download from the source URLs listed there.
+art/models/*/
+
+# Intermediate bake output. Only the packed atlas under public/assets/sprites/
+# is committed; these are reproducible with `npm run bake:cars`.
+art/build/
+scripts/__pycache__/

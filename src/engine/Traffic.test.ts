@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Traffic, type TrafficCar } from './Traffic.js';
 
-const mk = (over: Partial<TrafficCar> = {}): TrafficCar => ({ z: 0, offset: 0, speed: 100, sprite: 'car0', ...over });
+const mk = (over: Partial<TrafficCar> = {}): TrafficCar => ({ z: 0, offset: 0, speed: 100, sprite: 'car0', variant: 0, ...over });
 
 describe('Traffic', () => {
   it('advances each car by speed*dt', () => {

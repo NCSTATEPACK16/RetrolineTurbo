@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LADDER, ladderStepFor, OVERLAY_CULL_STEP } from './ladder.js';
+import { LADDER, ladderStepFor, OVERLAY_CULL_STEP, quantisedWidth } from './ladder.js';
 import { PLAYER_CAR_WIDTH } from '../constants.js';
 
 describe('LADDER', () => {
@@ -58,5 +58,49 @@ describe('ladderStepFor', () => {
 
   it('culls overlays at a step small enough that nobody sees them', () => {
     expect(LADDER[OVERLAY_CULL_STEP]!).toBeLessThanOrEqual(30);
+  });
+});
+
+describe('quantisedWidth', () => {
+  it('reproduces the baked widths exactly inside the ladder range', () => {
+    // Cars are drawn from frames baked at these widths; any drift here resamples
+    // the very sprites the ladder exists to keep pixel-exact.
+    LADDER.forEach((w) => expect(quantisedWidth(w)).toBe(w));
+  });
+
+  it('continues the same geometric series below the smallest baked step', () => {
+    // Roadside props project well under 10px. Clamping them all to the ladder
+    // floor would draw a sprite 300 segments away the same size as one 30
+    // segments away, which reads as no depth at all.
+    expect(quantisedWidth(6.5)).toBeLessThan(10);
+    expect(quantisedWidth(6.5)).toBeGreaterThan(quantisedWidth(0.6));
+    expect(quantisedWidth(0.6)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('grows past the largest baked step rather than clamping', () => {
+    expect(quantisedWidth(400)).toBeGreaterThan(LADDER[0]!);
+  });
+
+  it('is piecewise constant — the anti-shimmer property', () => {
+    // Sweeping a sprite continuously toward the camera must produce long runs of
+    // one width, not a new width every frame. That is the whole mechanism: with
+    // imageSmoothingEnabled off, a width that changes every frame resamples at a
+    // slightly different ratio every frame and the pixels crawl.
+    let changes = 0;
+    let prev = quantisedWidth(20);
+    for (let i = 1; i <= 400; i++) {
+      const w = quantisedWidth(20 + i * 0.25); // 20px -> 120px, continuously
+      if (w !== prev) changes++;
+      prev = w;
+    }
+    expect(changes).toBeLessThan(12); // ~8 geometric steps across that range
+  });
+
+  it('never returns a non-positive or non-finite width', () => {
+    for (const bad of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const w = quantisedWidth(bad);
+      expect(Number.isFinite(w)).toBe(true);
+      expect(w).toBeGreaterThan(0);
+    }
   });
 });

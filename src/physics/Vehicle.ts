@@ -40,6 +40,8 @@ export class Vehicle implements PlayerState {
   private isSkidding = false;
   private skidDir = 0; // sign of the curvature that triggered the skid
   private recoverySteps = 0;
+  private lastSteer = 0; // last applied steer, clamped; drives the sprite frame
+  private lastBraking = false; // brake or handbrake held; lights the brake overlay
 
   constructor(private readonly roadWidth: number) {}
 
@@ -58,11 +60,29 @@ export class Vehicle implements PlayerState {
     return this.isSkidding;
   }
 
+  /** Steer the driver actually applied last step, clamped to -1..1.
+   * Reported rather than derived from lateral velocity so the sprite follows the
+   * stick immediately — a car that visually straightens mid-corner reads as a bug. */
+  get steer(): number {
+    return this.lastSteer;
+  }
+
+  /** Brake or handbrake held on the last step. Drives the brake-light overlay. */
+  get braking(): boolean {
+    return this.lastBraking;
+  }
+
   /** Advance one fixed step. `curvature` is the current segment's K_i.
    * `roadCenterX` is the nearest road centre-line's world-x (non-zero during a
    * branch split, where the drivable roads diverge from the track centre) so
    * the off-road test follows the actual road, not the abstract centre. */
   step(cmd: Command, curvature: number, dt: number = STEP_S, roadCenterX = 0): void {
+    // Record the driver's intent for the sprite layer. Clamped here and nowhere
+    // else: the lateral maths below deliberately keeps using the raw command, so
+    // adding this view cannot perturb the existing deterministic behaviour.
+    this.lastSteer = cmd.steer < -1 ? -1 : cmd.steer > 1 ? 1 : cmd.steer;
+    this.lastBraking = cmd.brake > 0 || cmd.handbrake;
+
     // -- transmission -------------------------------------------------------
     if (cmd.gearUp && this.gearIdx < GEAR_MAX_KMH.length) this.gearIdx++;
     if (cmd.gearDown && this.gearIdx > 1) this.gearIdx--;
@@ -134,5 +154,6 @@ export class Vehicle implements PlayerState {
   reset(): void {
     this.posZ = 0; this.posX = 0; this.kmh = 0; this.gearIdx = 1;
     this.isSkidding = false; this.skidDir = 0; this.recoverySteps = 0;
+    this.lastSteer = 0; this.lastBraking = false;
   }
 }

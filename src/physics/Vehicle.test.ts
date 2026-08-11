@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Vehicle, createCommand, type Command } from './Vehicle.js';
 import { STEP_S, GEAR_MAX_KMH, SKID_GRIP, SKID_RECOVERY_STEPS } from '../constants.js';
+import type { PlayerState } from '../types/engine.js';
 
 const ROAD = 2000;
 
@@ -214,5 +215,39 @@ describe('Vehicle centrifugal + collision response + determinism', () => {
     v.reset();
     expect(v.z).toBe(0); expect(v.x).toBe(0); expect(v.speedKmh).toBe(0);
     expect(v.gear).toBe(1); expect(v.skidding).toBe(false);
+  });
+});
+
+describe('PlayerState steer + skid view', () => {
+  it('exposes steer and skid state through the read-only PlayerState view', () => {
+    const v = new Vehicle(ROAD);
+    const state: PlayerState = v; // must typecheck
+    expect(typeof state.steer).toBe('number');
+    expect(state.steer).toBeGreaterThanOrEqual(-1);
+    expect(state.steer).toBeLessThanOrEqual(1);
+    expect(typeof state.skidding).toBe('boolean');
+  });
+
+  it('reports the steer the driver actually applied', () => {
+    const v = new Vehicle(ROAD);
+    run(v, 10, (c) => { c.throttle = 1; c.steer = 0.75; });
+    expect(v.steer).toBeCloseTo(0.75, 5);
+    run(v, 10, (c) => { c.throttle = 1; c.steer = -1; });
+    expect(v.steer).toBe(-1);
+  });
+
+  it('clamps out-of-range steer, because the sprite selector indexes on it', () => {
+    const v = new Vehicle(ROAD);
+    run(v, 5, (c) => { c.steer = 4; });
+    expect(v.steer).toBe(1);
+    run(v, 5, (c) => { c.steer = -4; });
+    expect(v.steer).toBe(-1);
+  });
+
+  it('holds the last steer across a translate, which only shifts world space', () => {
+    const v = new Vehicle(ROAD);
+    run(v, 5, (c) => { c.throttle = 1; c.steer = 0.5; });
+    v.translate(100, 10);
+    expect(v.steer).toBeCloseTo(0.5, 5);
   });
 });

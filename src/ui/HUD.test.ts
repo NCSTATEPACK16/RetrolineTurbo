@@ -15,7 +15,7 @@ import type { Camera, PlayerState } from '../types/engine.js';
 
 const atlas = new SpriteAtlas({} as CanvasImageSource, packAtlas(SPRITE_MANIFEST, 256).frames);
 const camera: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
-const player: PlayerState = { z: 0, x: 0, speed: 6000, gear: 2 };
+const player: PlayerState = { z: 0, x: 0, speed: 6000, gear: 2, steer: 0, skidding: false, braking: false };
 
 describe('HUD helpers', () => {
   it('formatTime renders minutes:seconds.tenths', () => {

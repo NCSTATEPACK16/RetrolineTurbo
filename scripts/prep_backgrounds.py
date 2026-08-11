@@ -29,6 +29,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from imageops import downscale_box, quantise_adaptive
+
 ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = ROOT / "art" / "source"
 OUT_DIR = ROOT / "public" / "assets" / "backgrounds"
@@ -95,8 +97,8 @@ def prep(asset: dict) -> dict:
 
     half_w = TARGET_W // 2
     target_h = max(1, round(art.height * half_w / art.width))
-    small = art.resize((half_w, target_h), Image.BOX)
-    small = small.quantize(colors=PALETTE_COLORS, method=Image.MEDIANCUT, dither=Image.NONE).convert("RGB")
+    small = downscale_box(art, half_w, target_h)
+    small = quantise_adaptive(small, PALETTE_COLORS)
 
     # Mirror onto itself: column 0 == last column, so the plate wraps seamlessly.
     plate = Image.new("RGB", (TARGET_W, target_h))

@@ -3,7 +3,7 @@ import {
   LOGICAL_WIDTH, LOGICAL_HEIGHT, COLORS, DEFAULT_CAMERA_HEIGHT,
   PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y,
 } from '../constants.js';
-import type { Camera, TrackConfig, SpriteFrame } from '../types/engine.js';
+import type { Camera, TrackConfig, SpriteFrame, PlayerState } from '../types/engine.js';
 import type { RenderBackend } from './RenderBackend.js';
 import type { TrackManager } from './TrackManager.js';
 import type { Background } from './Background.js';
@@ -12,6 +12,72 @@ import type { SpriteAtlas } from './SpriteAtlas.js';
 import type { Traffic } from './Traffic.js';
 import { branchSpread, fillRoadOffsets } from './BranchRenderer.js';
 import { bandMerges } from './roadBanding.js';
+import { OVERLAY_CULL_STEP, quantisedWidth } from '../math/ladder.js';
+import { overlayDest, type Rect } from './SpriteComposer.js';
+import type { CarFrameSet } from './CarFrameSet.js';
+
+/** Which baked car frame to draw: one of three authored angles, optionally mirrored. */
+export interface CarFrameChoice { angle: number; flipX: boolean; skid: boolean }
+
+/** Steer magnitudes at which the car swaps to the next authored steering frame. */
+const STEER_FRAME_1 = 0.1;
+const STEER_FRAME_2 = 0.5;
+
+/**
+ * Steering-frame selection.
+ *
+ * Three authored angles (0, 15, 30 degrees) cover both directions via horizontal
+ * flip (research §3c), which halves the atlas. NaN falls through to the straight
+ * frame because the render loop must never throw.
+ */
+export function selectCarFrame(steer: number, skidding: boolean): CarFrameChoice {
+  const mag = Math.abs(steer);
+  const angle = mag > STEER_FRAME_2 ? 2 : mag > STEER_FRAME_1 ? 1 : 0;
+  return { angle, flipX: steer < 0, skid: skidding };
+}
+
+/** Nobody sees an exhaust tip on a 24px car (research §4b). */
+export function overlaysVisible(step: number): boolean {
+  return step < OVERLAY_CULL_STEP;
+}
+
+/** One overlay part and the body anchor it is pinned to. */
+export interface BakedOverlay {
+  /** Anchor name in the body frame, e.g. `wheelBL`. */
+  anchor: string;
+  set: CarFrameSet;
+}
+
+/**
+ * The baked car artwork, handed over when the async atlas arrives.
+ *
+ * Overlays are separate frame sets rather than extra body variants: parts pinned
+ * to anchors are what lets 80 upgrade parts share 12 car frames instead of
+ * multiplying them (research §4b).
+ *
+ * Each wheel is its OWN overlay. Reusing one wheel sprite at four anchors was
+ * tried and looks wrong — the far wheels are smaller and higher, and on a turned
+ * car they show the rim face while the near ones show tread.
+ *
+ * `under` parts are drawn BEFORE the body so the bodywork occludes them. Wheels
+ * are baked unoccluded (their pass hides the body), so drawing them on top paints
+ * a whole wheel over the arch and the car reads as sitting on stilts. Painter
+ * order is the only depth sorting available, and putting the body last restores
+ * exactly the occlusion the single-pass render has.
+ */
+export interface BakedCar {
+  image: CanvasImageSource;
+  body: CarFrameSet;
+  under: readonly BakedOverlay[];
+  brake: CarFrameSet | null;
+  /** Index into the body set's colour dimension. */
+  color: number;
+}
+
+/** Vertical nudge, in px, when the car is on its outermost steering frame.
+ * Body roll is faked by a vertical offset: rotating the sprite is the Mode-7
+ * look the project avoids, and RenderBackend has no rotation by design. */
+const ROLL_OFFSET_PX = 1;
 
 /** Screen-space projection of a road centre point: centre-x, row, half-width. */
 export interface Projected {
@@ -84,6 +150,11 @@ export class Renderer {
   private roadsNear = 1;
   private spreadFar = 0;
   private spreadNear = 0;
+  // Baked car artwork and its scratch space. Pre-allocated so the overlay pass
+  // allocates nothing per frame (hard rule 4).
+  private bakedCar: BakedCar | null = null;
+  private readonly anchorOut: [number, number] = [0, 0];
+  private readonly overlayRect: Rect = { dx: 0, dy: 0, dw: 0, dh: 0 };
 
   constructor(private readonly config: TrackConfig, private readonly atlas: SpriteAtlas) {
     this.records = Array.from({ length: config.drawDistance }, () => (
@@ -98,6 +169,7 @@ export class Renderer {
     traffic?: Traffic,
     curvatureAtCamera: number = 0,
     backdrop?: Backdrop,
+    player?: PlayerState,
   ): void {
     backend.clear(COLORS.sky);
     background?.render(camera, curvatureAtCamera, backend, backdrop);
@@ -217,7 +289,7 @@ export class Renderer {
     }
 
     this.drawSprites(camera, track, backend, traffic);
-    this.drawPlayerCar(backend);
+    this.drawPlayerCar(backend, player);
     // NOTE: present() is the caller's responsibility so the HUD can composite
     // onto the same logical frame before the blit (see main.ts render step).
   }
@@ -232,7 +304,13 @@ export class Renderer {
   }
 
   /** Second, far→near pass: draw each visible segment's static sprites and any
-   * traffic car mapped to it, painter-ordered and crest bottom-clipped. */
+   * traffic car mapped to it, painter-ordered and crest bottom-clipped.
+   *
+   * PERF: this rescans the whole traffic array for every visible segment, so it
+   * is O(drawDistance x cars) — 300 x 4 = 1200 iterations/frame today, which is
+   * nothing. At the ~60 cars the research describes it would be 18,000. Bucket
+   * cars by segment index before the draw pass if the count passes ~12; do not
+   * ship the naive loop at scale. */
   private drawSprites(camera: Camera, track: TrackManager, backend: RenderBackend, traffic?: Traffic): void {
     const { segmentLength, roadWidth, drawDistance } = this.config;
     for (let i = drawDistance - 1; i >= 0; i--) {          // far → near
@@ -250,7 +328,13 @@ export class Renderer {
 
   private blit(backend: RenderBackend, f: SpriteFrame, rec: ProjRecord, offset: number, camera: Camera, roadHalfWidth: number): void {
     const scale = scaleFor(camera.focalLength, rec.relZ);
-    const dw = scale * f.w * (LOGICAL_WIDTH / 2) * (roadHalfWidth / DEFAULT_CAMERA_HEIGHT); // provisional world→px sprite scale, retuned at gate
+    // The provisional world→px term now only picks a ladder step; it no longer
+    // scales the blit, so the drawn size is always one of 12 pre-baked widths.
+    // That is the whole anti-shimmer mechanism: with imageSmoothingEnabled off, a
+    // continuously varying destination width resamples at a slightly different
+    // ratio every frame and the pixels crawl.
+    const ideal = scale * f.w * (LOGICAL_WIDTH / 2) * (roadHalfWidth / DEFAULT_CAMERA_HEIGHT);
+    const dw = quantisedWidth(ideal);
     const dh = dw * (f.h / f.w);
     const cx = rec.x + rec.w * offset;                       // lateral: offset in road-half-widths
     const dx = cx - dw * (f.anchorX / f.w);
@@ -258,14 +342,63 @@ export class Renderer {
     backend.drawSprite(this.atlas.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, rec.maxy);
   }
 
-  private drawPlayerCar(backend: RenderBackend): void {
-    const f = this.atlas.frame('player');
-    // Layout-locked size and position (research §5a). Spec C swaps the artwork
-    // behind this without re-deriving where the car sits.
-    const dw = PLAYER_CAR_WIDTH;
-    const dh = dw * (f.h / f.w);
+  /** Hand over the baked car artwork once the async atlas has arrived. Null
+   * restores the procedural placeholder, so a failed fetch degrades the picture
+   * rather than the loop. */
+  setBakedCar(car: BakedCar | null): void {
+    this.bakedCar = car;
+  }
+
+  private drawPlayerCar(backend: RenderBackend, player?: PlayerState): void {
+    const baked = this.bakedCar;
+    if (!baked) {
+      const f = this.atlas.frame('player');
+      // Layout-locked size and position (research §5a). Spec C swaps the artwork
+      // behind this without re-deriving where the car sits.
+      const dw = PLAYER_CAR_WIDTH;
+      const dh = dw * (f.h / f.w);
+      const dx = (LOGICAL_WIDTH - dw) / 2;
+      const dy = PLAYER_CAR_BASE_Y - dh;
+      backend.drawSprite(this.atlas.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, LOGICAL_HEIGHT);
+      return;
+    }
+
+    const choice = selectCarFrame(player?.steer ?? 0, player?.skidding ?? false);
+    // The player car always sits on the largest ladder step, and each baked
+    // frame is drawn at its NATIVE size — a turned car is genuinely wider on
+    // screen, so forcing every angle to one width would squash it.
+    const f = baked.body.frame(baked.color, choice.angle, 0);
+    const dw = f.w;
+    const dh = f.h;
     const dx = (LOGICAL_WIDTH - dw) / 2;
-    const dy = PLAYER_CAR_BASE_Y - dh;
-    backend.drawSprite(this.atlas.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, LOGICAL_HEIGHT);
+    const roll = choice.angle === 2 ? ROLL_OFFSET_PX : 0;
+    const dy = PLAYER_CAR_BASE_Y - dh + roll;
+    const showOverlays = overlaysVisible(0);
+
+    // Wheels first, then the body over them: the wheel passes were baked with the
+    // body hidden, so painting them last would cover the arches.
+    if (showOverlays) {
+      for (const part of baked.under) {
+        if (!baked.body.anchor(choice.angle, part.anchor, this.anchorOut)) continue;
+        const w = part.set.frame(0, choice.angle, 0);
+        overlayDest(dx, dy, dw, dh, this.anchorOut[0], this.anchorOut[1],
+          w.w, w.h, choice.flipX, this.overlayRect);
+        const r = this.overlayRect;
+        backend.drawSprite(baked.image, w.x, w.y, w.w, w.h,
+          r.dx, r.dy, r.dw, r.dh, LOGICAL_HEIGHT, choice.flipX);
+      }
+    }
+
+    backend.drawSprite(baked.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, LOGICAL_HEIGHT, choice.flipX);
+
+    if (!showOverlays) return;
+    if (baked.brake && player?.braking && baked.body.anchor(choice.angle, 'brake', this.anchorOut)) {
+      const b = baked.brake.frame(0, choice.angle, 0);
+      overlayDest(dx, dy, dw, dh, this.anchorOut[0], this.anchorOut[1],
+        b.w, b.h, choice.flipX, this.overlayRect);
+      const r = this.overlayRect;
+      backend.drawSprite(baked.image, b.x, b.y, b.w, b.h,
+        r.dx, r.dy, r.dw, r.dh, LOGICAL_HEIGHT, choice.flipX);
+    }
   }
 }

@@ -102,18 +102,32 @@ baseline exists.
 
 *Depends on B. ⚠️ Requires network access for model downloads before anything else can start.*
 
-- [ ] `art/models/` — Kenney Car Kit + RGS_Dev (CC0, separated wheels) + `LICENSES.md`;
-      wheels-separate, poly count, and body symmetry all verified in Blender
-- [ ] `scripts/imageops.py` — shared downscale + **both** quantise modes (adaptive for plates,
+- [x] `art/models/` — Kenney Car Kit + RGS_Dev (CC0, separated wheels) + `LICENSES.md`;
+      wheels-separate, poly count, and body symmetry all verified in Blender. **The bake uses
+      RGS_Dev `Sports.fbx`** (794-tri body + 4 separate wheels, materials split by function).
+      Kenney's cars are one mesh with a single texture-atlas material — no separate wheel
+      passes, no cheap repaint — so they stay as a fallback source only.
+- [x] `scripts/imageops.py` — shared downscale + **both** quantise modes (adaptive for plates,
       fixed for sprites); `prep_backgrounds.py` refactored onto it with **byte-identical output**
-- [ ] `scripts/render_car_sprites.py` — headless Blender 5.2 (`BLENDER_EEVEE`, `Standard` view
-      transform, `film_transparent`, 1px Freestyle), 3 angles × 12 steps × N colours, body and
-      wheels on separate passes, **anchors projected from the 3D scene**
-- [ ] `scripts/pack_atlas.py` — POT ≤2048×2048, 2px gutter + 1px bleed, manifest accepted by
-      Spec B's parser unchanged; golden-fixture round-trip test (vitest + pytest)
-- [ ] `src/types/engine.ts` — `PlayerState` widened with `steer` + `skidding` (vitest)
-- [ ] `src/engine/Renderer.ts` — ladder quantisation in `blit`; `selectCarFrame`; overlay culling;
-      brake lights as an overlay; body roll by vertical offset, **never rotation** (vitest)
+- [x] `scripts/render_car_sprites.py` + `scripts/postprocess_cars.py` — headless Blender 5.2
+      (`BLENDER_EEVEE`, `Standard` view transform, `film_transparent`, 1px Freestyle), 3 angles ×
+      12 steps × 2 colours, body / per-wheel / brake-light passes, **anchors projected from the
+      3D scene** and cross-checked against each overlay's own crop centre.
+      **Split across two interpreters:** Blender 5.2 bundles Python 3.13 with no Pillow, so the
+      render stage is stdlib-only and the image stages run under `.venv`. `npm run bake:cars`
+      chains render → clamp → pack.
+- [x] `scripts/pack_atlas.py` — POT ≤2048×2048 (actual: **1024×1024**, 252 frames, 90 KB), 2px
+      gutter + 1px bleed, manifest accepted by Spec B's parser unchanged; golden-fixture
+      round-trip test (vitest + pytest)
+- [x] `src/types/engine.ts` — `PlayerState` widened with `steer`, `skidding` **and `braking`**
+      (the brake-light overlay needed a signal Task 5 had not surfaced) (vitest)
+- [x] `src/engine/Renderer.ts` — ladder quantisation in `blit`; `selectCarFrame`; overlay culling;
+      brake lights as an overlay; body roll by vertical offset, **never rotation** (vitest).
+      **`quantisedWidth` extends the ladder's geometric series past both ends**: roadside props
+      project from ~32px down to half a pixel, and clamping them to the ladder's 10px floor would
+      have drawn a tree 300 segments away the same size as one 30 segments away.
+      Wheels draw **under** the body — they are baked with the body hidden, so painting them on
+      top laid a whole wheel over the arch.
 - [ ] **VISUAL GATE:** no pixel crawl at **any** speed including crawl; overlays stay attached
       through a **hard left turn**
 
@@ -148,6 +162,7 @@ no pixel crawl at any speed, and anchored overlays stay registered in both turn 
 ## Operational carryover
 
 - [x] Phase 7 core branching architecture complete (196 unit tests green)
+- [x] Spec C complete except its human visual gate: **350 vitest + 14 pytest green**, `npm run build` clean
 - [x] Netlify continuous deploy active at `https://retrolineturbo.netlify.app/`
 - [ ] **Follow-up:** F1 open-wheel silhouette. No vetted CC0 pack contains one; Spec C proves the
       pipeline on GT/tourer models, after which F1 is a model swap, not a pipeline change.
