@@ -12,6 +12,9 @@ import { hitCar, responseDelta } from './engine/Collision.js';
 import { Vehicle, createCommand } from './physics/Vehicle.js';
 import { InputManager, mouseSteerCurve } from './input/InputManager.js';
 import { LocalStorageSaveBackend } from './economy/save.js';
+import { ScoreState } from './economy/score.js';
+import { loadBackdrops } from './engine/loadBackdrops.js';
+import { backdropIdForStage, type Backdrop } from './engine/Backdrop.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
 import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
@@ -60,6 +63,12 @@ const cars: TrafficCar[] = [
 const traffic = new Traffic(cars, trackLength);
 
 const save = new LocalStorageSaveBackend();
+const score = new ScoreState(); // TX-1 passed-cars / points, shown in the HUD header
+
+// Horizon plates load asynchronously; until (or unless) they arrive the
+// Background falls back to its flat colour bands, so the loop never waits.
+let backdrops = new Map<string, Backdrop>();
+void loadBackdrops().then((loaded) => { backdrops = loaded; });
 const input = new InputManager();
 const vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
 const remap = new RemapScreen(atlas, save, input);
@@ -111,6 +120,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && (route.expired || route.finished)) {
     route = new RouteState(1);
     vehicle.reset();
+    score.reset();
     elapsedMs = 0;
     routeMap.flashMs = 0;
     bootScene();
@@ -176,6 +186,8 @@ createLoop({
     vehicle.step(cmd, seg.curve, dt, roadCenterX);
     elapsedMs += dt * 1000;
     traffic.update(dt);
+    // Both positions are current here, so a pass is scored on the step it happens.
+    score.addOvertakes(traffic.countOvertakes(vehicle.z));
 
     // Off-road drag is the Vehicle's own μ path; responseDelta applies on hits only.
     if (hitCar(vehicle, cars, cfg) != null) {
@@ -225,8 +237,10 @@ createLoop({
   },
   render: (): void => {
     const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
-    renderer.render(camera, track, backend, background, traffic, track.segment(base).curve);
-    hud.render(vehicle, elapsedMs, track, camera, backend, route.remainingMs);
+    const backdrop = backdrops.get(backdropIdForStage(route.stage));
+    renderer.render(camera, track, backend, background, traffic, track.segment(base).curve, backdrop);
+    hud.render(vehicle, elapsedMs, track, camera, backend, route.remainingMs,
+      route, score.passedCars, score.points);
     remap.render(backend);
     editor.render(backend);
     routeMap.render(route, backend);

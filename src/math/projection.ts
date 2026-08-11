@@ -14,7 +14,9 @@
  *
  * Forward projection maps normalized device coords [-1, 1] into pixel space via
  * the half-dimension factors `W/2` / `H/2`; the z-map is that map's exact inverse
- * for flat ground, so `zAtScanline(projectY(0, h, d/z), cam) === z`.
+ * for flat ground at *any* horizon, so
+ * `zAtScanline(projectY(0, h, d/z, H, cam.horizon), cam) === z` — not only when
+ * the horizon happens to sit at the vertical centre.
  */
 
 import { LOGICAL_WIDTH, LOGICAL_HEIGHT } from '../constants.js';
@@ -41,17 +43,23 @@ export function projectX(
 
 /**
  * Project a world elevation to a screen row (y grows downward).
- * `H/2 − S·(y − y_camera)·(H/2)`. For ground (worldY=0) below the camera this
- * yields a row larger than `H/2`, collapsing to `H/2` as `scale → 0`.
+ * `Y_horizon − S·(y − y_camera)·(H/2)`. For ground (worldY=0) below the camera
+ * this yields a row larger than `Y_horizon`, collapsing to `Y_horizon` as
+ * `scale → 0`.
+ *
+ * Only the *origin row* is the horizon; the `H/2` factor stays the NDC→pixel
+ * conversion, so moving the horizon slides the vanishing point without changing
+ * the road's rate of convergence. `horizon` is last so existing positional call
+ * sites keep working, and defaults to the vertical centre.
  */
 export function projectY(
   worldY: number,
   cameraY: number,
   scale: number,
   height: number = LOGICAL_HEIGHT,
+  horizon: number = height / 2,
 ): number {
-  const half = height / 2;
-  return half - scale * (worldY - cameraY) * half;
+  return horizon - scale * (worldY - cameraY) * (height / 2);
 }
 
 /**

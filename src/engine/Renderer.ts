@@ -1,12 +1,17 @@
 import { scaleFor, projectX, projectY, accumulateSegment, clipToCrest } from '../math/projection.js';
-import { LOGICAL_WIDTH, LOGICAL_HEIGHT, COLORS, DEFAULT_CAMERA_HEIGHT } from '../constants.js';
+import {
+  LOGICAL_WIDTH, LOGICAL_HEIGHT, COLORS, DEFAULT_CAMERA_HEIGHT,
+  PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y,
+} from '../constants.js';
 import type { Camera, TrackConfig, SpriteFrame } from '../types/engine.js';
 import type { RenderBackend } from './RenderBackend.js';
 import type { TrackManager } from './TrackManager.js';
 import type { Background } from './Background.js';
+import type { Backdrop } from './Backdrop.js';
 import type { SpriteAtlas } from './SpriteAtlas.js';
 import type { Traffic } from './Traffic.js';
 import { branchSpread, fillRoadOffsets } from './BranchRenderer.js';
+import { bandMerges } from './roadBanding.js';
 
 /** Screen-space projection of a road centre point: centre-x, row, half-width. */
 export interface Projected {
@@ -33,7 +38,7 @@ export function projectSegment(
   const scale = scaleFor(camera.focalLength, relZ);
   return {
     x: projectX(worldXCenter, camera.x, scale, width),
-    y: projectY(worldY, camera.height, scale, height),
+    y: projectY(worldY, camera.height, scale, height, camera.horizon),
     w: scale * roadHalfWidth * (width / 2),
   };
 }
@@ -92,9 +97,10 @@ export class Renderer {
     background?: Background,
     traffic?: Traffic,
     curvatureAtCamera: number = 0,
+    backdrop?: Backdrop,
   ): void {
     backend.clear(COLORS.sky);
-    background?.render(camera, curvatureAtCamera, backend);
+    background?.render(camera, curvatureAtCamera, backend, backdrop);
 
     const { segmentLength, drawDistance, roadWidth } = this.config;
     const base = Math.floor(camera.z / segmentLength);
@@ -140,7 +146,8 @@ export class Renderer {
         const clip = clipToCrest(maxy, this.far.y);
         if (clip.visible) {
           maxy = clip.clip;
-          const dark = Math.floor((base + i) / this.config.rumbleSegments) % 2 === 1;
+          const merged = bandMerges(this.near.y - this.far.y, this.config.rumbleSegments);
+          const dark = !merged && Math.floor((base + i) / this.config.rumbleSegments) % 2 === 1;
 
           // Median wedge between the diverging inner edges, once a gap exists
           // on both ends of the span (roads overlay its edges).
@@ -160,7 +167,14 @@ export class Renderer {
             const fx = this.far.x + offFarPx;
             const nx = this.near.x + offNearPx;
 
-            // Rumble (wider, drawn first so the road overlays it).
+            // Shoulder: a thin band between kerb and grass, on BOTH phases, so
+            // the kerb red never vibrates against the foliage green (§1d).
+            backend.drawQuad(
+              fx, this.far.y, this.far.w * 1.22,
+              nx, this.near.y, this.near.w * 1.22,
+              COLORS.shoulder,
+            );
+            // Kerb (wider, drawn before the road so the road overlays it).
             backend.drawQuad(
               fx, this.far.y, this.far.w * 1.15,
               nx, this.near.y, this.near.w * 1.15,
@@ -172,8 +186,9 @@ export class Renderer {
               nx, this.near.y, this.near.w,
               dark ? COLORS.roadDark : COLORS.road,
             );
-            // Centre lane line on light bands only.
-            if (!dark) {
+            // Centre lane dash on light bands only — and never on a merged band,
+            // where it would be sub-row noise.
+            if (!dark && !merged) {
               backend.drawQuad(
                 fx, this.far.y, this.far.w * 0.04,
                 nx, this.near.y, this.near.w * 0.04,
@@ -212,7 +227,7 @@ export class Renderer {
   ): void {
     const scale = scaleFor(camera.focalLength, relZ);
     out.x = projectX(worldXCenter, camera.x, scale, LOGICAL_WIDTH);
-    out.y = projectY(worldY, camera.height, scale, LOGICAL_HEIGHT);
+    out.y = projectY(worldY, camera.height, scale, LOGICAL_HEIGHT, camera.horizon);
     out.w = scale * roadHalfWidth * (LOGICAL_WIDTH / 2);
   }
 
@@ -245,9 +260,12 @@ export class Renderer {
 
   private drawPlayerCar(backend: RenderBackend): void {
     const f = this.atlas.frame('player');
-    const dw = f.w * 3, dh = f.h * 3;                         // fixed foreground scale (provisional)
+    // Layout-locked size and position (research §5a). Spec C swaps the artwork
+    // behind this without re-deriving where the car sits.
+    const dw = PLAYER_CAR_WIDTH;
+    const dh = dw * (f.h / f.w);
     const dx = (LOGICAL_WIDTH - dw) / 2;
-    const dy = LOGICAL_HEIGHT - dh - 6;
+    const dy = PLAYER_CAR_BASE_Y - dh;
     backend.drawSprite(this.atlas.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, LOGICAL_HEIGHT);
   }
 }

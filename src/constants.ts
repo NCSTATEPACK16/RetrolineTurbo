@@ -3,6 +3,7 @@
  * cadence are single-sourced.
  */
 
+import { PALETTE } from './assets/palette.js';
 import type { TrackConfig } from './types/engine.js';
 
 /** Fixed logical framebuffer (research §4 / plan §2.4). Nearest-neighbour upscaled. */
@@ -29,7 +30,19 @@ export const MAX_FRAME_MS = 250;
  */
 export const DEFAULT_FOCAL_LENGTH = 0.84; // d_screen (screen-plane distance)
 export const DEFAULT_CAMERA_HEIGHT = 1000; // h_camera above the road plane (world units)
-export const HORIZON_Y = LOGICAL_HEIGHT / 2; // Y_horizon = 135; vanishing row for a level camera
+
+/**
+ * Screen layout (research §5a). The horizon sits just above vertical centre so
+ * the road gets the bottom ~56% — correct proportions for a racer. Moving this
+ * moves the vanishing point for every projected segment; retune
+ * DEFAULT_FOCAL_LENGTH alongside it if the road reads wrong.
+ */
+export const HORIZON_Y = 118; // Y_horizon; vanishing row for a level camera
+export const HEADER_H = 40; // TX-1 blue header depth
+export const HUD_MARGIN = 6; // safe inset from every edge (iOS notch)
+export const HUD_ROW_Y = 248; // baseline row for the SCORE / SPEED corner readouts
+export const PLAYER_CAR_BASE_Y = 232; // player car bottom edge
+export const PLAYER_CAR_WIDTH = 120; // player car drawn width (~1/4 screen)
 
 /**
  * Provisional track geometry (Jake Gordon's proven seed values). `roadWidth` is
@@ -67,14 +80,19 @@ export const SKID_GRIP = 0.4; // steering grip while skidding (−60%)
 export const SKID_SPEED_DECAY = 0.9; // per-second speed retention while skidding
 export const SKID_RECOVERY_STEPS = 12; // consecutive counter-steer steps to recover
 
-/** Provisional retro palette. Retuned when the look locks in Phase 4. */
+/**
+ * Retro palette, derived from the shared master palette (`assets/palette.json`)
+ * so the engine and the offline bake scripts clamp to identical values.
+ * Key names are unchanged from the provisional set so no call site moves.
+ */
 export const COLORS = {
-  sky: '#3a1a5a',
-  groundLight: '#1d6b2e',
-  groundDark: '#175a26',
-  road: '#4a4a52',
-  roadDark: '#42424a',
-  rumbleLight: '#d0d0d8',
-  rumbleDark: '#c04040',
-  lane: '#d8d8e0',
+  sky: PALETTE.sky.night[0]!,
+  groundLight: PALETTE.foliage[1]!,
+  groundDark: PALETTE.foliage[0]!,
+  road: PALETTE.road.surfaceA,
+  roadDark: PALETTE.road.surfaceB,
+  shoulder: PALETTE.road.shoulder,
+  rumbleLight: PALETTE.kerb.white,
+  rumbleDark: PALETTE.kerb.red,
+  lane: PALETTE.lane,
 } as const;

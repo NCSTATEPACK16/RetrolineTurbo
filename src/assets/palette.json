@@ -1,0 +1,30 @@
+{
+  "road":    { "surfaceA": "#4a4a55", "surfaceB": "#42424c", "shoulder": "#5a5a66" },
+  "kerb":    { "red": "#d02020", "white": "#f0f0f0" },
+  "lane":    "#e8e8d0",
+  "outline": "#101018",
+  "trunk":   "#6a4a2a",
+  "foliage": ["#2a7a3a", "#3d9a4d", "#58b85a"],
+  "chrome":  ["#2a2a32", "#5a5a6a", "#9a9ab0", "#d8d8e8", "#ffffff"],
+  "body": {
+    "red":  ["#4a0a10", "#8a1a20", "#c02a30", "#e85a55", "#ffb0a0"],
+    "blue": ["#0a1a4a", "#1a3a8a", "#2a5ac0", "#5a8ae8", "#b0d0ff"]
+  },
+  "sky": {
+    "night":   ["#00012f", "#10154c", "#1e1a5b", "#441d7f"],
+    "sunset":  ["#1b0131", "#b00187", "#f01985", "#f4477e", "#fea263", "#fee971"],
+    "canyon":  ["#271059", "#6228a2", "#9132a7", "#c4432f", "#fea74c"]
+  },
+  "ui": {
+    "header":     "#000088",
+    "headerEdge": "#3333ff",
+    "treeNode":   "#5060c0",
+    "starOff":    "#2a2a6a",
+    "white":      "#e8e8f0",
+    "magenta":    "#e040c0",
+    "cyan":       "#40e0e0",
+    "red":        "#f03030",
+    "gold":       "#ffcc00",
+    "blue":       "#5070ff"
+  }
+}
