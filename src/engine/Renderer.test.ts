@@ -11,8 +11,11 @@ import {
 } from '../constants.js';
 import type { Camera, Segment, Sprite } from '../types/engine.js';
 import { parseTrackFile } from '../track/schema.js';
+import { MIN_BAND_ROWS } from './roadBanding.js';
 
 const CAM: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
+const camAt = (z: number): Camera =>
+  ({ x: 0, z, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y });
 const ROAD_HALF = 2000;
 
 const atlas = new SpriteAtlas({} as CanvasImageSource, packAtlas(SPRITE_MANIFEST, 256).frames);
@@ -149,7 +152,6 @@ describe('Renderer curve + hill + occlusion (M2 track)', () => {
 });
 
 describe('Renderer branch pass (fork roads + median)', () => {
-  const camAt = (z: number): Camera => ({ x: 0, z, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y });
   const cfg = { ...DEFAULT_TRACK_CONFIG, drawDistance: 40 };
   const segLen = DEFAULT_TRACK_CONFIG.segmentLength;
 
@@ -214,7 +216,6 @@ describe('Renderer branch pass (fork roads + median)', () => {
 });
 
 describe('Renderer sprite pass (depth-sorted billboards)', () => {
-  const camAt = (z: number): Camera => ({ x: 0, z, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y });
   const treeFrame = atlas.frame('tree');
   const isTree = (s: { sx: number; sy: number }): boolean => s.sx === treeFrame.x && s.sy === treeFrame.y;
 
@@ -262,5 +263,51 @@ describe('Renderer sprite pass (depth-sorted billboards)', () => {
     for (const s of crestBackend.sprites) expect(s.clipBottom).toBeLessThanOrEqual(LOGICAL_HEIGHT);
     // The crest hides the far road (and its scenery); the flat run sees more.
     expect(crestBackend.sprites.length).toBeLessThan(flatBackend.sprites.length);
+  });
+});
+
+describe('road surface', () => {
+  it('draws shoulder, rumble, road widest-first so each overlays the last', () => {
+    const backend = new RecordingBackend();
+    const track = stubTrack(() => []);
+    new Renderer(DEFAULT_TRACK_CONFIG, atlas).render(camAt(0), track, backend);
+
+    const shoulders = backend.quads.filter((q) => q.color === COLORS.shoulder);
+    expect(shoulders.length).toBeGreaterThan(0);
+
+    // For one span, the shoulder quad is wider than the rumble beneath it.
+    const i = backend.quads.findIndex((q) => q.color === COLORS.shoulder);
+    const shoulder = backend.quads[i]!;
+    const rumble = backend.quads[i + 1]!;
+    expect(shoulder.w2).toBeGreaterThan(rumble.w2);
+  });
+
+  it('draws the shoulder on both band phases, unlike the kerb', () => {
+    const backend = new RecordingBackend();
+    new Renderer(DEFAULT_TRACK_CONFIG, atlas).render(camAt(0), stubTrack(() => []), backend);
+
+    const kerbRed = backend.quads.filter((q) => q.color === COLORS.rumbleDark).length;
+    const kerbWhite = backend.quads.filter((q) => q.color === COLORS.rumbleLight).length;
+    const shoulder = backend.quads.filter((q) => q.color === COLORS.shoulder).length;
+
+    expect(kerbRed).toBeGreaterThan(0);
+    expect(kerbWhite).toBeGreaterThan(0);
+    // One shoulder per road span; kerb splits that count across two phases.
+    expect(shoulder).toBe(kerbRed + kerbWhite);
+  });
+
+  it('merges bands near the horizon instead of alternating them', () => {
+    const backend = new RecordingBackend();
+    new Renderer(DEFAULT_TRACK_CONFIG, atlas).render(camAt(0), stubTrack(() => []), backend);
+
+    // The far end of the draw distance is emitted last within each span group;
+    // collect kerb quads whose projected height is under the merge floor.
+    const kerbs = backend.quads.filter(
+      (q) => q.color === COLORS.rumbleDark || q.color === COLORS.rumbleLight,
+    );
+    const tiny = kerbs.filter((q) => Math.abs(q.y2 - q.y1) * DEFAULT_TRACK_CONFIG.rumbleSegments < MIN_BAND_ROWS);
+    expect(tiny.length).toBeGreaterThan(0);
+    // Every merged band uses the light phase — no alternation at the horizon.
+    for (const q of tiny) expect(q.color).toBe(COLORS.rumbleLight);
   });
 });
