@@ -48,6 +48,18 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # screen-right is +X: yaw = BASE_YAW - angle turns the car to screen right.
 BASE_YAW = 180.0
 
+# Shading rig. These are tuned against the measured tone histogram of the a0
+# frame, not by eye: the target is most of the bodywork on the base and key-lit
+# steps, shadows below, and the highlight confined to edges (<10% of the car).
+# The first version used KEY_ENERGY = 3.0, which clipped every lit face to 1.0 —
+# invisible while the ramp topped out at ramp[3], but it blew the whole car out
+# to the highlight the moment ramp[4] was added.
+KEY_ENERGY = 1.8
+AMBIENT = 0.15
+FILL_ENERGY = 0.9  # opposite-side fill; without it every face is either key-lit or ambient
+RIM_STRENGTH = 0.55
+RIM_POWER = 2.0
+
 
 def srgb_to_linear(c: float) -> float:
     """Blender colour sockets are linear; palette hexes are sRGB."""
@@ -105,33 +117,90 @@ def transparent_material(name: str) -> bpy.types.Material:
 
 
 def cel_material(name: str, ramp: list[str]) -> bpy.types.Material:
-    """Three hard-stopped tones off one key light: shadow, base, lit.
+    """Hard-stopped cel shading across the WHOLE 5-step palette ramp.
 
-    Stops are consecutive entries of the 5-step palette ramp. The darkest and
-    lightest entries are held back for the outline and for chrome/headlights, so
-    the paint never collides with them after the fixed-palette clamp.
+    An earlier version used only ramp[1..3]. Holding back both ends cost the car
+    its darkest shadow and — worse — its highlight, so nothing on the bodywork
+    ever caught the light and the sprite read flat and muddy next to 16-bit
+    reference art. All five steps are now in play:
+
+        ramp[0] core shadow   ramp[1] shadow   ramp[2] base
+        ramp[3] key-lit       ramp[4] highlight
+
+    A Fresnel term is mixed into the lighting factor so glancing angles ride up
+    the ramp. That is the bright rim along the roof and shoulder line that
+    separates the car from the road — the single biggest readability win, and
+    the reason hand-painted arcade sprites never look like flat vector shapes.
     """
     mat, nodes, links = _blank_material(name)
     diff = nodes.new("ShaderNodeBsdfDiffuse")
     diff.inputs["Color"].default_value = (1.0, 1.0, 1.0, 1.0)
-    diff.location = (-600, 0)
+    diff.location = (-900, 0)
     s2rgb = nodes.new("ShaderNodeShaderToRGB")
-    s2rgb.location = (-400, 0)
+    s2rgb.location = (-700, 0)
+
+    fres = nodes.new("ShaderNodeFresnel")
+    fres.inputs["IOR"].default_value = 1.45
+    fres.location = (-900, -200)
+    rim = nodes.new("ShaderNodeMath")  # squeeze the rim into a narrow edge band
+    rim.operation = "POWER"
+    rim.inputs[1].default_value = RIM_POWER
+    rim.location = (-700, -200)
+    rim_gain = nodes.new("ShaderNodeMath")
+    rim_gain.operation = "MULTIPLY"
+    rim_gain.inputs[1].default_value = RIM_STRENGTH
+    rim_gain.location = (-560, -200)
+    mix = nodes.new("ShaderNodeMath")
+    mix.operation = "ADD"
+    mix.location = (-400, -100)
+
     ramp_node = nodes.new("ShaderNodeValToRGB")
-    ramp_node.location = (-200, 0)
+    ramp_node.location = (-300, 0)
     cr = ramp_node.color_ramp
     cr.interpolation = "CONSTANT"  # hard bands, never a gradient
     cr.elements[0].position = 0.0
-    cr.elements[0].color = hex_to_linear(ramp[1])  # shadow
-    cr.elements[1].position = 0.32
-    cr.elements[1].color = hex_to_linear(ramp[2])  # base
-    lit = cr.elements.new(0.72)
-    lit.color = hex_to_linear(ramp[3])  # key-lit
+    cr.elements[0].color = hex_to_linear(ramp[0])   # core shadow
+    cr.elements[1].position = 0.16
+    cr.elements[1].color = hex_to_linear(ramp[1])   # shadow
+    for pos, idx in ((0.38, 2), (0.66, 3), (0.88, 4)):
+        cr.elements.new(pos).color = hex_to_linear(ramp[idx])
+
     em = nodes.new("ShaderNodeEmission")
-    em.location = (100, 0)
+    em.location = (0, 0)
 
     links.new(diff.outputs["BSDF"], s2rgb.inputs["Shader"])
-    links.new(s2rgb.outputs["Color"], ramp_node.inputs["Fac"])
+    links.new(fres.outputs["Fac"], rim.inputs[0])
+    links.new(s2rgb.outputs["Color"], mix.inputs[0])
+    links.new(rim.outputs["Value"], rim_gain.inputs[0])
+    links.new(rim_gain.outputs["Value"], mix.inputs[1])
+    links.new(mix.outputs["Value"], ramp_node.inputs["Fac"])
+    links.new(ramp_node.outputs["Color"], em.inputs["Color"])
+    links.new(em.outputs["Emission"], nodes["Material Output"].inputs["Surface"])
+    return mat
+
+
+def glass_material(name: str, chrome: list[str]) -> bpy.types.Material:
+    """Two-tone glass: dark body with a Fresnel glint along the glancing edge.
+
+    One flat grey pane reads as a hole cut in the car. The glint is what makes it
+    read as glass at 120px.
+    """
+    mat, nodes, links = _blank_material(name)
+    fres = nodes.new("ShaderNodeFresnel")
+    fres.inputs["IOR"].default_value = 1.6
+    fres.location = (-500, 0)
+    ramp_node = nodes.new("ShaderNodeValToRGB")
+    ramp_node.location = (-300, 0)
+    cr = ramp_node.color_ramp
+    cr.interpolation = "CONSTANT"
+    cr.elements[0].position = 0.0
+    cr.elements[0].color = hex_to_linear(chrome[0])  # deep glass
+    cr.elements[1].position = 0.45
+    cr.elements[1].color = hex_to_linear(chrome[1])  # mid pane
+    cr.elements.new(0.78).color = hex_to_linear(chrome[3])  # glint
+    em = nodes.new("ShaderNodeEmission")
+    em.location = (0, 0)
+    links.new(fres.outputs["Fac"], ramp_node.inputs["Fac"])
     links.new(ramp_node.outputs["Color"], em.inputs["Color"])
     links.new(em.outputs["Emission"], nodes["Material Output"].inputs["Surface"])
     return mat
@@ -167,22 +236,31 @@ def setup_scene(outline_hex: str) -> None:
 
 
 def setup_lighting(height: float) -> None:
-    """One sun key from upper-front-left, plus flat ambient so shadows stay readable.
+    """Key, fill, and flat ambient. Only the paint reacts; the rest is unlit emission.
 
-    Only the paint materials react to it; everything else is unlit emission.
+    The fill is not optional. With a key alone, a low-poly car's flat faces are
+    bimodal — each one either points at the key or sits at ambient — so the
+    histogram empties out in the middle and the car reads as two tones with
+    nothing in between. The fill is what populates the base step.
     """
-    sun_data = bpy.data.lights.new("key", type="SUN")
-    sun_data.energy = 3.0
-    sun_data.angle = 0.0  # hard terminator — a soft one blurs the ramp stops
-    sun = bpy.data.objects.new("key", sun_data)
-    bpy.context.collection.objects.link(sun)
-    sun.location = (-height * 3, -height * 3, height * 4)
-    sun.rotation_euler = (math.radians(50), 0.0, math.radians(-35))
+    def sun(name: str, energy: float, pitch: float, yaw: float) -> None:
+        data = bpy.data.lights.new(name, type="SUN")
+        data.energy = energy
+        data.angle = 0.0  # hard terminator — a soft one blurs the ramp stops
+        obj = bpy.data.objects.new(name, data)
+        bpy.context.collection.objects.link(obj)
+        obj.location = (0.0, 0.0, height * 4)
+        obj.rotation_euler = (math.radians(pitch), 0.0, math.radians(yaw))
+
+    # Key from behind-above-left: the chase camera sees the car's rear, so the
+    # key has to come from the camera's side or the visible face is the dark one.
+    sun("key", KEY_ENERGY, 50.0, -35.0)
+    sun("fill", FILL_ENERGY, 65.0, 45.0)
 
     world = bpy.data.worlds.new("flat")
     world.use_nodes = True
     bg = world.node_tree.nodes["Background"]
-    bg.inputs["Color"].default_value = (0.35, 0.35, 0.38, 1.0)
+    bg.inputs["Color"].default_value = (AMBIENT, AMBIENT, AMBIENT * 1.1, 1.0)
     bg.inputs["Strength"].default_value = 1.0
     bpy.context.scene.world = world
 
@@ -370,8 +448,12 @@ def assign_materials(body: bpy.types.Object, wheels: list[bpy.types.Object],
     ramp = pal["body"][color]
     chrome = pal["chrome"]
     paint = cel_material(f"paint_{color}", ramp)
-    glass = flat_material("glass", chrome[1])
-    trim = flat_material("trim", pal["outline"])
+    glass = glass_material("glass", chrome)
+    # Dark panels take the paint's own darkest step, not a neutral black. Pure
+    # #101018 merged roof, air dam and outline into one silhouette-swallowing
+    # void; a tinted dark keeps them reading as part of the same car, which is
+    # how 16-bit sprite art handles shadow.
+    trim = flat_material(f"trim_{color}", ramp[0])
     lamp = flat_material("lamp", chrome[4])
     tail = flat_material("tail", pal["ui"]["red"])
     rim = flat_material("rim", chrome[3])
