@@ -4,7 +4,7 @@ import type { TrafficCar } from './Traffic.js';
 import type { PlayerState } from '../types/engine.js';
 
 const cfg = { roadWidth: 2000, segmentLength: 200, carHalfWidthPx: 900 };
-const player: PlayerState = { z: 1000, x: 0, speed: 100, gear: 1 };
+const player: PlayerState = { z: 1000, x: 0, speed: 100, gear: 1, steer: 0, skidding: false };
 
 describe('Collision', () => {
   it('flags off-road past the road half-width', () => {
