@@ -41,3 +41,6 @@ echo "==> rendering $CAR ($COLORS)"
 
 echo "==> palette clamp"
 "$PY" scripts/postprocess_cars.py
+
+echo "==> packing atlas"
+"$PY" scripts/pack_atlas.py --src art/build/cars --id cars --out public/assets/sprites
