@@ -135,23 +135,58 @@ baseline exists.
 
 *Depends on C. Smallest and most deferrable. Parallax first, font is the designated cut.*
 
-- [ ] Second parallax layer behind the plates (`Backdrop.ts`, `Background.ts`, `prep_backgrounds.py`)
-      — closes the "one plate layer" gap (vitest)
-- [ ] Roadside props baked through Spec C's pipeline; lamp posts (`offset: ±1.2`), hazard median
-      posts; sparse 6-step ladder; **every new name registered in `SPRITE_MANIFEST` and passing
-      `track/schema.ts` validation** (vitest)
-- [ ] `effects.png` — flame / dust / speed streaks; **droppable**, game fully playable without it (vitest)
-- [ ] *(optional, cut first)* Press Start 2P (OFL) baked per colour; `maskOps` generalised beyond
-      3 columns with a bit-for-bit regression test; HUD re-measured (vitest)
+- [x] Second parallax layer — **drawn in FRONT of the plates, not behind them.** The spec and plan
+      both called for a far layer behind at `BACKDROP_FAR_SPEED < BACKDROP_LAYER_SPEED`. That
+      cannot work: `prep_backgrounds.py` builds every plate as an opaque RGB image 99–119px tall
+      resting on the horizon, so a layer behind one is never seen — and the plan's own ordering
+      test would have gone green over an unchanged screen. Flipped to a transparent ridge over the
+      plate at `BACKDROP_NEAR_SPEED = 0.05` vs the plate's `0.02`; the lag between them is the same
+      depth cue, built from the side of the plate we can reach. Ridge is baked from the **alpha
+      mask** of a CC0 OGA layer (never its colours) and refilled from tones sampled out of the
+      plate it sits on, which is what stops one ridge clashing across city/coastal/desert.
+      `Backdrop` gained an optional `near` rather than `Background.render` gaining a parameter, so
+      `main.ts` is untouched (vitest, +12 tests).
+- [x] Roadside props — `lamp_post`, `median_post`, `grandstand`, `palm`, `billboard_sponsor`
+      registered in `SPRITE_MANIFEST` (procedural fallback art, on the 2×2 grid, all colours from
+      `palette.json`) and baked through Spec C's pipeline unchanged via `scripts/render_props.py`
+      → `props.png` **1024×512, 30 frames, 20 KB**. Sparse 6-rung ladder indexed by **width**, not
+      height — `Renderer.blit` picks a step with `ladderStepFor(idealWidthPx)`, so a height-indexed
+      bake would put every prop on the wrong rung. `CarFrameSet.nearestStep` is what makes sparse
+      safe: without it a hole in the step array resolves to the 1×1 empty frame and the prop
+      silently vanishes at some distances (vitest, +10 tests; pytest, +3).
+- [x] `effects.png` — dust / flame / speed streaks, **droppable and proven so** (a null set draws
+      nothing and throws nothing; `main.ts` resolves it independently of the car's early return; a
+      partial `effects.json` costs only the missing effect). `drawSprite` gained an optional
+      trailing `alpha`, because the plan's own rule is to bake opacity only where it is *constant*
+      and particle fade is a function of age, streak intensity a function of speed. Shape is still
+      baked as a short animation strip. `Effects` is a fixed 24-slot pool in parallel typed arrays,
+      allocation-free, deterministic scatter (vitest, +25 tests).
+- [x] **CUT: Press Start 2P.** Task 4 Step 1 was a gate — measure at 8px, stop if it does not fit.
+      It does not, in three places: `passed cars` runs x394→**x493**, 19px past the x474 safe
+      margin; the time countdown occupies y16→**y32** against an elapsed clock at y30; the score
+      label occupies y241→**y249** against a value at y248. Two are vertical collisions inside the
+      locked `HEADER_H = 40` band, so absorbing them means re-laying-out the header. The 3×5 face
+      is legible and shipped. **`maskOps` was generalised to any width anyway** and the duplicate
+      7-column `starOps` folded into it and deleted — pinned bit-for-bit against verbatim copies of
+      both originals, since 228 baked glyph frames already exist against that output (vitest, +5).
 - [ ] **VISUAL GATE:** parallax reads as depth; props identifiable at 200 km/h
+      → **still owed — requires a human at `npm run dev`.** Automated gates are green:
+        **398 vitest / 40 files** (was 350/39), **17 pytest**, `npm run build` clean.
+
+**Also cut from Spec D:** the plan's Task 2 does not wire `props.png` into the draw path (it wires
+effects in Task 3 and deliberately does not wire props), so the atlas ships baked and packed while
+`Renderer.drawSprites` still renders the procedural `SPRITE_MANIFEST` entries. Wiring it is the
+natural next task and needs a `setBakedProps` mirroring `setBakedCar`.
 
 ---
 
 ## Gate for the phase
 
-- [ ] `npm test` green · `npm run build` clean
-- [ ] Hard rules 1–5 held — in particular **no per-frame allocation and no per-frame string
-      construction** in the sprite path
+- [x] `npm test` green (398 / 40 files) · `npm run build` clean · `pytest scripts/` green (17)
+- [x] Hard rules 1–5 held — in particular **no per-frame allocation and no per-frame string
+      construction** in the sprite path. Spec D's two new render-path additions both honour it:
+      `Background` pre-allocates a second tile array beside `tileXs`, and `Effects` is a
+      fixed-size pool in parallel typed arrays with swap-with-last retirement.
 
 ## Done-when
 
@@ -163,6 +198,9 @@ no pixel crawl at any speed, and anchored overlays stay registered in both turn 
 
 - [x] Phase 7 core branching architecture complete (196 unit tests green)
 - [x] Spec C complete except its human visual gate: **350 vitest + 14 pytest green**, `npm run build` clean
+- [x] Spec D complete except its human visual gate: **398 vitest + 17 pytest green**, `npm run build` clean.
+      Three visual gates (A, C, D) are now owed to one `npm run dev` session.
+- [ ] **Follow-up:** wire `props.png` into `Renderer.drawSprites` (see the Spec D cut note above).
 - [x] Netlify continuous deploy active at `https://retrolineturbo.netlify.app/`
 - [ ] **Follow-up:** F1 open-wheel silhouette. No vetted CC0 pack contains one; Spec C proves the
       pipeline on GT/tourer models, after which F1 is a model swap, not a pipeline change.
