@@ -11,7 +11,7 @@ import { HUD } from './ui/HUD.js';
 import { hitCar, responseDelta } from './engine/Collision.js';
 import { Vehicle, createCommand } from './physics/Vehicle.js';
 import { InputManager, mouseSteerCurve } from './input/InputManager.js';
-import { LocalStorageSaveBackend } from './economy/save.js';
+import { chooseSaveBackend } from './net/saveBackend.js';
 import { ScoreState } from './economy/score.js';
 import { loadBackdrops } from './engine/loadBackdrops.js';
 import { backdropIdForStage, type Backdrop } from './engine/Backdrop.js';
@@ -65,7 +65,7 @@ const cars: TrafficCar[] = [
 ];
 const traffic = new Traffic(cars, trackLength);
 
-const save = new LocalStorageSaveBackend();
+const save = chooseSaveBackend();
 const score = new ScoreState(); // TX-1 passed-cars / points, shown in the HUD header
 
 // Horizon plates load asynchronously; until (or unless) they arrive the
