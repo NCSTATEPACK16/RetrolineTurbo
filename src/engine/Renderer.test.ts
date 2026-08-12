@@ -373,6 +373,58 @@ describe('scale ladder quantisation', () => {
   });
 });
 
+describe('baked roadside props', () => {
+  /** Mirrors props.json's convention: `car` is the prop name, one colour
+   * ('std'), one angle (0), a sparse subset of ladder steps. */
+  const mkPropSet = (name: string, steps: number[]) =>
+    buildCarFrameSet(steps.map((step) => ({
+      id: `${name}_std_a0_s${step}`, x: step * 10, y: 0,
+      w: LADDER[step]!, h: LADDER[step]!, car: name, color: 'std', angle: 0, step, anchors: {},
+    })));
+
+  it('draws a prop from the baked atlas, snapped to a rung that actually exists', () => {
+    const sets = new Map([['lamp_post', mkPropSet('lamp_post', [0, 4, 8])]]);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    renderer.setBakedProps({ image: {} as CanvasImageSource, sets });
+    const track = stubTrack((i) => (i === 5 ? [{ name: 'lamp_post', offset: -1.2 }] : []));
+    const backend = new RecordingBackend();
+    renderer.render(camAt(0), track, backend);
+
+    const bakedRungs: number[] = [LADDER[0]!, LADDER[4]!, LADDER[8]!];
+    const prop = backend.sprites.find((s) => bakedRungs.includes(s.dw));
+    expect(prop).toBeDefined();
+    // Never a hole in the sparse table (e.g. step 6, which was never baked).
+    expect(bakedRungs).toContain(prop!.dw);
+  });
+
+  it('falls back to the procedural atlas for a name with no baked entry', () => {
+    const sets = new Map([['lamp_post', mkPropSet('lamp_post', [0])]]);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    renderer.setBakedProps({ image: {} as CanvasImageSource, sets });
+    const track = stubTrack((i) => (i === 5 ? [{ name: 'tree', offset: -1.2 }] : []));
+    const backend = new RecordingBackend();
+    renderer.render(camAt(0), track, backend);
+
+    const treeFrame = atlas.frame('tree');
+    const tree = backend.sprites.find((s) => s.sx === treeFrame.x && s.sy === treeFrame.y);
+    expect(tree).toBeDefined();
+  });
+
+  it('null restores the procedural placeholder for every prop', () => {
+    const sets = new Map([['lamp_post', mkPropSet('lamp_post', [0])]]);
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    renderer.setBakedProps({ image: {} as CanvasImageSource, sets });
+    renderer.setBakedProps(null);
+    const track = stubTrack((i) => (i === 5 ? [{ name: 'lamp_post', offset: -1.2 }] : []));
+    const backend = new RecordingBackend();
+    renderer.render(camAt(0), track, backend);
+
+    const lampFrame = atlas.frame('lamp_post');
+    const lamp = backend.sprites.find((s) => s.sx === lampFrame.x && s.sy === lampFrame.y);
+    expect(lamp).toBeDefined();
+  });
+});
+
 describe('player steering frames', () => {
   const cases: [number, boolean, number, boolean][] = [
     // steer, skidding, expectedAngleIdx, expectedFlipX

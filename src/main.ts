@@ -109,6 +109,14 @@ void loadAtlases().then((loaded) => {
     brake: brake.length ? buildCarFrameSet(brake) : null,
     color: 0,
   });
+
+  const props = atlases.get('props');
+  if (!props) return; // no baked props: procedural placeholders keep drawing
+  const names = new Set(props.meta.frames.map((f) => f.car));
+  const sets = new Map(Array.from(names, (name) => (
+    [name, buildCarFrameSet(props.meta.frames.filter((f) => f.car === name))]
+  )));
+  renderer.setBakedProps({ image: props.image, sets });
 });
 
 const input = new InputManager();
