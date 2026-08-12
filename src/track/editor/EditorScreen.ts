@@ -49,6 +49,7 @@ export class EditorScreen {
     private readonly atlas: SpriteAtlas,
     private readonly save: SaveBackend,
     private readonly onTrackChange: (track: ParsedTrack) => boolean,
+    private readonly publish?: (name: string, file: TrackFile) => Promise<boolean>,
   ) {}
 
   get open(): boolean { return this.isOpen; }
@@ -138,6 +139,7 @@ export class EditorScreen {
       case 'Minus': this.seedValue = Math.max(0, this.seedValue - 1); this.statusLine = `seed ${this.seedValue}`; break;
       case 'KeyS': this.persist(); break;
       case 'KeyL': this.cycleLoad(); break;
+      case 'KeyP': this.publishCurrent(); break;
       default: break; // open screen swallows everything
     }
     return true;
@@ -171,6 +173,18 @@ export class EditorScreen {
       await this.save.set(TRACK_INDEX_KEY, JSON.stringify(this.savedIds));
     })();
     this.statusLine = `saved ${id}`;
+  }
+
+  private publishCurrent(): void {
+    if (!this.publish) {
+      this.statusLine = 'publish unavailable';
+      return;
+    }
+    const id = this.workingFile.trackId;
+    this.statusLine = 'publishing...';
+    this.lastPersist = this.publish(id, this.workingFile).then((ok) => {
+      this.statusLine = ok ? `published ${id}` : 'publish failed';
+    });
   }
 
   private cycleLoad(): void {
@@ -216,6 +230,6 @@ export class EditorScreen {
       const marker = i === this.selected ? '*' : ' ';
       drawText(backend, this.atlas, `${marker}${i} l${s.length} c${s.curve} p${s.pitch} ${preset}`, 20, 46 + r * 12);
     }
-    drawText(backend, this.atlas, 'n add x del d dup g gen s save l load e i json', 20, LOGICAL_HEIGHT - 24);
+    drawText(backend, this.atlas, 'n add x del d dup g gen s save l load p publish e i json', 20, LOGICAL_HEIGHT - 24);
   }
 }

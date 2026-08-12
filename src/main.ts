@@ -11,7 +11,7 @@ import { HUD } from './ui/HUD.js';
 import { hitCar, responseDelta } from './engine/Collision.js';
 import { Vehicle, createCommand } from './physics/Vehicle.js';
 import { InputManager, mouseSteerCurve } from './input/InputManager.js';
-import { LocalStorageSaveBackend } from './economy/save.js';
+import { chooseSaveBackend } from './net/saveBackend.js';
 import { ScoreState } from './economy/score.js';
 import { loadBackdrops } from './engine/loadBackdrops.js';
 import { backdropIdForStage, type Backdrop } from './engine/Backdrop.js';
@@ -19,8 +19,13 @@ import { loadAtlases, ATLAS_IDS, type LoadedAtlas } from './engine/loadAtlases.j
 import { buildCarFrameSet } from './engine/CarFrameSet.js';
 import { buildEffectSet } from './engine/Effects.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
+import { LeaderboardScreen } from './ui/LeaderboardScreen.js';
+import { TrackBrowserScreen } from './ui/TrackBrowserScreen.js';
+import { AccountScreen } from './ui/AccountScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
-import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
+import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES, routeIdentity } from './track/route.js';
+import { recordRaceResult } from './net/raceResults.js';
+import { publishTrack } from './net/tracks.js';
 import { chosenOffsetAtNode, branchSpread, fillRoadOffsets } from './engine/BranchRenderer.js';
 import { RouteMap } from './ui/RouteMap.js';
 import { drawText } from './ui/text.js';
@@ -65,7 +70,7 @@ const cars: TrafficCar[] = [
 ];
 const traffic = new Traffic(cars, trackLength);
 
-const save = new LocalStorageSaveBackend();
+const save = chooseSaveBackend();
 const score = new ScoreState(); // TX-1 passed-cars / points, shown in the HUD header
 
 // Horizon plates load asynchronously; until (or unless) they arrive the
@@ -109,11 +114,21 @@ void loadAtlases().then((loaded) => {
     brake: brake.length ? buildCarFrameSet(brake) : null,
     color: 0,
   });
+
+  const props = atlases.get('props');
+  if (!props) return; // no baked props: procedural placeholders keep drawing
+  const names = new Set(props.meta.frames.map((f) => f.car));
+  const sets = new Map(Array.from(names, (name) => (
+    [name, buildCarFrameSet(props.meta.frames.filter((f) => f.car === name))]
+  )));
+  renderer.setBakedProps({ image: props.image, sets });
 });
 
 const input = new InputManager();
 const vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
 const remap = new RemapScreen(atlas, save, input);
+const leaderboard = new LeaderboardScreen(atlas);
+const account = new AccountScreen(atlas);
 const cmd = createCommand(); // pre-allocated; refilled each step (hard rule 4)
 
 // --- Phase 7: route mode — the pyramid drives which scene is loaded ----------
@@ -133,8 +148,16 @@ const editor = new EditorScreen(atlas, save, (t) => {
   }
   track.rebuild(t);
   return true;
-});
+}, publishTrack);
 void editor.loadIndex();
+
+const trackBrowser = new TrackBrowserScreen(atlas, (t) => {
+  if (t.file.segmentLength !== DEFAULT_TRACK_CONFIG.segmentLength || t.file.roadWidth !== DEFAULT_TRACK_CONFIG.roadWidth) {
+    return false;
+  }
+  track.rebuild(t);
+  return true;
+});
 
 const camera: Camera = {
   x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y,
@@ -145,15 +168,24 @@ void loadBindings(save).then((b) => { input.setBindings(b); });
 // Screens see every key first (remap, then editor); leftovers drive the InputManager.
 // While a screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
 window.addEventListener('keydown', (e) => {
-  const screenOpen = remap.open || editor.open;
+  const screenOpen = remap.open || editor.open || leaderboard.open || trackBrowser.open || account.open;
   if (screenOpen && (e.metaKey || e.ctrlKey)) return;
-  if (e.code === 'Tab' || e.code === 'F2' || input.isBound(e.code)) e.preventDefault();
+  if (e.code === 'Tab' || e.code === 'F2' || e.code === 'F3' || e.code === 'F4' || e.code === 'F5' || input.isBound(e.code)) e.preventDefault();
   if (remap.handleKey(e.code)) {
     // Spec §6 mutual exclusion: opening remap closes the editor.
     if (remap.open && editor.open) editor.handleKey('Escape');
     return;
   }
   if (editor.handleKey(e.code)) return;
+  if (e.code === 'F3') {
+    leaderboard.toggle(routeIdentity(route).trackId);
+    return;
+  }
+  if (leaderboard.handleKey(e.code)) return;
+  if (e.code === 'F4') { trackBrowser.toggle(); return; }
+  if (trackBrowser.handleKey(e.code)) return;
+  if (e.code === 'F5') { account.toggle(); return; }
+  if (account.handleKey(e.code)) return;
   if (e.code === 'KeyM') {
     // Toggled on: pinned forever on the ending screen, timed elsewhere.
     routeMap.flashMs = routeMap.flashMs > 0 ? 0 : (route.finished ? Number.MAX_SAFE_INTEGER : 60_000);
@@ -204,7 +236,7 @@ createLoop({
   update: (dt: number): void => {
     pollGamepad();
     input.read(cmd);
-    if (remap.open || editor.open) { // pause driving while a screen is up
+    if (remap.open || editor.open || leaderboard.open || trackBrowser.open || account.open) { // pause driving while a screen is up
       cmd.throttle = 0; cmd.brake = 0; cmd.steer = 0; cmd.handbrake = true;
     } else if (route.expired || route.finished) {
       cmd.throttle = 0; cmd.steer = 0; cmd.brake = 1; // roll to a stop on the end screens
@@ -268,6 +300,8 @@ createLoop({
           && vehicle.z >= track.length * DEFAULT_TRACK_CONFIG.segmentLength) {
         route.finish();
         routeMap.flashMs = Number.MAX_SAFE_INTEGER; // stays up on the ending screen
+        const { trackId, path } = routeIdentity(route);
+        void recordRaceResult({ trackId, route: path, timeMs: elapsedMs });
       }
     }
     if (routeMap.flashMs > 0 && routeMap.flashMs < Number.MAX_SAFE_INTEGER) {
@@ -289,6 +323,9 @@ createLoop({
       route, score.passedCars, score.points);
     remap.render(backend);
     editor.render(backend);
+    leaderboard.render(backend);
+    trackBrowser.render(backend);
+    account.render(backend);
     routeMap.render(route, backend);
     if (route.expired) {
       drawText(backend, atlas, 'time up  press r', LOGICAL_WIDTH / 2 - 56, LOGICAL_HEIGHT / 2 - 6, 3);

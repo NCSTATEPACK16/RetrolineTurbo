@@ -3,7 +3,7 @@ import {
   LOGICAL_WIDTH, LOGICAL_HEIGHT, COLORS, DEFAULT_CAMERA_HEIGHT,
   PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y, TOP_SPEED_WORLD,
 } from '../constants.js';
-import type { Camera, TrackConfig, SpriteFrame, PlayerState } from '../types/engine.js';
+import type { Camera, TrackConfig, PlayerState } from '../types/engine.js';
 import type { RenderBackend } from './RenderBackend.js';
 import type { TrackManager } from './TrackManager.js';
 import type { Background } from './Background.js';
@@ -12,7 +12,7 @@ import type { SpriteAtlas } from './SpriteAtlas.js';
 import type { Traffic } from './Traffic.js';
 import { branchSpread, fillRoadOffsets } from './BranchRenderer.js';
 import { bandMerges } from './roadBanding.js';
-import { OVERLAY_CULL_STEP, quantisedWidth } from '../math/ladder.js';
+import { OVERLAY_CULL_STEP, quantisedWidth, ladderStepFor } from '../math/ladder.js';
 import { overlayDest, type Rect } from './SpriteComposer.js';
 import type { CarFrameSet } from './CarFrameSet.js';
 import { Effects, type EffectSet } from './Effects.js';
@@ -73,6 +73,18 @@ export interface BakedCar {
   brake: CarFrameSet | null;
   /** Index into the body set's colour dimension. */
   color: number;
+}
+
+/**
+ * Baked roadside-prop artwork, handed over once `props.png` arrives. One shared
+ * image (like {@link BakedCar}) plus a `CarFrameSet` per prop name — each set
+ * bakes a sparse subset of the ladder (a lamp post is never seen at every
+ * rung), so lookups always go through `CarFrameSet.nearestStep` rather than
+ * `frame()` directly.
+ */
+export interface BakedProps {
+  image: CanvasImageSource;
+  sets: ReadonlyMap<string, CarFrameSet>;
 }
 
 /** Vertical nudge, in px, when the car is on its outermost steering frame.
@@ -154,6 +166,8 @@ export class Renderer {
   // Baked car artwork and its scratch space. Pre-allocated so the overlay pass
   // allocates nothing per frame (hard rule 4).
   private bakedCar: BakedCar | null = null;
+  // Baked prop artwork, same null-degrades-gracefully contract as bakedCar.
+  private bakedProps: BakedProps | null = null;
   private readonly anchorOut: [number, number] = [0, 0];
   private readonly overlayRect: Rect = { dx: 0, dy: 0, dw: 0, dh: 0 };
   // Alpha-blended extras. `effects` stays null until (and unless) the droppable
@@ -327,26 +341,41 @@ export class Renderer {
       const rec = this.records[i]!;
       if (!rec.valid) continue;
       const seg = track.segment(rec.base);
-      for (const sp of seg.sprites) this.blit(backend, this.atlas.frame(sp.name), rec, sp.offset, camera, roadWidth);
+      for (const sp of seg.sprites) this.blit(backend, sp.name, rec, sp.offset, camera, roadWidth);
       if (traffic) for (const car of traffic.cars) {
         if (Math.floor(car.z / segmentLength) === rec.base) {
-          this.blit(backend, this.atlas.frame(car.sprite), rec, car.offset, camera, roadWidth);
+          this.blit(backend, car.sprite, rec, car.offset, camera, roadWidth);
         }
       }
     }
   }
 
-  private blit(backend: RenderBackend, f: SpriteFrame, rec: ProjRecord, offset: number, camera: Camera, roadHalfWidth: number): void {
+  private blit(backend: RenderBackend, name: string, rec: ProjRecord, offset: number, camera: Camera, roadHalfWidth: number): void {
     const scale = scaleFor(camera.focalLength, rec.relZ);
+    const f = this.atlas.frame(name);
     // The provisional world→px term now only picks a ladder step; it no longer
-    // scales the blit, so the drawn size is always one of 12 pre-baked widths.
+    // scales the blit, so the drawn size is always one of the pre-baked widths.
     // That is the whole anti-shimmer mechanism: with imageSmoothingEnabled off, a
     // continuously varying destination width resamples at a slightly different
     // ratio every frame and the pixels crawl.
     const ideal = scale * f.w * (LOGICAL_WIDTH / 2) * (roadHalfWidth / DEFAULT_CAMERA_HEIGHT);
+    const cx = rec.x + rec.w * offset;                       // lateral: offset in road-half-widths
+
+    // Baked roadside props take priority: a real pre-rendered frame beats the
+    // procedural placeholder, same as the player car. `nearestStep` snaps onto
+    // whichever rungs this prop actually baked, since its ladder is sparse.
+    const bakedSet = this.bakedProps?.sets.get(name);
+    if (bakedSet) {
+      const step = bakedSet.nearestStep(0, 0, ladderStepFor(ideal));
+      const bf = bakedSet.frame(0, 0, step);
+      const dx = cx - bf.w * (bf.anchorX / bf.w);
+      const dy = rec.y - bf.h * (bf.anchorY / bf.h);
+      backend.drawSprite(this.bakedProps!.image, bf.x, bf.y, bf.w, bf.h, dx, dy, bf.w, bf.h, rec.maxy);
+      return;
+    }
+
     const dw = quantisedWidth(ideal);
     const dh = dw * (f.h / f.w);
-    const cx = rec.x + rec.w * offset;                       // lateral: offset in road-half-widths
     const dx = cx - dw * (f.anchorX / f.w);
     const dy = rec.y - dh * (f.anchorY / f.h);
     backend.drawSprite(this.atlas.image, f.x, f.y, f.w, f.h, dx, dy, dw, dh, rec.maxy);
@@ -357,6 +386,13 @@ export class Renderer {
    * rather than the loop. */
   setBakedCar(car: BakedCar | null): void {
     this.bakedCar = car;
+  }
+
+  /** Hand over baked roadside-prop artwork once `props.png` arrives. Null
+   * restores the procedural placeholder for every prop, same contract as
+   * {@link Renderer.setBakedCar}. */
+  setBakedProps(props: BakedProps | null): void {
+    this.bakedProps = props;
   }
 
   /** Hand over the effects artwork. Null is the normal state, not an error path:

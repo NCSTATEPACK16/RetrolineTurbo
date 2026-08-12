@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildPyramid, sceneTrack, resolveFork, nextSceneIdx, RouteState,
+  buildPyramid, sceneTrack, resolveFork, nextSceneIdx, RouteState, routeIdentity,
   STAGES, INITIAL_TIME_MS, STAGE_TIME_BONUS_MS,
 } from './route.js';
 import { parseTrackFile } from './schema.js';
@@ -124,5 +124,25 @@ describe('RouteState', () => {
     r.advance(1);
     expect(r.currentPlan().stage).toBe(1);
     expect(r.currentPlan().idx).toBe(1);
+  });
+});
+
+describe('routeIdentity', () => {
+  it('derives a stable trackId from baseSeed and a path from the forks taken', () => {
+    const route = new RouteState(7);
+    expect(route.baseSeed).toBe(7);
+    route.advance(1); // stage 0 -> 1, choice 1
+    route.advance(0); // stage 1 -> 2, choice 0
+    const { trackId } = routeIdentity(route);
+    expect(trackId).toBe('route-7');
+    // visited holds the sceneIdx at each fork, ending in the current (unfinished) sceneIdx
+    expect(routeIdentity(route).path).toBe(route.visited.concat(route.sceneIdx).join('-'));
+  });
+
+  it('uses endingIdx once the route has finished', () => {
+    const route = new RouteState(3);
+    for (let i = 0; i < 4; i++) route.advance(1);
+    route.finish();
+    expect(routeIdentity(route).path).toBe(route.visited.concat(route.endingIdx!).join('-'));
   });
 });
