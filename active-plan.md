@@ -322,6 +322,21 @@ should drive one real route and confirm the earned figure lands in the wallet.
 on 2026-08-11. Worth re-checking Settings → API → Exposed schemas against the project those local
 keys point at; Phase 9 code is backend-agnostic and was verified against the localStorage backend.
 
+### Carried fix — centrifugal-vs-steer-authority + input correctness · *2026-08-12*
+
+Landed on `phase-9-modular-economy` alongside the Phase 9 commits (not part of the economy
+spec — a driving-feel bug found while playtesting that phase): `CENTRIFUGAL` was 9000 against
+`STEER_MAX_WPS` 2500, so the sharpest curves `generate.ts` emits could out-pull full steering
+lock and shove the driver off-road with the stick pinned. Dropped to 600. Landed alongside it:
+rate-limited steer approach (~170ms to full lock, sprite still leans instantly on the raw
+command), a hard lateral clamp (off-road drag alone didn't stop a stuck steer input walking the
+car out of the world), pointer-lock + relative-delta mouse steering (the old absolute-cursor
+mapping made the resting cursor spot a permanent steer command), a gamepad deadzone, one device
+voting per read instead of summing all three, and a `ContactLatch` so one collision produces one
+response instead of one per physics step it spans (was compounding into a near-stop and
+over-counting hits against the clean-race payout multiplier). Verified via headless
+`drive_game.mjs` — car tracks cleanly through both turn directions. 509/56 tests, build clean.
+
 ### Phase 10 — audio · *nothing exists*
 
 `src/audio/` is absent entirely. Greenfield.
