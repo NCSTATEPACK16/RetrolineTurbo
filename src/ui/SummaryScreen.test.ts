@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SpriteAtlas } from '../engine/SpriteAtlas.js';
 import { packAtlas } from '../assets/packAtlas.js';
-import { SPRITE_MANIFEST } from '../assets/spriteManifest.js';
+import { SPRITE_MANIFEST, FONT_COLORS, glyphFrameName, type FontColor } from '../assets/spriteManifest.js';
 import { RecordingBackend } from '../engine/testing/RecordingBackend.js';
 import { computePayout } from '../economy/payout.js';
 import { SummaryScreen } from './SummaryScreen.js';
@@ -45,6 +45,22 @@ describe('SummaryScreen', () => {
     clean.render(a);
     dirtyScreen.render(b);
     expect(a.sprites.length).toBeGreaterThan(b.sprites.length);
+  });
+
+  it('shows the clean bonus as credits, never as a decimal multiplier', () => {
+    // The 3x5 font renders '.' as a colon, so "x1.1" would read as "x1:1".
+    const screen = new SummaryScreen(atlas);
+    const backend = new RecordingBackend();
+    screen.show('route complete', ledger, 0);
+    screen.render(backend);
+    const subtotal = ledger.lines.reduce((sum, l) => sum + l.credits, 0);
+    const bonus = ledger.total - subtotal;
+    expect(bonus).toBeGreaterThan(0);
+    // Every glyph drawn must come from the digit/letter sets — a colon frame in
+    // any font colour would mean a decimal point slipped into the panel.
+    const colons = (Object.keys(FONT_COLORS) as FontColor[])
+      .map((c) => atlas.frame(glyphFrameName('glyph_colon', c)));
+    expect(backend.sprites.some((s) => colons.some((f) => s.sx === f.x && s.sy === f.y))).toBe(false);
   });
 
   it('clear hides it again', () => {

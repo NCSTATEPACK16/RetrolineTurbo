@@ -57,9 +57,14 @@ export class SummaryScreen {
       y += LINE_H;
     }
     if (ledger.cleanMultiplier !== 1) {
+      // Shown as the credits the multiplier added, not as "x1.1": the 3x5 font
+      // has no period glyph (it renders '.' as a colon), so a decimal reads as
+      // "x1:1" on screen. Credits also match every other row's units.
+      const subtotal = ledger.lines.reduce((sum, l) => sum + l.credits, 0);
+      const bonus = ledger.total - subtotal;
       drawText(backend, this.atlas, 'clean race', left, y, 2, 'gold');
-      const mult = `x${ledger.cleanMultiplier}`;
-      drawText(backend, this.atlas, mult, right - textWidth(this.atlas, mult), y, 2, 'gold');
+      const value = `${bonus}`;
+      drawText(backend, this.atlas, value, right - textWidth(this.atlas, value), y, 2, 'gold');
       y += LINE_H;
     }
     y += 4;
