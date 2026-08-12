@@ -1,5 +1,11 @@
 # Phase 9 — Modular Economy & Post-Race Shop (design spec)
 
+> **SUPERSEDED (2026-08-11)** by
+> `docs/superpowers/specs/2026-08-11-phase-9-modular-economy-shop.md`. This version's payout
+> model (placement 1st/2nd/3rd, fastest lap) assumes rivals and laps, neither of which the
+> shipped game has; the successor re-bases payout on the real route/traffic/collision signals
+> and keeps the baseline-50 + 80-part trade-off model intact. Kept for provenance.
+
 Source spec for `plan.md` Phase 9. Replaces the earlier linear, tier-based progression with a
 **modular, stat-altering** economy: vehicles start from a median baseline and players buy/equip
 specialized parts that shift core physics metrics, forcing strategic trade-offs rather than a

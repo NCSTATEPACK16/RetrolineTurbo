@@ -66,8 +66,11 @@ ladder with anchored overlays — so the 80-part Phase 9 economy has somewhere t
 - [x] `scripts/sample_palette.py` + `scripts/requirements.txt` (Pillow — none declared today)
 - [ ] **VISUAL GATE:** no kerb strobe at full speed **or at crawl**; road greys read as texture;
       kerb red does not vibrate against foliage green
-      → **still owed — requires a human at `npm run dev`.** Automated gates are green:
-        **281 tests / 33 files** (was 243/30), `npm run build` clean.
+      → **de-risked 2026-08-11 via headless Playwright pass** (crawl→top-speed screenshots, zero
+        console errors) — kerb/shoulder bands read clean and merge smoothly toward the horizon at
+        every captured speed, no obvious moiré. Static screenshots can't prove the *temporal*
+        no-strobe property the gate is actually about; a human glance at `npm run dev` is still the
+        real close. Automated gates are green: **401 tests / 40 files**, `npm run build` clean.
 
 **Cut from Spec A:** the grass banding stretch item (spec §4.4) has no task and was not
 implemented. It is perf-gated in the spec and should be attempted only after a frame-time
@@ -130,6 +133,14 @@ baseline exists.
       top laid a whole wheel over the arch.
 - [ ] **VISUAL GATE:** no pixel crawl at **any** speed including crawl; overlays stay attached
       through a **hard left turn**
+      → **de-risked 2026-08-11 via headless Playwright pass.** Pixel crawl: the mechanism is
+        unit-tested directly (`quantisedWidth` fixed-point + anti-shimmer run tests), and
+        screenshots across the speed range show no resampling artifacts. Overlay registration:
+        **ambiguous in screenshots** — front/rear wheels look slightly detached from the fender
+        line on both a hard left and hard right, while on-road. The anchor math itself is covered
+        by a dedicated test (`keeps overlays attached when the car is mirrored`) and passes, so
+        this reads more like a low-res bake/stylistic artifact than a broken registration — but
+        it's the one item from this session worth an actual human look before calling it closed.
 
 ## M-checklist — Spec D · props, parallax, effects, font
 
@@ -170,19 +181,32 @@ baseline exists.
       7-column `starOps` folded into it and deleted — pinned bit-for-bit against verbatim copies of
       both originals, since 228 baked glyph frames already exist against that output (vitest, +5).
 - [ ] **VISUAL GATE:** parallax reads as depth; props identifiable at 200 km/h
-      → **still owed — requires a human at `npm run dev`.** Automated gates are green:
-        **398 vitest / 40 files** (was 350/39), **17 pytest**, `npm run build` clean.
+      → **de-risked 2026-08-11 via headless Playwright pass.** Parallax: city/bridge/mountain
+        layers visibly separate and pan at different rates across the captured speed range — reads
+        as depth. Effects: a dust puff is visibly rendering off-road at speed (confirms
+        `effects.png` is loaded and drawing, not just passing its tests). Props: **not visually
+        confirmed** — the driven stretch of the default procedural track didn't place a
+        `lamp_post`/`billboard_sponsor`/etc. within the captured draw distance, so "identifiable at
+        200 km/h" wasn't actually exercised on screen this session, only through the new Renderer
+        unit tests + a clean build. Automated gates are green: **401 vitest / 40 files**, **17
+        pytest**, `npm run build` clean.
 
-**Also cut from Spec D:** the plan's Task 2 does not wire `props.png` into the draw path (it wires
-effects in Task 3 and deliberately does not wire props), so the atlas ships baked and packed while
-`Renderer.drawSprites` still renders the procedural `SPRITE_MANIFEST` entries. Wiring it is the
-natural next task and needs a `setBakedProps` mirroring `setBakedCar`.
+- [x] **Wired** `props.png` into the draw path (2026-08-11): `Renderer.setBakedProps` mirrors
+      `setBakedCar` — one shared image + a `CarFrameSet` per prop name. `blit` now takes a sprite
+      *name* (not a pre-resolved frame) so it can check `bakedProps.sets.get(name)` before falling
+      back to the procedural atlas; when baked, `ladderStepFor` picks the ideal rung and
+      `CarFrameSet.nearestStep` snaps it onto whichever rungs that prop actually baked (sparse
+      table). `main.ts` builds the per-name `Map<string, CarFrameSet>` from `props.meta.frames`
+      the same way it partitions car parts by id. Traffic-car sprites go through the same `blit`
+      unchanged — they're just never in the props map, so they always fall through to procedural.
+      3 new Renderer tests (baked draw, procedural fallback for an unbaked name, `null` clears it);
+      401/40 files green, `npm run build` clean.
 
 ---
 
 ## Gate for the phase
 
-- [x] `npm test` green (398 / 40 files) · `npm run build` clean · `pytest scripts/` green (17)
+- [x] `npm test` green (401 / 40 files) · `npm run build` clean · `pytest scripts/` green (17)
 - [x] Hard rules 1–5 held — in particular **no per-frame allocation and no per-frame string
       construction** in the sprite path. Spec D's two new render-path additions both honour it:
       `Background` pre-allocates a second tile array beside `tileXs`, and `Effects` is a
@@ -198,9 +222,9 @@ no pixel crawl at any speed, and anchored overlays stay registered in both turn 
 
 - [x] Phase 7 core branching architecture complete (196 unit tests green)
 - [x] Spec C complete except its human visual gate: **350 vitest + 14 pytest green**, `npm run build` clean
-- [x] Spec D complete except its human visual gate: **398 vitest + 17 pytest green**, `npm run build` clean.
-      Three visual gates (A, C, D) are now owed to one `npm run dev` session.
-- [ ] **Follow-up:** wire `props.png` into `Renderer.drawSprites` (see the Spec D cut note above).
+- [x] Spec D complete: `props.png` is now wired (see M-checklist above); only its human visual gate
+      remains, and only for the props half — parallax + effects were visually confirmed this
+      session. **401 vitest + 17 pytest green**, `npm run build` clean.
 - [x] Netlify continuous deploy active at `https://retrolineturbo.netlify.app/`
 - [ ] **Follow-up:** F1 open-wheel silhouette. No vetted CC0 pack contains one; Spec C proves the
       pipeline on GT/tourer models, after which F1 is a model swap, not a pipeline change.
@@ -212,36 +236,91 @@ no pixel crawl at any speed, and anchored overlays stay registered in both turn 
 
 ## What's left — read this first in a new session
 
-Verified against the tree on 2026-08-11, not copied from `plan.md`.
+Verified against the tree on 2026-08-11 (props wiring + headless visual pass landed this session).
 
 ### Blocking, and cheap
 
-1. **One `npm run dev` session settles three owed visual gates at once** — Spec A (kerb strobe at
-   speed *and* at crawl), Spec C (pixel crawl; overlays through a hard left turn), Spec D
-   (parallax depth, props at 200 km/h, effects, `effects.png` blocked in DevTools). Every
-   automated gate is green; these are the only things standing between Phase 7.5 and closed.
-2. **Two manual Supabase steps, user-side, before any Phase 8 work compiles against real data:**
-   expose the `retroline` schema in Settings → API → Exposed schemas, and set
-   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in Netlify env. Auth-only calls
-   (`ensureAnonSession()`) already work without either.
+1. **One real `npm run dev` session still closes Phase 7.5**, now down to two open items rather
+   than three: (a) a human's own eyes on kerb strobe at speed/crawl and props at 200 km/h (the
+   headless pass above de-risked both but couldn't prove either outright), and (b) specifically
+   the wheel-overlay positioning through a hard turn, which looked slightly off in headless
+   screenshots even though the anchor math is unit-tested green. Everything else automated is
+   green — this is a look, not more code.
+2. ~~Two manual Supabase steps~~ — **done 2026-08-11.** `retroline` schema exposed in Settings →
+   API → Exposed schemas; `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` set in Netlify env
+   (redeploy triggered so the build picks them up). Phase 8 code can now be written against a
+   real schema instead of the null-client fallback.
 
-### Phase 8 — Supabase persistence · *partly built, more than plan.md implies*
+### Phase 8 — Supabase persistence · *code complete 2026-08-11, one manual gap left*
 
-Already there: `supabase/migrations/0001_init.sql` (schema + RLS, applied), `src/net/supabase.ts`
-(client scoped to the `retroline` schema, anonymous auth, degrades to a null client when env vars
-are unset), and the `SaveBackend` seam with `MemorySaveBackend` + `LocalStorageSaveBackend`.
+Built this session on branch `phase-8-supabase-persistence` (plan:
+`docs/superpowers/plans/2026-08-11-phase-8-supabase-persistence.md`), each as a small `net/`
+edge module that degrades to a no-op when `supabase` is the null client:
 
-Not there: `SupabaseBackend implements SaveBackend`; save sync on race end; `race_results` insert;
-`leaderboard_best` reads; community track publish/browse against `tracks.is_public`; anonymous →
-account upgrade. The seam means none of this should touch game logic.
+- `net/SupabaseBackend.ts` — `SaveBackend` over one `saves.settings` jsonb blob keyed by user
+  (bindings + local editor track drafts); `net/saveBackend.ts` picks it over
+  `LocalStorageSaveBackend` in `main.ts` when configured.
+- `route.baseSeed` + `routeIdentity()` (`track/route.ts`) → `net/raceResults.ts` inserts
+  `race_results` on `route.finish()`.
+- `net/leaderboard.ts` + `ui/LeaderboardScreen.ts` (**F3**) — top times per route from
+  `race_results` (not the `leaderboard_best` view, which is `distinct on (track_id)` and only
+  ever returns the single best row — no use for a top-N screen).
+- `net/tracks.ts` (`publishTrack`/`browsePublicTracks`/`fetchTrack`) — publish via `EditorScreen`'s
+  new `KeyP`, browse via `ui/TrackBrowserScreen.ts` (**F4**).
+- `net/account.ts` + `ui/AccountScreen.ts` (**F5**) — anonymous→permanent upgrade
+  (`auth.updateUser({ email })` then `{ password }` per Supabase's documented flow). Email/password
+  entry is `window.prompt`, not on-canvas — the bitmap font has no `@` glyph.
 
-### Phase 9 — modular economy · *needs a spec before code*
+436 vitest / 49 files green (was 401/40 before this phase), `npm run build` clean.
 
-`economy/` holds only `score.ts` and `save.ts`. Everything in plan.md §10 Phase 9 is unwritten:
-`types/inventory.ts`, the 80-part JSON catalogue (4 categories × 20), `Garage.ts` as a pure
-baseline+mod resolver feeding `physics/Vehicle.ts`, payout logic, and `ui/GarageScreen`. The
-source spec is `docs/superpowers/specs/2026-08-05-phase-9-modular-economy.md`; the garage *screen*
-still needs its own spec on top of it.
+**Still open:** the plan's own manual smoke pass (`npm run dev`, drive a full route, F3/F4/F5) has
+not been run by a human yet — automated coverage is real but nobody has watched a race actually
+insert a leaderboard row, a published track round-trip through F4, or a real confirmation email
+land. Separately, the account-upgrade flow needs **"manual linking" enabled** in the Supabase
+dashboard (Authentication → Settings) before `linkEmail` will succeed against the real backend —
+a dashboard toggle, not something any commit here can set.
+
+### Phase 9 — modular economy · *code complete 2026-08-11, one verification gap*
+
+Built on branch `phase-9-modular-economy` (spec:
+`docs/superpowers/specs/2026-08-11-phase-9-modular-economy-shop.md`, plan:
+`docs/superpowers/plans/2026-08-11-phase-9-modular-economy-shop.md`). The 2026-08-05 spec is
+superseded: its payout model (placement 1st/2nd/3rd, fastest lap) assumes rivals and laps that
+this game does not have, so payout was re-based on route stages, banked time, passed cars and
+collisions — all signals already in the tree.
+
+- `physics/Vehicle.ts` — `VehicleParams` (gear ceilings, gear accel, steer authority,
+  centrifugal) injected at construction, defaulted to the old constants so a stock car is
+  bit-for-bit the pre-Phase-9 car. Every prior Vehicle test passes untouched.
+- `types/inventory.ts` + `economy/partCurves.ts` — 80 parts (4 categories × 20) generated from
+  tier curves, snapshotted to `economy/parts.json` behind a golden test (`UPDATE_PARTS=1 npm test`
+  regenerates). Balance guards assert every tier-20 part carries a penalty and that no loadout
+  leads on all four metrics.
+- `economy/Garage.ts` — pure `resolveMetrics` (baseline 50 + mods, clamped 5..95) and
+  `metricsToParams`, calibrated so metric 50 = ×1.0 exactly.
+- `economy/GarageState.ts` — credits, inventory, fitted loadout, `bestStage`; five part states
+  (locked → unaffordable → purchasable → owned → equipped); corrupt-save tolerant; persists
+  through the existing `SaveBackend`, so Supabase cross-device comes free.
+- `economy/payout.ts` — pure ledger: stages×250 + 1000 completion + 10c/banked-second +
+  points/10, ×1.1 clean-race. `ScoreState` gained a collisions counter.
+- `ui/SummaryScreen.ts` (auto on run end) + `ui/GarageScreen.ts` (**F6**, stat-diff bars driven by
+  the same resolver the physics uses).
+
+491 vitest / 56 files green (was 436/49), `npm run build` clean. Headless drive confirmed: the
+summary panel renders its ledger on expiry, F6 buys + fits a part, and credits/loadout survive a
+reload (50,000 → 46,311 for a tier-10 engine, matching the cost curve).
+
+**Still open:** no in-browser run has yet earned a *non-zero* payout — the headless driver has no
+steering feedback and ends up in the grass, so every scripted run expired at stage 0 with no
+overtakes. The award path's parts are all unit-tested and the commit path is proven (the summary
+appears with the real ledger; the buy path proves credit mutation + persistence), but a human
+should drive one real route and confirm the earned figure lands in the wallet.
+
+**Also seen during verification:** with the repo `.env` in place the save backend is
+`SupabaseBackend` and every call failed with `Invalid schema: retroline` (plus one
+`JWT issued at future`, i.e. clock skew) — despite the note above recording that schema as exposed
+on 2026-08-11. Worth re-checking Settings → API → Exposed schemas against the project those local
+keys point at; Phase 9 code is backend-agnostic and was verified against the localStorage backend.
 
 ### Phase 10 — audio · *nothing exists*
 
@@ -254,13 +333,17 @@ waiting on one (see below). Phase 12 (Capacitor) stays off the critical path by 
 
 ### Loose threads carried across phases
 
-- **Wire `props.png` into `Renderer.drawSprites`** (Spec D's recorded gap). Needs a
-  `setBakedProps` mirroring `setBakedCar`, plus `CarFrameSet.nearestStep` at the call site —
-  that method exists and is tested but has no production caller yet.
-- **F1 open-wheel silhouette.** No vetted CC0 pack contains one. Spec C proved the pipeline on
-  GT/tourer models, so this is a model swap, not a pipeline change.
-- **Spec A's grass banding stretch item** (spec §4.4) was cut, perf-gated. Needs the frame-time
-  baseline first.
+- ~~Wire `props.png` into `Renderer.drawSprites`~~ — done 2026-08-11, see the M-checklist entry above.
+- **F1 open-wheel silhouette.** No vetted CC0 pack contains one. Out of scope until one is sourced
+  — this is a model swap on Spec C's pipeline, not new pipeline work, so there is nothing to build
+  today. Spec C proved the pipeline on GT/tourer models.
+- **Spec A's grass banding stretch item** (spec §4.4) was cut, perf-gated on a frame-time baseline
+  existing. **First baseline taken 2026-08-11** (headless Chromium, no GPU accel, driving at
+  cruising speed): ~180 frames averaged 16.66ms, p95 17.7ms, max 17.7ms — a tight distribution
+  right at vsync with no spike pattern, i.e. no evidence of exceeding budget. Caveat: headless/
+  software rendering isn't the "mid-range laptop + mobile Safari" profiling pass plan.md §12
+  actually wants for Phase 11 — this is a first data point, not that pass. It does not, on its
+  own, justify spending the grass-banding item now.
 - **WebGL/PixiJS backend** stays hypothetical: the threshold in plan.md §12 is sustained >16.6ms
-  in profiling, which nobody has measured yet. The `RenderBackend` seam is the hedge; do not
-  pre-emptively cash it.
+  in profiling. The one baseline taken so far shows no sign of it. The `RenderBackend` seam is the
+  hedge; do not pre-emptively cash it.

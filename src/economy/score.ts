@@ -6,9 +6,18 @@ export const OVERTAKE_POINTS = 100;
 export class ScoreState {
   private cars = 0;
   private pts = 0;
+  private hits = 0;
 
   get passedCars(): number { return this.cars; }
   get points(): number { return this.pts; }
+
+  /** Trackside collisions this run — zero earns the clean-race multiplier. */
+  get collisions(): number { return this.hits; }
+
+  /** Record one collision event (one per hit, not per contact frame). */
+  addCollision(): void {
+    this.hits++;
+  }
 
   /** Record `n` cars overtaken this step (0 is a no-op). */
   addOvertakes(n: number): void {
@@ -19,5 +28,6 @@ export class ScoreState {
   reset(): void {
     this.cars = 0;
     this.pts = 0;
+    this.hits = 0;
   }
 }

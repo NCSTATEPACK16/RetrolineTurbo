@@ -18,6 +18,9 @@ coverage/
 # Local git worktrees
 .worktrees/
 
+# Headless visual/perf smoke-check output (scripts/drive_game.mjs)
+.playwright-output/
+
 # Python venv for asset bake scripts
 .venv/
 

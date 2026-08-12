@@ -34,4 +34,14 @@ describe('ScoreState', () => {
     expect(s.passedCars).toBe(0);
     expect(s.points).toBe(0);
   });
+
+  it('counts collisions and clears them on reset', () => {
+    const s = new ScoreState();
+    expect(s.collisions).toBe(0);
+    s.addCollision();
+    s.addCollision();
+    expect(s.collisions).toBe(2);
+    s.reset();
+    expect(s.collisions).toBe(0);
+  });
 });

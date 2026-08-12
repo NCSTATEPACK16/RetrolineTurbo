@@ -11,7 +11,7 @@ import { HUD } from './ui/HUD.js';
 import { hitCar, responseDelta } from './engine/Collision.js';
 import { Vehicle, createCommand } from './physics/Vehicle.js';
 import { InputManager, mouseSteerCurve } from './input/InputManager.js';
-import { LocalStorageSaveBackend } from './economy/save.js';
+import { chooseSaveBackend } from './net/saveBackend.js';
 import { ScoreState } from './economy/score.js';
 import { loadBackdrops } from './engine/loadBackdrops.js';
 import { backdropIdForStage, type Backdrop } from './engine/Backdrop.js';
@@ -19,15 +19,24 @@ import { loadAtlases, ATLAS_IDS, type LoadedAtlas } from './engine/loadAtlases.j
 import { buildCarFrameSet } from './engine/CarFrameSet.js';
 import { buildEffectSet } from './engine/Effects.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
+import { LeaderboardScreen } from './ui/LeaderboardScreen.js';
+import { TrackBrowserScreen } from './ui/TrackBrowserScreen.js';
+import { AccountScreen } from './ui/AccountScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
-import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
+import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES, routeIdentity } from './track/route.js';
+import { recordRaceResult } from './net/raceResults.js';
+import { publishTrack } from './net/tracks.js';
 import { chosenOffsetAtNode, branchSpread, fillRoadOffsets } from './engine/BranchRenderer.js';
 import { RouteMap } from './ui/RouteMap.js';
-import { drawText } from './ui/text.js';
+import { GarageState, loadGarage, persistGarage } from './economy/GarageState.js';
+import { metricsToParams, resolveMetrics } from './economy/Garage.js';
+import { computePayout } from './economy/payout.js';
+import { SummaryScreen } from './ui/SummaryScreen.js';
+import { GarageScreen } from './ui/GarageScreen.js';
 import { parseTrackFile } from './track/schema.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
-  LOGICAL_WIDTH, LOGICAL_HEIGHT, PLAYER_CAR_ID,
+  PLAYER_CAR_ID,
 } from './constants.js';
 import type { Camera } from './types/engine.js';
 
@@ -65,7 +74,7 @@ const cars: TrafficCar[] = [
 ];
 const traffic = new Traffic(cars, trackLength);
 
-const save = new LocalStorageSaveBackend();
+const save = chooseSaveBackend();
 const score = new ScoreState(); // TX-1 passed-cars / points, shown in the HUD header
 
 // Horizon plates load asynchronously; until (or unless) they arrive the
@@ -109,11 +118,46 @@ void loadAtlases().then((loaded) => {
     brake: brake.length ? buildCarFrameSet(brake) : null,
     color: 0,
   });
+
+  const props = atlases.get('props');
+  if (!props) return; // no baked props: procedural placeholders keep drawing
+  const names = new Set(props.meta.frames.map((f) => f.car));
+  const sets = new Map(Array.from(names, (name) => (
+    [name, buildCarFrameSet(props.meta.frames.filter((f) => f.car === name))]
+  )));
+  renderer.setBakedProps({ image: props.image, sets });
 });
 
 const input = new InputManager();
-const vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
+let vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
+
+// --- Phase 9: economy ------------------------------------------------------
+// The garage loads asynchronously; until it lands the car is stock, which is
+// exactly what an empty loadout resolves to anyway. `garage` is hydrated in
+// place rather than rebound: GarageScreen captures this exact instance.
+const garage = new GarageState();
+const summary = new SummaryScreen(atlas);
+const rebuildVehicle = (): void => {
+  vehicle = new Vehicle(
+    DEFAULT_TRACK_CONFIG.roadWidth,
+    metricsToParams(resolveMetrics(garage.equipped)),
+  );
+};
+const shop = new GarageScreen(atlas, garage, undefined, () => {
+  void persistGarage(save, garage);
+  rebuildVehicle(); // fitted parts take effect on the next step
+});
+void loadGarage(save).then((loaded) => {
+  garage.credits = loaded.credits;
+  garage.bestStage = loaded.bestStage;
+  garage.equipped = loaded.equipped;
+  for (const id of loaded.toJSON().owned) garage.adopt(id);
+  rebuildVehicle();
+});
+
 const remap = new RemapScreen(atlas, save, input);
+const leaderboard = new LeaderboardScreen(atlas);
+const account = new AccountScreen(atlas);
 const cmd = createCommand(); // pre-allocated; refilled each step (hard rule 4)
 
 // --- Phase 7: route mode — the pyramid drives which scene is loaded ----------
@@ -133,8 +177,16 @@ const editor = new EditorScreen(atlas, save, (t) => {
   }
   track.rebuild(t);
   return true;
-});
+}, publishTrack);
 void editor.loadIndex();
+
+const trackBrowser = new TrackBrowserScreen(atlas, (t) => {
+  if (t.file.segmentLength !== DEFAULT_TRACK_CONFIG.segmentLength || t.file.roadWidth !== DEFAULT_TRACK_CONFIG.roadWidth) {
+    return false;
+  }
+  track.rebuild(t);
+  return true;
+});
 
 const camera: Camera = {
   x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y,
@@ -145,15 +197,28 @@ void loadBindings(save).then((b) => { input.setBindings(b); });
 // Screens see every key first (remap, then editor); leftovers drive the InputManager.
 // While a screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
 window.addEventListener('keydown', (e) => {
-  const screenOpen = remap.open || editor.open;
+  const screenOpen = remap.open || editor.open || leaderboard.open || trackBrowser.open
+    || account.open || shop.open;
   if (screenOpen && (e.metaKey || e.ctrlKey)) return;
-  if (e.code === 'Tab' || e.code === 'F2' || input.isBound(e.code)) e.preventDefault();
+  if (e.code === 'Tab' || e.code === 'F2' || e.code === 'F3' || e.code === 'F4'
+      || e.code === 'F5' || e.code === 'F6' || input.isBound(e.code)) e.preventDefault();
   if (remap.handleKey(e.code)) {
     // Spec §6 mutual exclusion: opening remap closes the editor.
     if (remap.open && editor.open) editor.handleKey('Escape');
     return;
   }
   if (editor.handleKey(e.code)) return;
+  if (e.code === 'F3') {
+    leaderboard.toggle(routeIdentity(route).trackId);
+    return;
+  }
+  if (leaderboard.handleKey(e.code)) return;
+  if (e.code === 'F4') { trackBrowser.toggle(); return; }
+  if (trackBrowser.handleKey(e.code)) return;
+  if (e.code === 'F5') { account.toggle(); return; }
+  if (account.handleKey(e.code)) return;
+  if (e.code === 'F6') { shop.toggle(); return; }
+  if (shop.handleKey(e.code)) return;
   if (e.code === 'KeyM') {
     // Toggled on: pinned forever on the ending screen, timed elsewhere.
     routeMap.flashMs = routeMap.flashMs > 0 ? 0 : (route.finished ? Number.MAX_SAFE_INTEGER : 60_000);
@@ -161,9 +226,11 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyR' && (route.expired || route.finished)) {
     route = new RouteState(1);
-    vehicle.reset();
+    rebuildVehicle(); // picks up anything bought since the last run
     score.reset();
     elapsedMs = 0;
+    payoutDone = false;
+    summary.clear();
     routeMap.flashMs = 0;
     bootScene();
     traffic.rescope(0, track.length * DEFAULT_TRACK_CONFIG.segmentLength);
@@ -198,13 +265,15 @@ const cfg = {
   carHalfWidthPx: 900,
 };
 let elapsedMs = 0;
+let payoutDone = false; // the run pays out exactly once, on the step it ends
 const roadCenters = [0, 0, 0]; // pre-allocated branch road centres (hard rule 4)
 
 createLoop({
   update: (dt: number): void => {
     pollGamepad();
     input.read(cmd);
-    if (remap.open || editor.open) { // pause driving while a screen is up
+    if (remap.open || editor.open || leaderboard.open || trackBrowser.open || account.open
+        || shop.open) { // pause driving while a screen is up
       cmd.throttle = 0; cmd.brake = 0; cmd.steer = 0; cmd.handbrake = true;
     } else if (route.expired || route.finished) {
       cmd.throttle = 0; cmd.steer = 0; cmd.brake = 1; // roll to a stop on the end screens
@@ -235,6 +304,7 @@ createLoop({
     if (hitCar(vehicle, cars, cfg) != null) {
       const d = responseDelta({ offRoad: false, hit: true });
       vehicle.applyCollision(d.speedFactor, (vehicle.x >= 0 ? -1 : 1) * d.xPush * dt);
+      score.addCollision(); // zero hits earns the clean-race multiplier
     }
 
     // Route progression: countdown, fork hand-off, final-stage finish.
@@ -270,6 +340,25 @@ createLoop({
         routeMap.flashMs = Number.MAX_SAFE_INTEGER; // stays up on the ending screen
       }
     }
+
+    // Payout: one commit per run, whichever way it ended. Owns the race_results
+    // write too, so the recorded time and the credits figure cannot disagree.
+    if (!payoutDone && (route.finished || route.expired)) {
+      payoutDone = true;
+      garage.noteStage(route.stage);
+      const ledger = computePayout({
+        stagesCleared: route.stage + (route.finished ? 1 : 0),
+        finished: route.finished,
+        remainingMs: route.remainingMs,
+        points: score.points,
+        collisions: score.collisions,
+      });
+      garage.award(ledger.total);
+      void persistGarage(save, garage);
+      summary.show(route.finished ? 'route complete' : 'time up', ledger, garage.credits);
+      const { trackId, path } = routeIdentity(route);
+      void recordRaceResult({ trackId, route: path, timeMs: elapsedMs, creditsEarned: ledger.total });
+    }
     if (routeMap.flashMs > 0 && routeMap.flashMs < Number.MAX_SAFE_INTEGER) {
       routeMap.flashMs = Math.max(0, routeMap.flashMs - dt * 1000);
     }
@@ -289,12 +378,12 @@ createLoop({
       route, score.passedCars, score.points);
     remap.render(backend);
     editor.render(backend);
+    leaderboard.render(backend);
+    trackBrowser.render(backend);
+    account.render(backend);
+    shop.render(backend);
     routeMap.render(route, backend);
-    if (route.expired) {
-      drawText(backend, atlas, 'time up  press r', LOGICAL_WIDTH / 2 - 56, LOGICAL_HEIGHT / 2 - 6, 3);
-    } else if (route.finished) {
-      drawText(backend, atlas, 'route complete  press r', LOGICAL_WIDTH / 2 - 80, LOGICAL_HEIGHT / 2 - 6, 3);
-    }
+    summary.render(backend);
     backend.present(); // HUD + screens composited onto the logical frame, then blit
   },
 }).start();
