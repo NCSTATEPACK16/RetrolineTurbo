@@ -20,9 +20,11 @@ const TABS: readonly { id: SettingsTab; label: string }[] = [
 
 function renderControlsTab(bridge: ShellBridge): HTMLElement {
   const wrap = document.createElement('div');
+  wrap.className = 'rt-col';
   const bindings = bridge.getBindings();
   for (const action of ACTIONS) {
     const row = document.createElement('div');
+    row.className = 'rt-row-between';
     const label = document.createElement('span');
     label.textContent = ACTION_LABEL[action];
     const current = document.createElement('span');
@@ -49,13 +51,16 @@ function renderControlsTab(bridge: ShellBridge): HTMLElement {
 
 function renderAudioTab(bridge: ShellBridge): HTMLElement {
   const wrap = document.createElement('div');
+  wrap.className = 'rt-col';
   const engineRow = document.createElement('div');
+  engineRow.className = 'rt-col';
   const engineLabel = document.createElement('span');
   engineLabel.textContent = 'Engine & SFX';
   const engineSlider = buildSlider(bridge.getVolume('engine'), 0, 1, 0.05, (v) => bridge.setVolume('engine', v));
   engineRow.append(engineLabel, engineSlider);
 
   const musicRow = document.createElement('div');
+  musicRow.className = 'rt-col';
   const musicLabel = document.createElement('span');
   musicLabel.textContent = 'Soundtrack';
   const musicSlider = buildSlider(bridge.getVolume('music'), 0, 1, 0.05, (v) => bridge.setVolume('music', v));
@@ -67,21 +72,25 @@ function renderAudioTab(bridge: ShellBridge): HTMLElement {
 
 function renderDisplayTab(bridge: ShellBridge): HTMLElement {
   const wrap = document.createElement('div');
+  wrap.className = 'rt-col';
   const settings = bridge.getCrtSettings();
 
   const scanLabel = document.createElement('span');
   scanLabel.textContent = 'Scanlines';
   const scanRow = document.createElement('div');
+  scanRow.className = 'rt-row-between';
   scanRow.append(scanLabel, buildToggle(settings.scanline, (v) => bridge.setCrtSettings({ scanline: v })));
 
   const aberrationLabel = document.createElement('span');
   aberrationLabel.textContent = 'Screen Curvature';
   const aberrationRow = document.createElement('div');
+  aberrationRow.className = 'rt-row-between';
   aberrationRow.append(aberrationLabel, buildToggle(settings.aberration, (v) => bridge.setCrtSettings({ aberration: v })));
 
   const bloomLabel = document.createElement('span');
   bloomLabel.textContent = 'Bloom';
   const bloomRow = document.createElement('div');
+  bloomRow.className = 'rt-col';
   bloomRow.append(bloomLabel, buildSlider(settings.bloom, 0, 1, 0.05, (v) => bridge.setCrtSettings({ bloom: v })));
 
   wrap.append(scanRow, aberrationRow, bloomRow);
@@ -90,6 +99,7 @@ function renderDisplayTab(bridge: ShellBridge): HTMLElement {
 
 function renderAccountTab(bridge: ShellBridge): HTMLElement {
   const wrap = document.createElement('div');
+  wrap.className = 'rt-col';
   const status = document.createElement('p');
   status.textContent = 'Checking account status…';
   void bridge.getIdentity().then((identity) => {
@@ -122,7 +132,11 @@ function renderAccountTab(bridge: ShellBridge): HTMLElement {
     });
   });
 
-  wrap.append(status, linkBtn, passBtn);
+  const buttonRow = document.createElement('div');
+  buttonRow.className = 'rt-row';
+  buttonRow.append(linkBtn, passBtn);
+
+  wrap.append(status, buttonRow);
   return wrap;
 }
 
@@ -139,8 +153,11 @@ function renderTab(tab: SettingsTab, bridge: ShellBridge): HTMLElement {
  * "underneath" per ShellRouter.settingsOpener. */
 export function renderSettings(router: ShellRouter, bridge: ShellBridge): HTMLElement {
   const body = document.createElement('div');
+  body.className = 'rt-col';
   const tabBarSlot = document.createElement('div');
   const tabBody = document.createElement('div');
+  tabBody.className = 'rt-col';
+  tabBody.style.paddingTop = '16px';
   function rerender(): void {
     tabBarSlot.innerHTML = '';
     tabBarSlot.appendChild(buildTabBar(TABS, router.settingsTab, (tab) => {

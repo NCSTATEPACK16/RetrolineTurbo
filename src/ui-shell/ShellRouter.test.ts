@@ -79,4 +79,37 @@ describe('ShellRouter', () => {
     router.resume();
     expect(router.state).toBe('playing');
   });
+
+  it('subscribe notifies listeners on every state-changing method', () => {
+    const router = new ShellRouter();
+    let calls = 0;
+    router.subscribe(() => { calls++; });
+    router.goGarage();
+    router.openSettings();
+    router.setSettingsTab('audio');
+    router.closeSettings();
+    router.startPlaying();
+    router.toggleEsc();
+    router.resume();
+    router.quitToHub();
+    expect(calls).toBe(8);
+  });
+
+  it('subscribe does not notify on a no-op (pause while not playing)', () => {
+    const router = new ShellRouter();
+    let calls = 0;
+    router.subscribe(() => { calls++; });
+    router.pause(); // no-op: state is 'hub', not 'playing'
+    expect(calls).toBe(0);
+  });
+
+  it('the unsubscribe function returned by subscribe stops further notifications', () => {
+    const router = new ShellRouter();
+    let calls = 0;
+    const unsubscribe = router.subscribe(() => { calls++; });
+    router.goGarage();
+    unsubscribe();
+    router.goHub();
+    expect(calls).toBe(1);
+  });
 });

@@ -38,6 +38,30 @@
   gap: 16px;
 }
 
+/* Utility layout classes — every screen composes rows of spans/buttons/
+   inputs that would otherwise run together as inline content with no
+   separator (e.g. a part name butting against its price). */
+#ui-shell .rt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#ui-shell .rt-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#ui-shell .rt-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 #ui-shell .rt-navbar {
   display: flex;
   align-items: center;

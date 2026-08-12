@@ -9,6 +9,7 @@ const CATEGORY_LABEL: Record<PartCategory, string> = {
 
 function statBar(label: string, delta: number): HTMLElement {
   const row = document.createElement('div');
+  row.className = 'rt-col';
   const cap = document.createElement('span');
   cap.textContent = `${label} ${delta >= 0 ? '+' : ''}${delta}`;
   const track = document.createElement('div');
@@ -24,7 +25,9 @@ function statBar(label: string, delta: number): HTMLElement {
 
 function partRow(part: Part, bridge: ShellBridge, onChange: () => void): HTMLElement {
   const row = document.createElement('div');
-  row.className = 'rt-card';
+  row.className = 'rt-card rt-col';
+  const header = document.createElement('div');
+  header.className = 'rt-row-between';
   const name = document.createElement('span');
   name.textContent = part.name;
   const state = bridge.getPartState(part);
@@ -39,15 +42,17 @@ function partRow(part: Part, bridge: ShellBridge, onChange: () => void): HTMLEle
   action.addEventListener('click', () => {
     if (bridge.buyAndEquip(part)) onChange();
   });
+  header.append(name, stateLabel, action);
 
   const diff = bridge.getStatDiff(part);
   const diffBox = document.createElement('div');
+  diffBox.className = 'rt-col';
   diffBox.append(
     statBar('Speed', diff.speed), statBar('Accel', diff.accel),
     statBar('Handling', diff.handling), statBar('Grip', diff.grip),
   );
 
-  row.append(name, stateLabel, action, diffBox);
+  row.append(header, diffBox);
   return row;
 }
 
@@ -73,6 +78,7 @@ export function renderGarage(router: ShellRouter, bridge: ShellBridge): HTMLElem
 
   let activeCategory: PartCategory = 'engine';
   const listWrap = document.createElement('div');
+  listWrap.className = 'rt-col';
 
   function renderList(): void {
     listWrap.innerHTML = '';

@@ -5,7 +5,7 @@ export function renderPauseOverlay(onResume: () => void, onSettings: () => void,
   backdrop.className = 'rt-pause-overlay';
 
   const card = document.createElement('div');
-  card.className = 'rt-card';
+  card.className = 'rt-card rt-col';
   const title = document.createElement('h2');
   title.textContent = 'Paused';
 

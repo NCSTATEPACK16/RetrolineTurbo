@@ -203,7 +203,7 @@ function renderShell(): void {
   shellEl.innerHTML = '';
   shellEl.setAttribute('data-hidden', String(router.state === 'playing'));
   if (router.state === 'hub') {
-    shellEl.appendChild(renderHub(router, bridge, () => { router.startPlaying(); renderShell(); }));
+    shellEl.appendChild(renderHub(router, bridge, () => router.startPlaying()));
   } else if (router.state === 'guide') {
     shellEl.appendChild(renderGuide(router));
   } else if (router.state === 'garage') {
@@ -215,19 +215,19 @@ function renderShell(): void {
     shellEl.append(under, renderSettings(router, bridge));
   } else if (router.state === 'paused') {
     shellEl.appendChild(renderPauseOverlay(
-      () => { router.resume(); renderShell(); },
-      () => { router.openSettings(); renderShell(); },
-      () => { router.quitToHub(); renderShell(); },
+      () => router.resume(),
+      () => router.openSettings(),
+      () => router.quitToHub(),
     ));
   }
   // 'playing': shellEl stays empty and hidden — the canvas owns the screen.
 }
+router.subscribe(renderShell); // screens navigate by calling router methods directly
 renderShell();
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && (router.state === 'playing' || router.state === 'paused')) {
     router.toggleEsc();
-    renderShell();
   }
 });
 

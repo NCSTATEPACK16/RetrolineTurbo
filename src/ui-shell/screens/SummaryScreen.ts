@@ -10,7 +10,7 @@ export function renderSummary(
   root.className = 'rt-screen';
 
   const card = document.createElement('div');
-  card.className = 'rt-card';
+  card.className = 'rt-card rt-col';
   const heading = document.createElement('h1');
   heading.textContent = title;
   card.appendChild(heading);
@@ -30,6 +30,7 @@ export function renderSummary(
   card.appendChild(total);
 
   const actions = document.createElement('div');
+  actions.className = 'rt-row';
   const again = document.createElement('button');
   again.type = 'button';
   again.className = 'rt-btn rt-btn-primary';
