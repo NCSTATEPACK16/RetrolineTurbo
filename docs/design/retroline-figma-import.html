@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Retroline Turbo — Settings & Garage/Marketplace (Figma import)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg1: #0B0C10;
+    --bg2: #1A1A2E;
+    --surface: rgba(31, 40, 51, 0.6);
+    --surface-solid: #1F2833;
+    --border-glass: rgba(255, 255, 255, 0.10);
+    --cyan: #00FFFF;
+    --cyan-ink: #05171a;
+    --red: #FF3333;
+    --gold: #FFD700;
+    --magenta: #FF00FF;
+    --text: #F2F4F8;
+    --text-muted: #9AA3B2;
+    --text-dim: #5C6472;
+    --font-head: "Space Grotesk", "Outfit", -apple-system, sans-serif;
+    --font-body: "Inter", "Roboto", -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: #050506;
+    font-family: var(--font-body);
+    color: var(--text);
+  }
+
+  .caption {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 64px 0 14px 4px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .caption:first-of-type { padding-top: 40px; }
+  .caption b { color: var(--cyan); font-weight: 600; }
+
+  /* ---------- frame shell ---------- */
+  .frame {
+    position: relative;
+    width: 1440px;
+    margin: 0 auto;
+    background: linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 100%);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
+  }
+
+  /* ---------- navbar (repeated per-frame, matches existing file) ---------- */
+  .navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 48px;
+    height: 32px;
+  }
+  .logo-group { display: flex; align-items: center; gap: 12px; }
+  .logo-mark {
+    width: 26px; height: 26px;
+    background: var(--cyan);
+    clip-path: polygon(60% 0%, 0% 58%, 45% 58%, 40% 100%, 100% 42%, 55% 42%);
+    filter: drop-shadow(0 0 6px rgba(0,255,255,0.7));
+  }
+  .logo-text {
+    font-family: var(--font-head);
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+  .nav-links { display: flex; gap: 32px; }
+  .nav-item {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+  .nav-item.active { color: var(--cyan); text-shadow: 0 0 8px rgba(0,255,255,0.5); }
+  .nav-item.new-item {
+    position: relative;
+    color: var(--cyan);
+  }
+  .nav-actions { display: flex; align-items: center; gap: 16px; }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface);
+    border: 1px solid var(--border-glass);
+  }
+  .icon-btn svg { width: 18px; height: 18px; stroke: var(--text-muted); }
+  .profile-chip {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 16px 4px 4px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border-glass);
+  }
+  .profile-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--magenta), var(--cyan));
+  }
+  .profile-name {
+    font-family: var(--font-head);
+    font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--text);
+  }
+
+  /* ---------- footer ---------- */
+  .footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 32px 48px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border-glass);
+  }
+  .footer .version { color: var(--magenta); font-family: var(--font-head); font-weight: 600; }
+  .footer .socials { display: flex; gap: 24px; }
+
+  /* ---------- generic buttons ---------- */
+  .btn {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: none;
+    cursor: default;
+  }
+  .btn-primary {
+    background: var(--cyan);
+    color: var(--cyan-ink);
+    box-shadow: 0 0 20px rgba(0,255,255,0.25);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-glass);
+  }
+  .btn-gold {
+    background: var(--gold);
+    color: #241d00;
+    box-shadow: 0 0 20px rgba(255,215,0,0.25);
+  }
+  .btn-locked {
+    background: rgba(255,255,255,0.04);
+    color: var(--text-dim);
+    border: 1px solid var(--border-glass);
+  }
+  .btn-danger-outline {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid rgba(255,51,51,0.4);
+  }
+
+  /* ================= SETTINGS MODAL SCREENS ================= */
+  .modal-scene {
+    position: relative;
+    padding-bottom: 0;
+  }
+  .modal-scene-bg {
+    padding: 40px 48px 120px;
+    filter: blur(2px) brightness(0.6);
+    opacity: 0.5;
+  }
+  .modal-scene-bg .mock-hero {
+    height: 420px;
+    border-radius: 16px;
+    background: radial-gradient(ellipse at 30% 20%, rgba(255,0,255,0.18), transparent 55%),
+                radial-gradient(ellipse at 75% 60%, rgba(0,255,255,0.14), transparent 55%),
+                var(--surface-solid);
+    border: 1px solid var(--border-glass);
+  }
+  .modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(5,5,8,0.55);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-card {
+    width: 800px;
+    background: var(--surface);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px;
+    box-shadow: 0 0 0 1px rgba(0,255,255,0.06), 0 24px 60px rgba(0,0,0,0.5);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 24px 28px;
+    border-bottom: 1px solid var(--border-glass);
+  }
+  .modal-header h2 {
+    margin: 0;
+    font-family: var(--font-head);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .modal-close { width: 20px; height: 20px; color: var(--text-muted); }
+  .modal-tabs {
+    display: flex; gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-glass);
+  }
+  .m-tab {
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: var(--text-muted);
+  }
+  .m-tab.active {
+    background: rgba(0,255,255,0.10);
+    color: var(--cyan);
+    border: 1px solid rgba(0,255,255,0.35);
+  }
+  .modal-body { padding: 28px 32px 8px; min-height: 340px; }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 20px 28px 28px;
+  }
+
+  .section-title {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--magenta);
+    margin: 0 0 16px;
+  }
+  .section-title:not(:first-child) { margin-top: 28px; }
+
+  /* rebind rows */
+  .rebind-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+    margin-bottom: 8px;
+  }
+  .rebind-action {
+    font-family: var(--font-body);
+    font-size: 14px; font-weight: 500;
+    color: var(--text);
+  }
+  .rebind-keys { display: flex; align-items: center; gap: 8px; }
+  .keycap {
+    font-family: var(--font-head);
+    font-size: 11px; font-weight: 700;
+    padding: 5px 9px;
+    border-radius: 6px;
+    background: var(--surface-solid);
+    border: 1px solid var(--border-glass);
+    color: var(--text-muted);
+    min-width: 14px;
+    text-align: center;
+  }
+  .rebind-btn {
+    font-family: var(--font-head);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    background: transparent;
+    border: 1px solid rgba(0,255,255,0.3);
+    border-radius: 6px;
+    padding: 6px 12px;
+    margin-left: 16px;
+  }
+
+  /* toggle row */
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .toggle-copy h4 {
+    margin: 0 0 4px;
+    font-family: var(--font-body);
+    font-size: 14px; font-weight: 600;
+    color: var(--text);
+  }
+  .toggle-copy p {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    color: var(--text-muted);
+    max-width: 420px;
+  }
+  .toggle {
+    position: relative;
+    width: 44px; height: 24px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--cyan); box-shadow: 0 0 12px rgba(0,255,255,0.4); }
+  .toggle .knob {
+    position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #fff;
+  }
+  .toggle.on .knob { left: 22px; background: var(--cyan-ink); }
+
+  /* slider row */
+  .slider-row { padding: 14px 4px; }
+  .slider-row .top-line {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .slider-label {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-body);
+    font-size: 14px; font-weight: 600;
+    color: var(--text);
+  }
+  .slider-label .icon { width: 16px; height: 16px; color: var(--cyan); }
+  .slider-value {
+    font-family: var(--font-head);
+    font-size: 13px; font-weight: 600;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .slider-track {
+    position: relative;
+    height: 6px; border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+  }
+  .slider-fill {
+    position: absolute; top: 0; left: 0; height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--magenta), var(--cyan));
+  }
+  .slider-thumb {
+    position: absolute; top: 50%;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(0,255,255,0.25);
+    transform: translate(-50%, -50%);
+  }
+  .hint {
+    display: flex; gap: 8px; align-items: flex-start;
+    margin-top: 18px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255,215,0,0.06);
+    border: 1px solid rgba(255,215,0,0.2);
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .hint b { color: var(--gold); }
+
+  /* account tab */
+  .account-identity {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 24px;
+  }
+  .account-avatar {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--magenta), var(--cyan));
+    flex-shrink: 0;
+  }
+  .account-name { font-family: var(--font-head); font-size: 17px; font-weight: 700; }
+  .account-tag {
+    display: inline-block;
+    margin-top: 4px;
+    font-family: var(--font-head);
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.05);
+    border-radius: 999px;
+    padding: 3px 10px;
+  }
+  .field {
+    margin-bottom: 18px;
+  }
+  .field label {
+    display: block;
+    font-family: var(--font-body);
+    font-size: 12.5px; font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .field-input {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border-glass);
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--text);
+  }
+  .account-action-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+    margin-bottom: 10px;
+  }
+  .account-action-copy h4 { margin: 0 0 3px; font-size: 14px; font-weight: 600; }
+  .account-action-copy p { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+
+  /* ================= GARAGE / MARKETPLACE SCREEN ================= */
+  .garage-body { padding: 40px 48px 64px; }
+  .garage-header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .garage-title {
+    font-family: var(--font-head);
+    font-size: 34px; font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .garage-subtitle {
+    font-family: var(--font-body);
+    font-size: 14px; color: var(--text-muted);
+    margin: 6px 0 0;
+  }
+  .credits-block { text-align: right; }
+  .credits-label {
+    font-family: var(--font-head);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .credits-value {
+    font-family: var(--font-head);
+    font-size: 32px; font-weight: 700;
+    color: var(--gold);
+    text-shadow: 0 0 20px rgba(255,215,0,0.35);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .vehicle-preview {
+    height: 220px;
+    border-radius: 16px;
+    margin-bottom: 24px;
+    background: radial-gradient(ellipse at 20% 30%, rgba(255,0,255,0.22), transparent 55%),
+                radial-gradient(ellipse at 80% 70%, rgba(0,255,255,0.18), transparent 55%),
+                var(--surface-solid);
+    border: 1px solid rgba(0,255,255,0.25);
+    box-shadow: 0 0 40px rgba(0,255,255,0.08) inset;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .vehicle-preview span {
+    font-family: var(--font-head);
+    font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .category-tabs {
+    display: flex; gap: 10px;
+    margin-bottom: 20px;
+  }
+  .cat-tab {
+    font-family: var(--font-head);
+    font-size: 12.5px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 12px 20px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border-glass);
+    color: var(--text-muted);
+  }
+  .cat-tab.active {
+    color: var(--cyan);
+    border-color: rgba(0,255,255,0.4);
+    background: rgba(0,255,255,0.08);
+    box-shadow: 0 0 16px rgba(0,255,255,0.12);
+  }
+
+  .garage-layout { display: flex; gap: 24px; align-items: flex-start; }
+  .part-list { flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; }
+
+  .part-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border-glass);
+  }
+  .part-row.is-fitted {
+    border-color: rgba(255,215,0,0.5);
+    box-shadow: 0 0 20px rgba(255,215,0,0.10);
+  }
+  .part-row.is-locked { opacity: 0.55; }
+
+  .part-main { display: flex; align-items: center; gap: 14px; }
+  .part-tier {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.04);
+    font-family: var(--font-head);
+    font-size: 12px; font-weight: 700;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .part-name { font-family: var(--font-body); font-size: 15px; font-weight: 600; color: var(--text); }
+  .part-cost {
+    font-family: var(--font-head);
+    font-size: 12.5px; color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+  .part-side { display: flex; align-items: center; gap: 14px; }
+  .state-badge {
+    font-family: var(--font-head);
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 5px 11px;
+    border-radius: 999px;
+  }
+  .state-badge.locked { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+  .state-badge.need { background: rgba(255,51,51,0.12); color: var(--red); }
+  .state-badge.fitted { background: rgba(255,215,0,0.15); color: var(--gold); }
+  .state-badge.owned { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+
+  .stat-panel {
+    width: 360px; flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px;
+    padding: 24px;
+    position: sticky; top: 24px;
+  }
+  .stat-panel h3 {
+    font-family: var(--font-head);
+    font-size: 14px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    margin: 0 0 2px;
+  }
+  .stat-panel .sub {
+    font-family: var(--font-body);
+    font-size: 12.5px; color: var(--text-muted);
+    margin: 0 0 22px;
+  }
+  .stat-row { margin-bottom: 18px; }
+  .stat-row .top-line {
+    display: flex; justify-content: space-between;
+    font-family: var(--font-body);
+    font-size: 13px; font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .stat-row .delta { font-variant-numeric: tabular-nums; }
+  .stat-row .delta.pos { color: var(--cyan); }
+  .stat-row .delta.neg { color: var(--red); }
+  .stat-bar {
+    position: relative;
+    height: 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+  .stat-bar .base { position: absolute; top: 0; left: 0; height: 100%; background: rgba(255,255,255,0.16); }
+  .stat-bar .delta-fill { position: absolute; top: 0; height: 100%; }
+  .stat-bar .delta-fill.pos { background: var(--cyan); box-shadow: 0 0 10px rgba(0,255,255,0.5); }
+  .stat-bar .delta-fill.neg { background: var(--red); box-shadow: 0 0 10px rgba(255,51,51,0.5); }
+
+  .cta-button {
+    width: 100%;
+    text-align: center;
+    margin-top: 6px;
+    padding: 16px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<p class="caption">Frame 1 / 5 — <b>Settings modal · Controls tab</b> (new content)</p>
+<div class="frame" id="settings-modal-controls">
+  <div class="modal-scene">
+    <div class="modal-scene-bg">
+      <div class="navbar">
+        <div class="logo-group"><div class="logo-mark"></div><span class="logo-text">RETROLINE TURBO</span></div>
+        <div class="nav-links">
+          <span class="nav-item">DASHBOARD</span>
+          <span class="nav-item">GAMEPLAY</span>
+          <span class="nav-item new-item">GARAGE</span>
+          <span class="nav-item">GUIDE</span>
+          <span class="nav-item active">RETRO FX</span>
+        </div>
+        <div class="nav-actions">
+          <div class="icon-btn"></div>
+          <div class="profile-chip"><div class="profile-avatar"></div><span class="profile-name">PILOT_83</span></div>
+        </div>
+      </div>
+      <div class="mock-hero"></div>
+    </div>
+    <div class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>CONFIGURATIONS &amp; RETRO ENGINE</h2>
+          <div class="modal-close">✕</div>
+        </div>
+        <div class="modal-tabs">
+          <span class="m-tab active">Controls</span>
+          <span class="m-tab">Audio Controls</span>
+          <span class="m-tab">Display &amp; Retro FX</span>
+          <span class="m-tab">Driver Account</span>
+        </div>
+        <div class="modal-body">
+          <p class="section-title">Input Remapping</p>
+          <div class="rebind-row"><span class="rebind-action">Throttle</span><div class="rebind-keys"><span class="keycap">W</span><span class="keycap">↑</span><button class="rebind-btn">Rebind</button></div></div>
+          <div class="rebind-row"><span class="rebind-action">Brake</span><div class="rebind-keys"><span class="keycap">S</span><span class="keycap">↓</span><button class="rebind-btn">Rebind</button></div></div>
+          <div class="rebind-row"><span class="rebind-action">Steer Left</span><div class="rebind-keys"><span class="keycap">A</span><span class="keycap">←</span><button class="rebind-btn">Rebind</button></div></div>
+          <div class="rebind-row"><span class="rebind-action">Steer Right</span><div class="rebind-keys"><span class="keycap">D</span><span class="keycap">→</span><button class="rebind-btn">Rebind</button></div></div>
+          <div class="rebind-row"><span class="rebind-action">Handbrake</span><div class="rebind-keys"><span class="keycap">SPACE</span><button class="rebind-btn">Rebind</button></div></div>
+          <div class="rebind-row"><span class="rebind-action">Gear Up</span><div class="rebind-keys"><span class="keycap">SHIFT</span><button class="rebind-btn">Rebind</button></div></div>
+          <div class="rebind-row"><span class="rebind-action">Gear Down</span><div class="rebind-keys"><span class="keycap">CTRL</span><button class="rebind-btn">Rebind</button></div></div>
+          <div class="rebind-row"><span class="rebind-action">Nitro</span><div class="rebind-keys"><span class="keycap">Q</span><button class="rebind-btn">Rebind</button></div></div>
+
+          <p class="section-title">Input Devices</p>
+          <div class="toggle-row">
+            <div class="toggle-copy"><h4>Mouse Steering</h4><p>Analog steer from cursor X-position, centered deadzone.</p></div>
+            <div class="toggle on"><div class="knob"></div></div>
+          </div>
+          <div class="slider-row">
+            <div class="top-line"><span class="slider-label">Sensitivity</span><span class="slider-value">62%</span></div>
+            <div class="slider-track"><div class="slider-fill" style="width:62%"></div><div class="slider-thumb" style="left:62%"></div></div>
+          </div>
+          <div class="slider-row">
+            <div class="top-line"><span class="slider-label">Deadzone</span><span class="slider-value">8%</span></div>
+            <div class="slider-track"><div class="slider-fill" style="width:8%"></div><div class="slider-thumb" style="left:8%"></div></div>
+          </div>
+          <div class="toggle-row" style="border-bottom:none;">
+            <div class="toggle-copy"><h4>Gamepad</h4><p>Left stick + LT/RT.</p></div>
+            <span class="state-badge locked">Not Connected</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary">Discard</button>
+          <button class="btn btn-primary">Save Modifications</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">
+    <span>RETROLINE TURBO © 2026. HOSTED ON NETLIFY.</span>
+    <span class="version">V2.0.0-TURBO</span>
+    <div class="socials"><span>GITHUB</span><span>DISCORD</span><span>TWITTER</span></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<p class="caption">Frame 2 / 5 — <b>Settings modal · Audio Controls tab</b> (split music / SFX)</p>
+<div class="frame" id="settings-modal-audio">
+  <div class="modal-scene">
+    <div class="modal-scene-bg">
+      <div class="navbar">
+        <div class="logo-group"><div class="logo-mark"></div><span class="logo-text">RETROLINE TURBO</span></div>
+        <div class="nav-links">
+          <span class="nav-item">DASHBOARD</span><span class="nav-item">GAMEPLAY</span><span class="nav-item new-item">GARAGE</span><span class="nav-item">GUIDE</span><span class="nav-item active">RETRO FX</span>
+        </div>
+        <div class="nav-actions"><div class="icon-btn"></div><div class="profile-chip"><div class="profile-avatar"></div><span class="profile-name">PILOT_83</span></div></div>
+      </div>
+      <div class="mock-hero"></div>
+    </div>
+    <div class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header"><h2>CONFIGURATIONS &amp; RETRO ENGINE</h2><div class="modal-close">✕</div></div>
+        <div class="modal-tabs">
+          <span class="m-tab">Controls</span>
+          <span class="m-tab active">Audio Controls</span>
+          <span class="m-tab">Display &amp; Retro FX</span>
+          <span class="m-tab">Driver Account</span>
+        </div>
+        <div class="modal-body">
+          <p class="section-title">Audio Balancing</p>
+          <div class="slider-row">
+            <div class="top-line"><span class="slider-label">Engine &amp; SFX</span><span class="slider-value">85%</span></div>
+            <div class="slider-track"><div class="slider-fill" style="width:85%"></div><div class="slider-thumb" style="left:85%"></div></div>
+          </div>
+          <div class="toggle-row" style="padding-top:0;">
+            <div class="toggle-copy"><p>Mute engine tone, tire squeal &amp; collision cues.</p></div>
+            <div class="toggle"><div class="knob"></div></div>
+          </div>
+          <div class="slider-row">
+            <div class="top-line"><span class="slider-label">Soundtrack (FM Synth)</span><span class="slider-value">80%</span></div>
+            <div class="slider-track"><div class="slider-fill" style="width:80%"></div><div class="slider-thumb" style="left:80%"></div></div>
+          </div>
+          <div class="toggle-row" style="border-bottom:none; padding-top:0;">
+            <div class="toggle-copy"><p>Mute streamed music only.</p></div>
+            <div class="toggle"><div class="knob"></div></div>
+          </div>
+          <div class="hint"><span><b>Note —</b> verify exact bus names against <code>SoundEngine.buildGraph()</code> before finalizing labels; this splits the single slider currently in the file into the two real gain nodes.</span></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary">Discard</button><button class="btn btn-primary">Save Modifications</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>RETROLINE TURBO © 2026. HOSTED ON NETLIFY.</span><span class="version">V2.0.0-TURBO</span><div class="socials"><span>GITHUB</span><span>DISCORD</span><span>TWITTER</span></div></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="caption">Frame 3 / 5 — <b>Settings modal · Display &amp; Retro FX tab</b> (bloom slider replaces "pixelated upscaling")</p>
+<div class="frame" id="settings-modal-display">
+  <div class="modal-scene">
+    <div class="modal-scene-bg">
+      <div class="navbar">
+        <div class="logo-group"><div class="logo-mark"></div><span class="logo-text">RETROLINE TURBO</span></div>
+        <div class="nav-links"><span class="nav-item">DASHBOARD</span><span class="nav-item">GAMEPLAY</span><span class="nav-item new-item">GARAGE</span><span class="nav-item">GUIDE</span><span class="nav-item active">RETRO FX</span></div>
+        <div class="nav-actions"><div class="icon-btn"></div><div class="profile-chip"><div class="profile-avatar"></div><span class="profile-name">PILOT_83</span></div></div>
+      </div>
+      <div class="mock-hero"></div>
+    </div>
+    <div class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header"><h2>CONFIGURATIONS &amp; RETRO ENGINE</h2><div class="modal-close">✕</div></div>
+        <div class="modal-tabs">
+          <span class="m-tab">Controls</span><span class="m-tab">Audio Controls</span><span class="m-tab active">Display &amp; Retro FX</span><span class="m-tab">Driver Account</span>
+        </div>
+        <div class="modal-body">
+          <p class="section-title">Arcade Simulation Shaders</p>
+          <div class="toggle-row">
+            <div class="toggle-copy"><h4>CRT Scanline emulation</h4><p>Simulate glass monitor scanlines &amp; dark phosphors.</p></div>
+            <div class="toggle on"><div class="knob"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-copy"><h4>Chromatic aberration</h4><p>RGB prism offset artifacting on fast drifting maneuvers.</p></div>
+            <div class="toggle on"><div class="knob"></div></div>
+          </div>
+          <div class="slider-row" style="padding-top:16px;">
+            <div class="top-line"><span class="slider-label">Bloom / Glow intensity</span><span class="slider-value">45%</span></div>
+            <div class="slider-track"><div class="slider-fill" style="width:45%"></div><div class="slider-thumb" style="left:45%"></div></div>
+          </div>
+          <div class="hint"><span><b>Default —</b> CRT scanline &amp; chromatic aberration default OFF on viewports under 720px. "Pixelated upscaling" was removed as a toggle: nearest-neighbor upscale is a fixed, always-on part of the render pipeline.</span></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary">Discard</button><button class="btn btn-primary">Save Modifications</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>RETROLINE TURBO © 2026. HOSTED ON NETLIFY.</span><span class="version">V2.0.0-TURBO</span><div class="socials"><span>GITHUB</span><span>DISCORD</span><span>TWITTER</span></div></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="caption">Frame 4 / 5 — <b>Settings modal · Driver Account tab</b> (was empty in the current file)</p>
+<div class="frame" id="settings-modal-account">
+  <div class="modal-scene">
+    <div class="modal-scene-bg">
+      <div class="navbar">
+        <div class="logo-group"><div class="logo-mark"></div><span class="logo-text">RETROLINE TURBO</span></div>
+        <div class="nav-links"><span class="nav-item">DASHBOARD</span><span class="nav-item">GAMEPLAY</span><span class="nav-item new-item">GARAGE</span><span class="nav-item">GUIDE</span><span class="nav-item active">RETRO FX</span></div>
+        <div class="nav-actions"><div class="icon-btn"></div><div class="profile-chip"><div class="profile-avatar"></div><span class="profile-name">PILOT_83</span></div></div>
+      </div>
+      <div class="mock-hero"></div>
+    </div>
+    <div class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header"><h2>CONFIGURATIONS &amp; RETRO ENGINE</h2><div class="modal-close">✕</div></div>
+        <div class="modal-tabs">
+          <span class="m-tab">Controls</span><span class="m-tab">Audio Controls</span><span class="m-tab">Display &amp; Retro FX</span><span class="m-tab active">Driver Account</span>
+        </div>
+        <div class="modal-body">
+          <div class="account-identity">
+            <div class="account-avatar"></div>
+            <div><div class="account-name">PILOT_83</div><span class="account-tag">Anonymous Session</span></div>
+          </div>
+          <div class="field"><label>Display Name</label><div class="field-input">PILOT_83</div></div>
+
+          <p class="section-title">Account Linking</p>
+          <div class="account-action-row">
+            <div class="account-action-copy"><h4>Link Email</h4><p>Attach an email so this save survives a cleared browser.</p></div>
+            <button class="btn btn-secondary">Link Email</button>
+          </div>
+          <div class="account-action-row">
+            <div class="account-action-copy"><h4>Set Password</h4><p>Enable sign-in from another device.</p></div>
+            <button class="btn btn-secondary">Set Password</button>
+          </div>
+          <div class="account-action-row" style="margin-top:20px;">
+            <div class="account-action-copy"><h4>Sign Out</h4><p>Available once this session is linked to an account.</p></div>
+            <button class="btn btn-danger-outline">Sign Out</button>
+          </div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary">Discard</button><button class="btn btn-primary">Save Modifications</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>RETROLINE TURBO © 2026. HOSTED ON NETLIFY.</span><span class="version">V2.0.0-TURBO</span><div class="socials"><span>GITHUB</span><span>DISCORD</span><span>TWITTER</span></div></div>
+</div>
+
+<!-- ============================================================ -->
+<p class="caption">Frame 5 / 5 — <b>Garage &amp; Marketplace</b> (new screen — the real gap)</p>
+<div class="frame" id="garage-marketplace">
+  <div class="navbar">
+    <div class="logo-group"><div class="logo-mark"></div><span class="logo-text">RETROLINE TURBO</span></div>
+    <div class="nav-links"><span class="nav-item">DASHBOARD</span><span class="nav-item">GAMEPLAY</span><span class="nav-item active new-item">GARAGE</span><span class="nav-item">GUIDE</span><span class="nav-item">RETRO FX</span></div>
+    <div class="nav-actions"><div class="icon-btn"></div><div class="profile-chip"><div class="profile-avatar"></div><span class="profile-name">PILOT_83</span></div></div>
+  </div>
+
+  <div class="garage-body">
+    <div class="garage-header">
+      <div>
+        <h1 class="garage-title">GARAGE</h1>
+        <p class="garage-subtitle">F1-83 TURBO · Balanced Build · Stage 2 Unlocked</p>
+      </div>
+      <div class="credits-block">
+        <div class="credits-label">Credits</div>
+        <div class="credits-value">48,240c</div>
+      </div>
+    </div>
+
+    <div class="vehicle-preview"><span>Active vehicle render</span></div>
+
+    <div class="category-tabs">
+      <span class="cat-tab active">Engine</span>
+      <span class="cat-tab">Transmission</span>
+      <span class="cat-tab">Suspension</span>
+      <span class="cat-tab">Wheels &amp; Tires</span>
+    </div>
+
+    <div class="garage-layout">
+      <div class="part-list">
+
+        <div class="part-row is-locked">
+          <div class="part-main"><div class="part-tier">16</div><div><div class="part-name">Twin-Turbo V8</div><div class="part-cost">16,226c</div></div></div>
+          <div class="part-side"><span class="state-badge locked">Unlocks at Stage 3</span><button class="btn btn-locked">Locked</button></div>
+        </div>
+
+        <div class="part-row">
+          <div class="part-main"><div class="part-tier">17</div><div><div class="part-name">Flat-12</div><div class="part-cost">20,769c</div></div></div>
+          <div class="part-side"><span class="state-badge need">Need 4,320c more</span><button class="btn btn-locked">Need Credits</button></div>
+        </div>
+
+        <div class="part-row">
+          <div class="part-main"><div class="part-tier">5</div><div><div class="part-name">Turbo 4</div><div class="part-cost">1,074c</div></div></div>
+          <div class="part-side"><span class="state-badge owned">Purchasable</span><button class="btn btn-primary">Buy &amp; Equip</button></div>
+        </div>
+
+        <div class="part-row">
+          <div class="part-main"><div class="part-tier">3</div><div><div class="part-name">Sport Inline-4</div><div class="part-cost">655c</div></div></div>
+          <div class="part-side"><span class="state-badge owned">Owned</span><button class="btn btn-secondary">Equip</button></div>
+        </div>
+
+        <div class="part-row is-fitted">
+          <div class="part-main"><div class="part-tier">2</div><div><div class="part-name">Tuned Inline-4</div><div class="part-cost">512c</div></div></div>
+          <div class="part-side"><span class="state-badge fitted">Fitted</span><button class="btn btn-gold">Equipped</button></div>
+        </div>
+
+      </div>
+
+      <div class="stat-panel">
+        <h3>Stat Comparison</h3>
+        <p class="sub">Turbo 4 (selected) vs. Tuned Inline-4 (equipped)</p>
+
+        <div class="stat-row">
+          <div class="top-line"><span>Top Speed</span><span class="delta pos">+5</span></div>
+          <div class="stat-bar"><div class="base" style="width:50%"></div><div class="delta-fill pos" style="left:50%; width:14%"></div></div>
+        </div>
+        <div class="stat-row">
+          <div class="top-line"><span>Acceleration</span><span class="delta pos">0</span></div>
+          <div class="stat-bar"><div class="base" style="width:50%"></div></div>
+        </div>
+        <div class="stat-row">
+          <div class="top-line"><span>Handling</span><span class="delta neg">−1</span></div>
+          <div class="stat-bar"><div class="base" style="width:50%"></div><div class="delta-fill neg" style="left:47%; width:3%"></div></div>
+        </div>
+        <div class="stat-row">
+          <div class="top-line"><span>Grip</span><span class="delta pos">0</span></div>
+          <div class="stat-bar"><div class="base" style="width:50%"></div></div>
+        </div>
+
+        <button class="btn btn-primary cta-button">Buy &amp; Equip — 1,074c</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>RETROLINE TURBO © 2026. HOSTED ON NETLIFY.</span><span class="version">V2.0.0-TURBO</span><div class="socials"><span>GITHUB</span><span>DISCORD</span><span>TWITTER</span></div></div>
+</div>
+
+<div style="height:80px;"></div>
+</body>
+</html>

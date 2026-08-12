@@ -56,13 +56,30 @@ DESIGN PHILOSOPHY: "The Premium Arcade Cabinet". The surrounding web application
 
 #### SCREEN 3: SETTINGS MODAL (Modern Tabbed Interface)
 - Structure: A centered glassmorphic modal overlaying the blurred home page.
-- Sidebar or Top Tabs: [ Controls ] [ Audio ] [ Display & Retro FX ] [ Account ]
-- Controls Tab (Visual Grid):
-  - Beautifully illustrated cards for input schemes: "Keyboard (WASD)", "Mouse (Analog)", "Gamepad".
-  - A clean, modern table for key rebinding with clear "Click to rebind" states.
-- Display Tab (Interactive Toggles):
-  - Modern toggle switches (iOS style but squared off) for: "CRT Scanline Shader", "Chromatic Aberration", "Pixelated Upscaling".
-- Audio Tab: Sleek horizontal sliders with volume icons.
+- Top Tabs: [ Controls ] [ Audio Controls ] [ Display & Retro FX ] [ Driver Account ]
+- Controls Tab — a rebind list for exactly these 8 actions (matches `InputManager.ts`):
+  Throttle, Brake, Steer Left, Steer Right, Handbrake, Gear Up, Gear Down, Nitro. Each
+  row shows the action name, its current key(s) as keycap chips (defaults: WASD + full
+  arrow-key mirror, Space = handbrake), and a "Rebind" action that enters a "press a
+  key" capture state. Below the list: a Mouse Steering toggle with sensitivity and
+  deadzone sliders, and a read-only Gamepad connection indicator — the game supports
+  all three input paths simultaneously.
+- Audio Controls Tab — two independent sliders, each with its own mute toggle: "Engine
+  & SFX" (procedural engine tone, tire squeal, collision cues) and "Soundtrack (FM
+  Synth)". Verify exact bus names against `SoundEngine.buildGraph()` before finalizing
+  copy — do not collapse this back into a single slider.
+- Display & Retro FX Tab (Interactive Toggles + a slider) — toggles for "CRT Scanline
+  emulation" and "Chromatic aberration"; a **slider** (not a toggle) for "Bloom / Glow
+  intensity" since `CrtEffect`'s fragment shader exposes a real bloom uniform. Do not
+  include a "Pixelated Upscaling" toggle — nearest-neighbor upscale is a fixed, always-
+  on part of the render pipeline (`Canvas2DBackend`), not a user-facing setting. Note
+  in the design that CRT effects default OFF under a mobile-width viewport
+  (`crtDefaultEnabled`) — reflect that as the default toggle state on narrow frames.
+- Driver Account Tab — anonymous pilot identity (avatar + generated name, e.g.
+  "PILOT_83") with a "Anonymous Session" tag; a display-name field (feeds the
+  leaderboard name shown elsewhere); two account-linking actions, "Link Email" and
+  "Set Password" (upgrades the anonymous save without losing progress, per
+  `net/account.ts`); a "Sign Out" action available once linked.
 
 #### SCREEN 4: HOW TO PLAY / DRIVER'S GUIDE
 - Layout: A clean, scrollable article format or a multi-step carousel (like a modern SaaS onboarding flow).
@@ -79,6 +96,39 @@ DESIGN PHILOSOPHY: "The Premium Arcade Cabinet". The surrounding web application
   - Clean Race: 1.1x Multiplier
   - Total: 1,650c (Emphasized with a glowing border).
 - Action Row: Primary button "RACE AGAIN". Secondary buttons "GARAGE" and "MAIN MENU".
+  The "GARAGE" button routes to Screen 6 below — it did not previously have a
+  destination.
+
+#### SCREEN 6: GARAGE & MARKETPLACE (One Merged Screen — the real gap)
+This was previously only a small preview card on the Dashboard with no real
+destination. `GarageState`/`GarageScreen` in code already merge "browse the parts
+catalog," "buy," and "equip" into one flow across 80 parts (4 categories × 20 tiers:
+Engine, Transmission, Suspension, Wheels/Tires) — design ONE screen, not a separate
+Garage + a separate Marketplace.
+- Add "GARAGE" as a primary top-nav item (between GAMEPLAY and GUIDE) — this is now a
+  full destination, not just a dashboard card.
+- Header band: current credits balance rendered large and prominent (Trophy Gold,
+  tabular numerals) next to the active vehicle name/archetype.
+- Vehicle preview: reuse the Dashboard Garage card's preview treatment, scaled up as
+  the hero element.
+- Category selector: 4 segments (Engine / Transmission / Suspension / Wheels & Tires)
+  using the same tab visual language as the Settings modal's tab bar.
+- Part list: rows ordered by tier — name, tier, cost, and a state badge using exactly
+  these five states (the real states `GarageState.partState()` tracks): **Locked**
+  (show "Unlocks at Stage N," not just disabled), **Need Credits** (show the exact
+  shortfall, e.g. "Need 4,320c more"), **Buy** ("Buy & Equip"), **Owned** ("Equip"),
+  **Fitted** (visually distinct — gold accent, not the generic cyan action color,
+  since it signals "your active choice" rather than "you can do this").
+- Stat-diff panel: four horizontal bars — Top Speed, Acceleration, Handling, Grip —
+  comparing the hovered/selected part against whatever's currently equipped in that
+  category, red (worse) / cyan (better) deltas off a shared baseline. This is the
+  signature mechanic (`GarageScreen.renderDiff`) and should be a hero UI moment, not
+  an afterthought. On narrow widths, collapse this into a bottom sheet that opens on
+  part selection.
+- Primary action: one contextual button whose label tracks state (Buy & Equip / Equip
+  / Need Xc more / Unlocks at Stage N).
+- Tie the credits display and ledger styling back to Screen 5's reward ledger so
+  credits visually flow from "just earned" to "about to spend."
 ```
 
 ---
@@ -87,3 +137,8 @@ DESIGN PHILOSOPHY: "The Premium Arcade Cabinet". The surrounding web application
 
 1. **Figma AI / Relume / v0 by Vercel**: Paste the text block directly into the AI prompt window. The use of terms like "Bento Grid", "Glassmorphism", "Navbar", and "Hero Section" will trigger the AI to use modern, responsive web components rather than generating an unusable, flat image of an arcade cabinet.
 2. **Human UI Designer**: Send this spec to a UI/UX designer. It clarifies the boundary between the *game* (which is retro) and the *website* (which is modern and accessible).
+3. **Figma import (Screens 3 & 6 specifically)**: most Figma AI chat inputs cap around 2,000 characters, too short for the Screen 3/6 detail above. `docs/design/retroline-figma-import.html` is a real, styled HTML mockup of all 4 Settings tabs plus the new Garage & Marketplace screen, built to the tokens/fonts/components in this doc — import it directly with an HTML-to-Figma plugin (e.g. `html.to.design`) instead of pasting text.
+
+## Existing Figma file
+
+Live file: `https://www.figma.com/design/oURI7m56fOQQGbpjfAc4Ub/Retroline-Turbo` — a first pass from this prompt already exists (home hub, gameplay mockup, settings modal, driver's guide, post-race summary). It's missing Screen 6 (Garage & Marketplace) and the Settings tab corrections above; `retroline-figma-import.html` fills both gaps in the same visual language rather than introducing a new one.
