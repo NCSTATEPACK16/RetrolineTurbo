@@ -36,6 +36,13 @@ import { GarageScreen } from './ui/GarageScreen.js';
 import { parseTrackFile } from './track/schema.js';
 import { SoundEngine } from './audio/SoundEngine.js';
 import { CrtEffect, crtDefaultEnabled } from './ui/CrtEffect.js';
+import { ShellRouter } from './ui-shell/ShellRouter.js';
+import { ShellBridge } from './ui-shell/ShellBridge.js';
+import { renderHub } from './ui-shell/screens/HubScreen.js';
+import { renderGuide } from './ui-shell/screens/GuideScreen.js';
+import { renderGarage as renderGarageShell } from './ui-shell/screens/GarageScreen.js';
+import { renderSettings } from './ui-shell/screens/SettingsScreen.js';
+import { renderPauseOverlay } from './ui-shell/screens/PauseOverlay.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
   PLAYER_CAR_ID, CAR_COLLIDE_HALF_WIDTH,
@@ -172,6 +179,56 @@ void loadGarage(save).then((loaded) => {
   garage.equipped = loaded.equipped;
   for (const id of loaded.toJSON().owned) garage.adopt(id);
   rebuildVehicle();
+});
+
+// --- Phase 11: DOM UI shell ---------------------------------------------
+const shellDiv = document.getElementById('ui-shell');
+if (!(shellDiv instanceof HTMLElement)) {
+  throw new Error('main: #ui-shell not found');
+}
+// TS doesn't carry the instanceof-narrowing above into a nested function
+// body (same pattern as gameSurfaceEl/crtSurfaceEl above), so re-bind as an
+// explicitly-typed, non-null local for use inside renderShell().
+const shellEl: HTMLElement = shellDiv;
+const router = new ShellRouter();
+const bridge = new ShellBridge({
+  garage, input, sound, crt,
+  onGarageChange: () => {
+    void persistGarage(save, garage);
+    rebuildVehicle();
+  },
+});
+
+function renderShell(): void {
+  shellEl.innerHTML = '';
+  shellEl.setAttribute('data-hidden', String(router.state === 'playing'));
+  if (router.state === 'hub') {
+    shellEl.appendChild(renderHub(router, bridge, () => { router.startPlaying(); renderShell(); }));
+  } else if (router.state === 'guide') {
+    shellEl.appendChild(renderGuide(router));
+  } else if (router.state === 'garage') {
+    shellEl.appendChild(renderGarageShell(router, bridge));
+  } else if (router.state === 'settings') {
+    // Settings renders as an overlay on top of whatever's underneath.
+    const under = router.settingsOpener === 'garage' ? renderGarageShell(router, bridge)
+      : router.settingsOpener === 'guide' ? renderGuide(router) : renderHub(router, bridge, () => {});
+    shellEl.append(under, renderSettings(router, bridge));
+  } else if (router.state === 'paused') {
+    shellEl.appendChild(renderPauseOverlay(
+      () => { router.resume(); renderShell(); },
+      () => { router.openSettings(); renderShell(); },
+      () => { router.quitToHub(); renderShell(); },
+    ));
+  }
+  // 'playing': shellEl stays empty and hidden — the canvas owns the screen.
+}
+renderShell();
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && (router.state === 'playing' || router.state === 'paused')) {
+    router.toggleEsc();
+    renderShell();
+  }
 });
 
 const remap = new RemapScreen(atlas, save, input);
