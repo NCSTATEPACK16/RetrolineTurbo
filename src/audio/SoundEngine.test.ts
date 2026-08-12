@@ -44,3 +44,27 @@ describe('SoundEngine without Web Audio support', () => {
     }).not.toThrow();
   });
 });
+
+describe('SoundEngine volume controls (no Web Audio support)', () => {
+  it('defaults to the constant bus gains', () => {
+    const engine = new SoundEngine();
+    expect(engine.getVolume('music')).toBeCloseTo(0.6);
+    expect(engine.getVolume('engine')).toBeCloseTo(0.8);
+  });
+
+  it('setVolume updates the stored value and clamps to 0..1', () => {
+    const engine = new SoundEngine();
+    engine.setVolume('music', 0.25);
+    expect(engine.getVolume('music')).toBeCloseTo(0.25);
+    engine.setVolume('engine', 5);
+    expect(engine.getVolume('engine')).toBe(1);
+    engine.setVolume('engine', -5);
+    expect(engine.getVolume('engine')).toBe(0);
+  });
+
+  it('never throws with no AudioContext backing the buses', () => {
+    const engine = new SoundEngine();
+    expect(() => engine.setVolume('music', 0.5)).not.toThrow();
+    expect(() => engine.setVolume('engine', 0.5)).not.toThrow();
+  });
+});

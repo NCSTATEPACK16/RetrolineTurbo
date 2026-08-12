@@ -48,6 +48,9 @@ function buildNoiseBuffer(ctx: AudioContext, seconds = 1): AudioBuffer {
 export class SoundEngine {
   private ctx: AudioContext | null = null;
   private sfxBus: GainNode | null = null;
+  private musicBus: GainNode | null = null;
+  private musicVolume = MUSIC_BUS_GAIN;
+  private sfxVolume = SFX_BUS_GAIN;
 
   private engineOsc: OscillatorNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
@@ -75,6 +78,7 @@ export class SoundEngine {
     const musicBus = ctx.createGain();
     musicBus.gain.value = MUSIC_BUS_GAIN;
     musicBus.connect(ctx.destination);
+    this.musicBus = musicBus;
 
     const sfxBus = ctx.createGain();
     sfxBus.gain.value = SFX_BUS_GAIN;
@@ -116,6 +120,24 @@ export class SoundEngine {
    * fires; calling this outside a gesture, or with no context, is harmless. */
   resume(): void {
     if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume().catch(() => {});
+  }
+
+  /** 'engine' addresses the sfxBus (engine tone + squeal + collision cue all route
+   * through it today — there is no separate engine-only bus); 'music' addresses
+   * musicBus. Works identically with or without a live AudioContext. */
+  getVolume(bus: 'engine' | 'music'): number {
+    return bus === 'music' ? this.musicVolume : this.sfxVolume;
+  }
+
+  setVolume(bus: 'engine' | 'music', value: number): void {
+    const clamped = Math.max(0, Math.min(1, value));
+    if (bus === 'music') {
+      this.musicVolume = clamped;
+      if (this.musicBus) this.musicBus.gain.value = clamped;
+    } else {
+      this.sfxVolume = clamped;
+      if (this.sfxBus) this.sfxBus.gain.value = clamped;
+    }
   }
 
   /** Poll once per rendered frame. Reads PlayerState only — never writes back.
