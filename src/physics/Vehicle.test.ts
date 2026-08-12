@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { Vehicle, createCommand, type Command } from './Vehicle.js';
-import { STEP_S, GEAR_MAX_KMH, SKID_GRIP, SKID_RECOVERY_STEPS } from '../constants.js';
+import {
+  Vehicle, createCommand, DEFAULT_VEHICLE_PARAMS, type Command, type VehicleParams,
+} from './Vehicle.js';
+import {
+  STEP_S, GEAR_MAX_KMH, GEAR_ACCEL_KMH_S, STEER_MAX_WPS, CENTRIFUGAL,
+  SKID_GRIP, SKID_RECOVERY_STEPS,
+} from '../constants.js';
 import type { PlayerState } from '../types/engine.js';
 
 const ROAD = 2000;
@@ -249,5 +254,52 @@ describe('PlayerState steer + skid view', () => {
     run(v, 5, (c) => { c.throttle = 1; c.steer = 0.5; });
     v.translate(100, 10);
     expect(v.steer).toBeCloseTo(0.5, 5);
+  });
+});
+
+describe('VehicleParams injection', () => {
+  it('defaults to the module constants', () => {
+    expect(DEFAULT_VEHICLE_PARAMS.gearMaxKmh).toEqual(GEAR_MAX_KMH);
+    expect(DEFAULT_VEHICLE_PARAMS.gearAccelKmhS).toEqual(GEAR_ACCEL_KMH_S);
+    expect(DEFAULT_VEHICLE_PARAMS.steerMaxWps).toBe(STEER_MAX_WPS);
+    expect(DEFAULT_VEHICLE_PARAMS.centrifugal).toBe(CENTRIFUGAL);
+  });
+
+  it('a higher gear ceiling reaches a strictly higher speed over the same steps', () => {
+    const fast: VehicleParams = { ...DEFAULT_VEHICLE_PARAMS, gearMaxKmh: [240, 580] };
+    const base = new Vehicle(ROAD);
+    const quick = new Vehicle(ROAD, fast);
+    const cmd = createCommand();
+    cmd.throttle = 1;
+    cmd.gearUp = true;
+    for (let i = 0; i < 600; i++) {
+      base.step(cmd, 0, STEP_S);
+      quick.step(cmd, 0, STEP_S);
+      cmd.gearUp = false;
+    }
+    expect(quick.speedKmh).toBeGreaterThan(base.speedKmh);
+  });
+
+  it('a higher steer authority moves further laterally in one step', () => {
+    const sharp: VehicleParams = { ...DEFAULT_VEHICLE_PARAMS, steerMaxWps: STEER_MAX_WPS * 2 };
+    const base = new Vehicle(ROAD);
+    const agile = new Vehicle(ROAD, sharp);
+    const cmd = createCommand();
+    cmd.throttle = 1;
+    for (let i = 0; i < 120; i++) { base.step(cmd, 0, STEP_S); agile.step(cmd, 0, STEP_S); }
+    cmd.steer = 1;
+    base.step(cmd, 0, STEP_S);
+    agile.step(cmd, 0, STEP_S);
+    expect(agile.x).toBeGreaterThan(base.x);
+  });
+
+  it('a lower centrifugal constant resists a curve better', () => {
+    const grippy: VehicleParams = { ...DEFAULT_VEHICLE_PARAMS, centrifugal: CENTRIFUGAL * 0.5 };
+    const base = new Vehicle(ROAD);
+    const stuck = new Vehicle(ROAD, grippy);
+    const cmd = createCommand();
+    cmd.throttle = 1;
+    for (let i = 0; i < 600; i++) { base.step(cmd, 0.2, STEP_S); stuck.step(cmd, 0.2, STEP_S); }
+    expect(stuck.x).toBeGreaterThan(base.x); // pushed less far in the -x direction
   });
 });

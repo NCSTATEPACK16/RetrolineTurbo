@@ -26,6 +26,26 @@ export function createCommand(): Command {
 }
 
 /**
+ * The four tunables a Phase 9 parts loadout can shift. Everything else about the
+ * car (brake rates, off-road drag, skid thresholds) stays a module constant —
+ * parts alter the metric surface described in the spec, nothing more.
+ */
+export interface VehicleParams {
+  gearMaxKmh: readonly [number, number];
+  gearAccelKmhS: readonly [number, number];
+  steerMaxWps: number;
+  centrifugal: number;
+}
+
+/** Stock car: reproduces the pre-Phase-9 handling exactly. */
+export const DEFAULT_VEHICLE_PARAMS: VehicleParams = {
+  gearMaxKmh: GEAR_MAX_KMH,
+  gearAccelKmhS: GEAR_ACCEL_KMH_S,
+  steerMaxWps: STEER_MAX_WPS,
+  centrifugal: CENTRIFUGAL,
+};
+
+/**
  * Deterministic arcade vehicle (plan.md §7 PRD). Fixed-step state machine:
  * every field is a number/boolean mutated in `step` — no allocation, no time
  * source of its own, no rendering knowledge. Implements the PlayerState seam
@@ -43,7 +63,10 @@ export class Vehicle implements PlayerState {
   private lastSteer = 0; // last applied steer, clamped; drives the sprite frame
   private lastBraking = false; // brake or handbrake held; lights the brake overlay
 
-  constructor(private readonly roadWidth: number) {}
+  constructor(
+    private readonly roadWidth: number,
+    private readonly params: VehicleParams = DEFAULT_VEHICLE_PARAMS,
+  ) {}
 
   // Read-only state: mutation happens only via step/applyCollision/reset.
   get z(): number { return this.posZ; }
@@ -84,10 +107,10 @@ export class Vehicle implements PlayerState {
     this.lastBraking = cmd.brake > 0 || cmd.handbrake;
 
     // -- transmission -------------------------------------------------------
-    if (cmd.gearUp && this.gearIdx < GEAR_MAX_KMH.length) this.gearIdx++;
+    if (cmd.gearUp && this.gearIdx < this.params.gearMaxKmh.length) this.gearIdx++;
     if (cmd.gearDown && this.gearIdx > 1) this.gearIdx--;
     const g = this.gearIdx - 1;
-    const gearMax = GEAR_MAX_KMH[g]!;
+    const gearMax = this.params.gearMaxKmh[g]!;
 
     // -- longitudinal -------------------------------------------------------
     if (cmd.handbrake) {
@@ -96,7 +119,7 @@ export class Vehicle implements PlayerState {
       this.kmh -= BRAKE_KMH_S * cmd.brake * dt;
     } else if (cmd.throttle > 0 && this.kmh < gearMax) {
       // Tapering accel curve: full torque at rest, zero at the gear cap.
-      this.kmh += GEAR_ACCEL_KMH_S[g]! * cmd.throttle * (1 - this.kmh / gearMax) * dt;
+      this.kmh += this.params.gearAccelKmhS[g]! * cmd.throttle * (1 - this.kmh / gearMax) * dt;
     } else {
       this.kmh -= COAST_KMH_S * dt; // engine drag (also drains an over-cap downshift)
     }
@@ -129,9 +152,9 @@ export class Vehicle implements PlayerState {
     // -- lateral ------------------------------------------------------------
     const grip = this.isSkidding ? SKID_GRIP : 1;
     const authority = Math.min(1, this.kmh / 60); // no curb-steering at rest
-    this.posX += cmd.steer * STEER_MAX_WPS * grip * authority * dt;
-    const speedRatio = this.kmh / GEAR_MAX_KMH[GEAR_MAX_KMH.length - 1]!;
-    this.posX -= curvature * CENTRIFUGAL * speedRatio * speedRatio * dt;
+    this.posX += cmd.steer * this.params.steerMaxWps * grip * authority * dt;
+    const speedRatio = this.kmh / this.params.gearMaxKmh[this.params.gearMaxKmh.length - 1]!;
+    this.posX -= curvature * this.params.centrifugal * speedRatio * speedRatio * dt;
 
     // -- longitudinal advance ----------------------------------------------
     this.posZ += this.speed * dt;
