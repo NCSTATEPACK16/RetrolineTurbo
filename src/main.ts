@@ -23,6 +23,7 @@ import { LeaderboardScreen } from './ui/LeaderboardScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
 import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES, routeIdentity } from './track/route.js';
 import { recordRaceResult } from './net/raceResults.js';
+import { publishTrack } from './net/tracks.js';
 import { chosenOffsetAtNode, branchSpread, fillRoadOffsets } from './engine/BranchRenderer.js';
 import { RouteMap } from './ui/RouteMap.js';
 import { drawText } from './ui/text.js';
@@ -144,7 +145,7 @@ const editor = new EditorScreen(atlas, save, (t) => {
   }
   track.rebuild(t);
   return true;
-});
+}, publishTrack);
 void editor.loadIndex();
 
 const camera: Camera = {

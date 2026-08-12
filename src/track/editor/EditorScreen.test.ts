@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EditorScreen, TRACK_KEY_PREFIX, TRACK_INDEX_KEY } from './EditorScreen.js';
 import { MemorySaveBackend } from '../../economy/save.js';
 import { SpriteAtlas } from '../../engine/SpriteAtlas.js';
@@ -148,6 +148,27 @@ describe('persistence + import/export', () => {
     await screen.lastLoad;
     expect(screen.working.trackId).toBe('default');
     expect(screen.status).toMatch(/loaded default/);
+  });
+});
+
+describe('publishing the working track (KeyP)', () => {
+  it('calls the injected publish() with the working file and reports the result', async () => {
+    const save = new MemorySaveBackend();
+    const publish = vi.fn(() => Promise.resolve(true));
+    const screen = new EditorScreen(atlas, save, () => true, publish);
+    screen.handleKey('F2');
+    screen.handleKey('KeyP');
+    await screen.lastPersist;
+    expect(publish).toHaveBeenCalledWith(screen.working.trackId, screen.working);
+    expect(screen.status).toBe(`published ${screen.working.trackId}`);
+  });
+
+  it('reports "publish unavailable" when no publish() was injected', () => {
+    const save = new MemorySaveBackend();
+    const screen = new EditorScreen(atlas, save, () => true);
+    screen.handleKey('F2');
+    screen.handleKey('KeyP');
+    expect(screen.status).toBe('publish unavailable');
   });
 });
 
