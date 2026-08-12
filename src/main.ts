@@ -20,7 +20,8 @@ import { buildCarFrameSet } from './engine/CarFrameSet.js';
 import { buildEffectSet } from './engine/Effects.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
-import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES } from './track/route.js';
+import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES, routeIdentity } from './track/route.js';
+import { recordRaceResult } from './net/raceResults.js';
 import { chosenOffsetAtNode, branchSpread, fillRoadOffsets } from './engine/BranchRenderer.js';
 import { RouteMap } from './ui/RouteMap.js';
 import { drawText } from './ui/text.js';
@@ -276,6 +277,8 @@ createLoop({
           && vehicle.z >= track.length * DEFAULT_TRACK_CONFIG.segmentLength) {
         route.finish();
         routeMap.flashMs = Number.MAX_SAFE_INTEGER; // stays up on the ending screen
+        const { trackId, path } = routeIdentity(route);
+        void recordRaceResult({ trackId, route: path, timeMs: elapsedMs });
       }
     }
     if (routeMap.flashMs > 0 && routeMap.flashMs < Number.MAX_SAFE_INTEGER) {

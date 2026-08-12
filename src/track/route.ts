@@ -67,6 +67,7 @@ export function nextSceneIdx(currentIdx: number, choice: number, ways: 2 | 3, ne
 /** Route progress + checkpoint timer. Mutated only via its own methods. */
 export class RouteState {
   readonly pyramid: ScenePlan[][];
+  readonly baseSeed: number;
   stage = 0;
   sceneIdx = 0;
   readonly visited: number[] = [];
@@ -75,6 +76,7 @@ export class RouteState {
   private ending: number | null = null;
 
   constructor(baseSeed: number) {
+    this.baseSeed = baseSeed;
     this.pyramid = buildPyramid(baseSeed);
   }
 
@@ -122,4 +124,12 @@ export class RouteState {
     this.isFinished = true;
     this.ending = this.sceneIdx;
   }
+}
+
+/** Stable identity for a finished (or in-progress) run, for `race_results`.
+ * `trackId` groups every attempt at the same seeded pyramid; `path` records
+ * which fork was taken at each stage, ending in the current or final scene. */
+export function routeIdentity(route: RouteState): { trackId: string; path: string } {
+  const last = route.endingIdx ?? route.sceneIdx;
+  return { trackId: `route-${route.baseSeed}`, path: route.visited.concat(last).join('-') };
 }
