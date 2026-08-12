@@ -19,6 +19,7 @@ import { loadAtlases, ATLAS_IDS, type LoadedAtlas } from './engine/loadAtlases.j
 import { buildCarFrameSet } from './engine/CarFrameSet.js';
 import { buildEffectSet } from './engine/Effects.js';
 import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
+import { LeaderboardScreen } from './ui/LeaderboardScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
 import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES, routeIdentity } from './track/route.js';
 import { recordRaceResult } from './net/raceResults.js';
@@ -123,6 +124,7 @@ void loadAtlases().then((loaded) => {
 const input = new InputManager();
 const vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
 const remap = new RemapScreen(atlas, save, input);
+const leaderboard = new LeaderboardScreen(atlas);
 const cmd = createCommand(); // pre-allocated; refilled each step (hard rule 4)
 
 // --- Phase 7: route mode — the pyramid drives which scene is loaded ----------
@@ -154,15 +156,20 @@ void loadBindings(save).then((b) => { input.setBindings(b); });
 // Screens see every key first (remap, then editor); leftovers drive the InputManager.
 // While a screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
 window.addEventListener('keydown', (e) => {
-  const screenOpen = remap.open || editor.open;
+  const screenOpen = remap.open || editor.open || leaderboard.open;
   if (screenOpen && (e.metaKey || e.ctrlKey)) return;
-  if (e.code === 'Tab' || e.code === 'F2' || input.isBound(e.code)) e.preventDefault();
+  if (e.code === 'Tab' || e.code === 'F2' || e.code === 'F3' || input.isBound(e.code)) e.preventDefault();
   if (remap.handleKey(e.code)) {
     // Spec §6 mutual exclusion: opening remap closes the editor.
     if (remap.open && editor.open) editor.handleKey('Escape');
     return;
   }
   if (editor.handleKey(e.code)) return;
+  if (e.code === 'F3') {
+    leaderboard.toggle(routeIdentity(route).trackId);
+    return;
+  }
+  if (leaderboard.handleKey(e.code)) return;
   if (e.code === 'KeyM') {
     // Toggled on: pinned forever on the ending screen, timed elsewhere.
     routeMap.flashMs = routeMap.flashMs > 0 ? 0 : (route.finished ? Number.MAX_SAFE_INTEGER : 60_000);
@@ -213,7 +220,7 @@ createLoop({
   update: (dt: number): void => {
     pollGamepad();
     input.read(cmd);
-    if (remap.open || editor.open) { // pause driving while a screen is up
+    if (remap.open || editor.open || leaderboard.open) { // pause driving while a screen is up
       cmd.throttle = 0; cmd.brake = 0; cmd.steer = 0; cmd.handbrake = true;
     } else if (route.expired || route.finished) {
       cmd.throttle = 0; cmd.steer = 0; cmd.brake = 1; // roll to a stop on the end screens
@@ -300,6 +307,7 @@ createLoop({
       route, score.passedCars, score.points);
     remap.render(backend);
     editor.render(backend);
+    leaderboard.render(backend);
     routeMap.render(route, backend);
     if (route.expired) {
       drawText(backend, atlas, 'time up  press r', LOGICAL_WIDTH / 2 - 56, LOGICAL_HEIGHT / 2 - 6, 3);
