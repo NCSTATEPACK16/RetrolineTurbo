@@ -246,20 +246,39 @@ Verified against the tree on 2026-08-11 (props wiring + headless visual pass lan
    the wheel-overlay positioning through a hard turn, which looked slightly off in headless
    screenshots even though the anchor math is unit-tested green. Everything else automated is
    green — this is a look, not more code.
-2. **Two manual Supabase steps, user-side, before any Phase 8 work compiles against real data:**
-   expose the `retroline` schema in Settings → API → Exposed schemas, and set
-   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in Netlify env. Auth-only calls
-   (`ensureAnonSession()`) already work without either.
+2. ~~Two manual Supabase steps~~ — **done 2026-08-11.** `retroline` schema exposed in Settings →
+   API → Exposed schemas; `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` set in Netlify env
+   (redeploy triggered so the build picks them up). Phase 8 code can now be written against a
+   real schema instead of the null-client fallback.
 
-### Phase 8 — Supabase persistence · *partly built, more than plan.md implies*
+### Phase 8 — Supabase persistence · *code complete 2026-08-11, one manual gap left*
 
-Already there: `supabase/migrations/0001_init.sql` (schema + RLS, applied), `src/net/supabase.ts`
-(client scoped to the `retroline` schema, anonymous auth, degrades to a null client when env vars
-are unset), and the `SaveBackend` seam with `MemorySaveBackend` + `LocalStorageSaveBackend`.
+Built this session on branch `phase-8-supabase-persistence` (plan:
+`docs/superpowers/plans/2026-08-11-phase-8-supabase-persistence.md`), each as a small `net/`
+edge module that degrades to a no-op when `supabase` is the null client:
 
-Not there: `SupabaseBackend implements SaveBackend`; save sync on race end; `race_results` insert;
-`leaderboard_best` reads; community track publish/browse against `tracks.is_public`; anonymous →
-account upgrade. The seam means none of this should touch game logic.
+- `net/SupabaseBackend.ts` — `SaveBackend` over one `saves.settings` jsonb blob keyed by user
+  (bindings + local editor track drafts); `net/saveBackend.ts` picks it over
+  `LocalStorageSaveBackend` in `main.ts` when configured.
+- `route.baseSeed` + `routeIdentity()` (`track/route.ts`) → `net/raceResults.ts` inserts
+  `race_results` on `route.finish()`.
+- `net/leaderboard.ts` + `ui/LeaderboardScreen.ts` (**F3**) — top times per route from
+  `race_results` (not the `leaderboard_best` view, which is `distinct on (track_id)` and only
+  ever returns the single best row — no use for a top-N screen).
+- `net/tracks.ts` (`publishTrack`/`browsePublicTracks`/`fetchTrack`) — publish via `EditorScreen`'s
+  new `KeyP`, browse via `ui/TrackBrowserScreen.ts` (**F4**).
+- `net/account.ts` + `ui/AccountScreen.ts` (**F5**) — anonymous→permanent upgrade
+  (`auth.updateUser({ email })` then `{ password }` per Supabase's documented flow). Email/password
+  entry is `window.prompt`, not on-canvas — the bitmap font has no `@` glyph.
+
+436 vitest / 49 files green (was 401/40 before this phase), `npm run build` clean.
+
+**Still open:** the plan's own manual smoke pass (`npm run dev`, drive a full route, F3/F4/F5) has
+not been run by a human yet — automated coverage is real but nobody has watched a race actually
+insert a leaderboard row, a published track round-trip through F4, or a real confirmation email
+land. Separately, the account-upgrade flow needs **"manual linking" enabled** in the Supabase
+dashboard (Authentication → Settings) before `linkEmail` will succeed against the real backend —
+a dashboard toggle, not something any commit here can set.
 
 ### Phase 9 — modular economy · *needs a spec before code*
 
