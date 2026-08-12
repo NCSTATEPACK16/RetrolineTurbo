@@ -139,14 +139,18 @@ Mods are generated from a per-category curve, not hand-tuned. For tier *t* ∈ [
 Low tiers are mild all-rounders; high tiers are sharp specializations, so the catalog is a
 set of choices rather than a ladder.
 
-`scripts/gen_parts.ts` emits `src/economy/parts.json` (checked in, so the runtime loads
-data rather than executing a generator), guarded by a golden test in the same shape as
-`engine/AtlasManifest.golden.test.ts`: regenerating must reproduce the committed file byte
-for byte.
+`economy/partCurves.ts` owns the curves and `generateCatalog()`; the runtime uses its
+deterministic output. A committed `src/economy/parts.json` snapshot makes every balance
+change visible in a diff, guarded by a golden test in the same shape as
+`engine/AtlasManifest.golden.test.ts`: the generator must reproduce the committed file byte
+for byte, and `UPDATE_PARTS=1 npm test` rewrites it. (The repo has no TypeScript script
+runner — only Python and plain `.mjs` — so the generator is a module exercised by vitest
+rather than a standalone `scripts/` entry.)
 
-## 4. `economy/Garage.ts` — pure resolver + state
+## 4. `economy/Garage.ts` + `economy/GarageState.ts` — pure resolver, then state
 
-No I/O, no rendering:
+The resolver (`Garage.ts`) has no I/O and no rendering; the mutable player state and its
+persistence live next door in `GarageState.ts` so each file keeps one responsibility:
 
 ```ts
 const BASELINE_METRICS: CarMetrics = { speed: 50, accel: 50, handling: 50, grip: 50 };
