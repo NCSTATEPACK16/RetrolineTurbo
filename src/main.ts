@@ -34,6 +34,8 @@ import { computePayout } from './economy/payout.js';
 import { SummaryScreen } from './ui/SummaryScreen.js';
 import { GarageScreen } from './ui/GarageScreen.js';
 import { parseTrackFile } from './track/schema.js';
+import { SoundEngine } from './audio/SoundEngine.js';
+import { CrtEffect, crtDefaultEnabled } from './ui/CrtEffect.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
   PLAYER_CAR_ID, CAR_COLLIDE_HALF_WIDTH,
@@ -48,8 +50,29 @@ const stage = canvas.parentElement ?? document.body;
 
 const backend = new Canvas2DBackend(canvas);
 
+// --- Phase 10: CRT post-pass ------------------------------------------------
+// A second canvas (#crt, index.html) stacked in the same grid cell as #game:
+// a canvas can only ever have one context type, so the WebGL2 shader output
+// cannot share #game's 2D context. Only one of the two is ever visible.
+const crtCanvasEl = document.getElementById('crt');
+if (!(crtCanvasEl instanceof HTMLCanvasElement)) {
+  throw new Error('main: #crt canvas not found');
+}
+const crt = new CrtEffect(crtCanvasEl);
+// TS doesn't carry the instanceof-narrowing above into a nested function body,
+// so re-bind both as explicitly-typed, non-null locals for use inside one.
+const gameSurfaceEl: HTMLCanvasElement = canvas;
+const crtSurfaceEl: HTMLCanvasElement = crtCanvasEl;
+let crtEnabled = crt.supported && crtDefaultEnabled(window.innerWidth);
+function applyCrtVisibility(): void {
+  crtSurfaceEl.style.display = crtEnabled ? 'block' : 'none';
+  gameSurfaceEl.style.display = crtEnabled ? 'none' : 'block';
+}
+applyCrtVisibility();
+
 function fit(): void {
   backend.resize(stage.clientWidth, stage.clientHeight);
+  crt.resize(stage.clientWidth, stage.clientHeight);
 }
 fit();
 window.addEventListener('resize', fit);
@@ -125,6 +148,7 @@ void loadAtlases().then((loaded) => {
 
 const input = new InputManager();
 let vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
+const sound = new SoundEngine(); // inert (no thrown errors) wherever Web Audio is unavailable
 
 // --- Phase 9: economy ------------------------------------------------------
 // The garage loads asynchronously; until it lands the car is stock, which is
@@ -192,6 +216,15 @@ void loadBindings(save).then((b) => { input.setBindings(b); });
 // Screens see every key first (remap, then editor); leftovers drive the InputManager.
 // While a screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
 window.addEventListener('keydown', (e) => {
+  // Any keydown is a valid autoplay-policy user gesture — resume here too, not
+  // just on the canvas click, so a keyboard-only driver who never clicks still
+  // hears audio. Idempotent: resume() no-ops once the context is running.
+  sound.resume();
+  if (e.code === 'KeyV' && crt.supported) {
+    crtEnabled = !crtEnabled;
+    applyCrtVisibility();
+    return;
+  }
   const screenOpen = remap.open || editor.open || leaderboard.open || trackBrowser.open
     || account.open || shop.open;
   if (screenOpen && (e.metaKey || e.ctrlKey)) return;
@@ -253,6 +286,7 @@ const MOUSE_RECENTRE_PER_S = 2.5; // self-centring rate when the mouse is still
 let mouseSteerRaw = 0;
 
 canvas.addEventListener('click', () => {
+  sound.resume();
   if (document.pointerLockElement !== canvas) void canvas.requestPointerLock?.();
 });
 document.addEventListener('pointerlockchange', () => {
@@ -340,6 +374,7 @@ createLoop({
       const push = shoveSign(vehicle.x, struck.offset * DEFAULT_TRACK_CONFIG.roadWidth) * d.xPush;
       vehicle.applyCollision(d.speedFactor, push); // an impulse, not a per-second rate
       score.addCollision(); // zero hits earns the clean-race multiplier
+      sound.collisionCue(); // one-shot per latch entry, not per step the bump spans
     }
 
     // Route progression: countdown, fork hand-off, final-stage finish.
@@ -406,6 +441,7 @@ createLoop({
     renderer.updateEffects(dt, vehicle);
   },
   render: (): void => {
+    sound.step(vehicle); // once per rendered frame, not the fixed physics step
     const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
     const backdrop = backdrops.get(backdropIdForStage(route.stage));
     renderer.render(camera, track, backend, background, traffic, track.segment(base).curve, backdrop, vehicle);
@@ -419,7 +455,11 @@ createLoop({
     shop.render(backend);
     routeMap.render(route, backend);
     summary.render(backend);
-    backend.present(); // HUD + screens composited onto the logical frame, then blit
+    // CRT reads the finished logical frame as a texture and draws its own
+    // canvas; #game's own present() is skipped so the two never fight over
+    // the same visible pixels (index.html shows exactly one at a time).
+    if (crtEnabled) crt.render(backend.surface);
+    else backend.present(); // HUD + screens composited onto the logical frame, then blit
   },
 }).start();
 

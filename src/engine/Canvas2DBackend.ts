@@ -35,6 +35,14 @@ export class Canvas2DBackend implements RenderBackend {
     this.out.imageSmoothingEnabled = false;
   }
 
+  /** The offscreen logical-resolution buffer everything above draws into.
+   * Read-only escape hatch for `ui/CrtEffect.ts`'s WebGL2 post-pass, which
+   * needs the finished frame as a texture source; nothing here changes what
+   * or how this backend draws. */
+  get surface(): HTMLCanvasElement {
+    return this.buffer;
+  }
+
   clear(color: string): void {
     this.ctx.fillStyle = color;
     this.ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);

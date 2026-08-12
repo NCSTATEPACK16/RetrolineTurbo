@@ -117,6 +117,32 @@ export const SKID_SPEED_DECAY = 0.9; // per-second speed retention while skiddin
 export const SKID_RECOVERY_STEPS = 12; // consecutive counter-steer steps to recover
 
 /**
+ * Phase 10 audio + CRT tuning (spec: docs/superpowers/specs/2026-08-12-phase-10-audio.md).
+ * None of these are numerically specified upstream — they're ear/eye-tuned
+ * starting points, shipped so the mechanism is correct and directionally
+ * right, flagged for a human pass at `npm run dev`, same as CENTRIFUGAL above.
+ */
+export const ENGINE_F_BASE_LOW = 90; // Hz, idle oscillator tone in Low gear
+export const ENGINE_F_BASE_HIGH = 60; // Hz, idle tone in High gear (lower, throatier)
+export const ENGINE_F_RANGE = 260; // Hz added on top of f_base at each gear's redline
+export const ENGINE_FILTER_MIN_HZ = 400; // lowpass cutoff at idle
+export const ENGINE_FILTER_MAX_HZ = 4000; // lowpass cutoff at redline
+export const ENGINE_GAIN = 0.18; // engine oscillator gain (headroom under SFX)
+export const SQUEAL_FILTER_HZ = 1200; // highpass cutoff for tire squeal noise
+export const SQUEAL_GAIN_MAX = 0.35; // peak squeal gain at skidMagnitude = 1
+export const AUDIO_RAMP_S = 0.08; // setTargetAtTime time-constant for param changes
+export const MUSIC_BUS_GAIN = 0.6;
+export const SFX_BUS_GAIN = 0.8;
+export const COLLISION_CUE_GAIN = 0.5; // one-shot collision thud gain
+export const COLLISION_CUE_DECAY_S = 0.18; // one-shot collision thud decay time
+
+export const CRT_MOBILE_MAX_WIDTH = 768; // px; CRT defaults off at/under this viewport width
+export const CRT_SCANLINE_INTENSITY = 0.18; // 0..1 darkening between scanlines
+export const CRT_DISTORTION = 0.06; // barrel distortion strength
+export const CRT_BLOOM_THRESHOLD = 0.75; // luminance threshold that starts blooming
+export const CRT_BLOOM_STRENGTH = 0.35; // bloom blend strength
+
+/**
  * Retro palette, derived from the shared master palette (`assets/palette.json`)
  * so the engine and the offline bake scripts clamp to identical values.
  * Key names are unchanged from the provisional set so no call site moves.
