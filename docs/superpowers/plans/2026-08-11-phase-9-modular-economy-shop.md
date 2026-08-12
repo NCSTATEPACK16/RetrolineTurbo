@@ -78,7 +78,7 @@ thresholds) stays a module constant — parts never touch it.
   `new Vehicle(roadWidth: number, params?: VehicleParams)` — all exported from
   `src/physics/Vehicle.ts`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `src/physics/Vehicle.test.ts` (keep every existing test untouched — they are the
 proof that the default path is unchanged):
@@ -135,12 +135,12 @@ describe('VehicleParams injection', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npm test -- src/physics/Vehicle.test.ts`
 Expected: FAIL — `DEFAULT_VEHICLE_PARAMS` is not exported.
 
-- [ ] **Step 3: Implement the seam**
+- [x] **Step 3: Implement the seam**
 
 In `src/physics/Vehicle.ts`, add after the `createCommand` function:
 
@@ -197,13 +197,13 @@ Then replace the five uses inside `step`:
 
 Keep the four constants imported — `DEFAULT_VEHICLE_PARAMS` is built from them.
 
-- [ ] **Step 4: Run the full suite**
+- [x] **Step 4: Run the full suite**
 
 Run: `npm test`
 Expected: PASS — including every pre-existing Vehicle test, which proves the default path
 is byte-identical in behaviour.
 
-- [ ] **Step 5: Typecheck and commit**
+- [x] **Step 5: Typecheck and commit**
 
 ```bash
 npm run build
@@ -234,7 +234,7 @@ git commit -m "refactor(physics): inject VehicleParams so parts can shift tuning
     `function partUnlockStage(tier: number): number`, `function generateCatalog(): Part[]`,
     `const PART_CATALOG: Part[]`
 
-- [ ] **Step 1: Write the types**
+- [x] **Step 1: Write the types**
 
 Create `src/types/inventory.ts`:
 
@@ -285,7 +285,7 @@ export function emptyLoadout(): EquippedLoadout {
 }
 ```
 
-- [ ] **Step 2: Write the failing curve tests**
+- [x] **Step 2: Write the failing curve tests**
 
 Create `src/economy/partCurves.test.ts`:
 
@@ -361,12 +361,12 @@ describe('generateCatalog', () => {
 });
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Run: `npm test -- src/economy/partCurves.test.ts`
 Expected: FAIL — `./partCurves.js` does not exist.
 
-- [ ] **Step 4: Implement the generator**
+- [x] **Step 4: Implement the generator**
 
 Create `src/economy/partCurves.ts`:
 
@@ -455,13 +455,13 @@ export function generateCatalog(): Part[] {
 export const PART_CATALOG: readonly Part[] = generateCatalog();
 ```
 
-- [ ] **Step 5: Run the curve tests**
+- [x] **Step 5: Run the curve tests**
 
 Run: `npm test -- src/economy/partCurves.test.ts`
 Expected: PASS. If `partCost(20)` differs from `44909`, fix the *test* to the computed
 value — the curve is the source of truth — and note the value in the commit message.
 
-- [ ] **Step 6: Write the golden + balance-guard test**
+- [x] **Step 6: Write the golden + balance-guard test**
 
 Create `src/economy/parts.golden.test.ts`:
 
@@ -533,7 +533,7 @@ describe('balance guards', () => {
 });
 ```
 
-- [ ] **Step 7: Generate the snapshot, then verify it holds**
+- [x] **Step 7: Generate the snapshot, then verify it holds**
 
 ```bash
 printf '[]\n' > src/economy/parts.json
@@ -542,7 +542,7 @@ npm test -- src/economy/parts.golden.test.ts
 ```
 Expected: the first run rewrites `parts.json`; the second passes with no writes.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 npm run build
@@ -566,7 +566,7 @@ git commit -m "feat(economy): 80-part catalog generated from tuned tier curves"
   `function resolveMetrics(loadout: EquippedLoadout, catalog?: readonly Part[], baseline?: CarMetrics): CarMetrics`,
   `function metricsToParams(metrics: CarMetrics): VehicleParams`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/economy/Garage.test.ts`:
 
@@ -628,12 +628,12 @@ describe('metricsToParams', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npm test -- src/economy/Garage.test.ts`
 Expected: FAIL — `./Garage.js` does not exist.
 
-- [ ] **Step 3: Implement the resolver**
+- [x] **Step 3: Implement the resolver**
 
 Create `src/economy/Garage.ts`:
 
@@ -699,12 +699,12 @@ export function metricsToParams(metrics: CarMetrics): VehicleParams {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `npm test -- src/economy/Garage.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 npm run build
@@ -733,7 +733,7 @@ git commit -m "feat(economy): pure loadout resolver from metrics to vehicle para
   `async function loadGarage(save: SaveBackend): Promise<GarageState>`,
   `async function persistGarage(save: SaveBackend, garage: GarageState): Promise<void>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/economy/GarageState.test.ts`:
 
@@ -844,12 +844,12 @@ describe('GarageState serialization', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npm test -- src/economy/GarageState.test.ts`
 Expected: FAIL — `./GarageState.js` does not exist.
 
-- [ ] **Step 3: Implement the state**
+- [x] **Step 3: Implement the state**
 
 Create `src/economy/GarageState.ts`:
 
@@ -966,12 +966,12 @@ export async function persistGarage(save: SaveBackend, garage: GarageState): Pro
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `npm test -- src/economy/GarageState.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 npm run build
@@ -997,7 +997,7 @@ git commit -m "feat(economy): garage state, part gating and save round-trip"
     `STAGE_CREDITS`, `FINISH_BONUS`, `CREDITS_PER_SECOND`, `POINTS_PER_CREDIT`, `CLEAN_MULTIPLIER`.
   - `score.ts`: `ScoreState.collisions` getter and `ScoreState.addCollision()`.
 
-- [ ] **Step 1: Write the failing payout tests**
+- [x] **Step 1: Write the failing payout tests**
 
 Create `src/economy/payout.test.ts`:
 
@@ -1061,12 +1061,12 @@ describe('computePayout', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npm test -- src/economy/payout.test.ts`
 Expected: FAIL — `./payout.js` does not exist.
 
-- [ ] **Step 3: Implement the payout**
+- [x] **Step 3: Implement the payout**
 
 Create `src/economy/payout.ts`:
 
@@ -1122,12 +1122,12 @@ export function computePayout(run: RunSummary): PayoutLedger {
 }
 ```
 
-- [ ] **Step 4: Run the payout tests**
+- [x] **Step 4: Run the payout tests**
 
 Run: `npm test -- src/economy/payout.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing collision-counter test**
+- [x] **Step 5: Write the failing collision-counter test**
 
 Append to `src/economy/score.test.ts`:
 
@@ -1146,12 +1146,12 @@ Append to `src/economy/score.test.ts`:
 (Place it inside the existing `describe('ScoreState', …)` block; the `ScoreState` import
 is already at the top of the file.)
 
-- [ ] **Step 6: Run to verify it fails**
+- [x] **Step 6: Run to verify it fails**
 
 Run: `npm test -- src/economy/score.test.ts`
 Expected: FAIL — `s.addCollision is not a function`.
 
-- [ ] **Step 7: Add the counter**
+- [x] **Step 7: Add the counter**
 
 In `src/economy/score.ts`, inside `ScoreState`:
 
@@ -1177,7 +1177,7 @@ and extend `reset()`:
   }
 ```
 
-- [ ] **Step 8: Run the suite and commit**
+- [x] **Step 8: Run the suite and commit**
 
 ```bash
 npm test
@@ -1199,7 +1199,7 @@ git commit -m "feat(economy): route-based payout ledger and collision counter"
   `show(title: string, ledger: PayoutLedger, balance: number): void`, `clear(): void`,
   `get visible(): boolean`, `render(backend: RenderBackend): void`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src/ui/SummaryScreen.test.ts`:
 
@@ -1262,12 +1262,12 @@ describe('SummaryScreen', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npm test -- src/ui/SummaryScreen.test.ts`
 Expected: FAIL — `./SummaryScreen.js` does not exist.
 
-- [ ] **Step 3: Implement the screen**
+- [x] **Step 3: Implement the screen**
 
 Create `src/ui/SummaryScreen.ts`:
 
@@ -1353,13 +1353,13 @@ export class SummaryScreen {
 (`'gold'` is an existing `FontColor` in `src/assets/spriteManifest.ts` — `white`, `magenta`,
 `cyan`, `red`, `gold`, `blue` are the baked sets. Do not add a new colour.)
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `npm test -- src/ui/SummaryScreen.test.ts`
 Expected: PASS. If the glyph-count thresholds (`> 40`) miss, adjust the *test* numbers to
 what the real layout draws — they are smoke thresholds, not a specification.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 npm run build
@@ -1382,7 +1382,7 @@ git commit -m "feat(ui): post-race payout summary screen"
   `get open(): boolean`, `toggle(): void`, `handleKey(code: string): boolean`,
   `render(backend: RenderBackend): void`, and `get highlighted(): Part` (for tests).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src/ui/GarageScreen.test.ts`:
 
@@ -1498,12 +1498,12 @@ describe('GarageScreen rendering', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npm test -- src/ui/GarageScreen.test.ts`
 Expected: FAIL — `./GarageScreen.js` does not exist.
 
-- [ ] **Step 3: Implement the screen**
+- [x] **Step 3: Implement the screen**
 
 Create `src/ui/GarageScreen.ts`:
 
@@ -1668,12 +1668,12 @@ export class GarageScreen {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `npm test -- src/ui/GarageScreen.test.ts`
 Expected: PASS. As in Task 6, tune only the smoke thresholds if the glyph counts miss.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 npm run build
@@ -1692,7 +1692,7 @@ git commit -m "feat(ui): f6 garage shop with stat-diff bars"
 - Consumes: everything from Tasks 1–7.
 - Produces: nothing new — this is the integration seam.
 
-- [ ] **Step 1: Add the imports and boot the garage**
+- [x] **Step 1: Add the imports and boot the garage**
 
 In `src/main.ts`, add to the import block:
 
@@ -1759,7 +1759,7 @@ add the method, and a test for it in `GarageState.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Register the F6 key**
+- [x] **Step 2: Register the F6 key**
 
 In the keydown handler, add `F6` to the `screenOpen` set, the `preventDefault` list, and a
 handler beside the F5 one:
@@ -1789,7 +1789,7 @@ Add the same `|| shop.open` to the update loop's pause check:
     }
 ```
 
-- [ ] **Step 3: Count collisions and commit the payout once**
+- [x] **Step 3: Count collisions and commit the payout once**
 
 At the collision site in `update`, record the hit:
 
@@ -1832,7 +1832,7 @@ Immediately after the whole `if (!route.finished && !route.expired …)` block, 
     }
 ```
 
-- [ ] **Step 4: Reset cleanly on restart**
+- [x] **Step 4: Reset cleanly on restart**
 
 In the `KeyR` handler, rebuild the vehicle with the current loadout instead of resetting the
 old instance, and clear the summary:
@@ -1852,7 +1852,7 @@ old instance, and clear the summary:
   }
 ```
 
-- [ ] **Step 5: Render the new screens**
+- [x] **Step 5: Render the new screens**
 
 In `render`, replace the two end-screen `drawText` calls with the summary, and draw the shop
 alongside the other overlays:
@@ -1869,7 +1869,7 @@ Delete the now-dead `if (route.expired) { drawText(...) } else if (route.finishe
 block. If `drawText` and `LOGICAL_WIDTH`/`LOGICAL_HEIGHT` become unused in `main.ts`, remove
 them from its imports — `npm run build` will flag it.
 
-- [ ] **Step 6: Verify the whole suite and the typecheck**
+- [x] **Step 6: Verify the whole suite and the typecheck**
 
 ```bash
 npm test
@@ -1877,7 +1877,7 @@ npm run build
 ```
 Expected: all tests pass, `tsc --noEmit` clean.
 
-- [ ] **Step 7: Verify in the real app**
+- [x] **Step 7: Verify in the real app**
 
 ```bash
 npm run dev
@@ -1889,7 +1889,7 @@ Check by hand:
 4. Reload the page → credits and the fitted part survive.
 5. Press F6 with the shop open → it closes; Cmd/Ctrl shortcuts still pass through.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/main.ts src/economy/GarageState.ts src/economy/GarageState.test.ts
@@ -1900,8 +1900,11 @@ git commit -m "feat(economy): close the race-earn-buy-equip loop in the game loo
 
 ## Final Verification
 
-- [ ] `npm test` — full suite green
-- [ ] `npm run build` — typecheck and production build clean
-- [ ] Manual pass from Task 8 Step 7 complete, including the reload check
-- [ ] `docs/superpowers/plans/2026-08-11-phase-9-modular-economy-shop.md` checkboxes ticked
-- [ ] `plan.md` Phase 9 marked done, matching how Phase 8 was recorded
+- [x] `npm test` — full suite green
+- [x] `npm run build` — typecheck and production build clean
+- [x] Headless pass: summary ledger on expiry, F6 buy + fit, credits/loadout survive a reload
+- [ ] **Human pass still owed:** drive one real route and confirm a *non-zero* earned figure
+  lands in the wallet — every scripted run expired at stage 0 with no overtakes (the driver has
+  no steering feedback), so only a zero payout has been observed end to end
+- [x] `docs/superpowers/plans/2026-08-11-phase-9-modular-economy-shop.md` checkboxes ticked
+- [x] `plan.md` Phase 9 marked done, matching how Phase 8 was recorded

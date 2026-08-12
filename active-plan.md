@@ -280,13 +280,47 @@ land. Separately, the account-upgrade flow needs **"manual linking" enabled** in
 dashboard (Authentication → Settings) before `linkEmail` will succeed against the real backend —
 a dashboard toggle, not something any commit here can set.
 
-### Phase 9 — modular economy · *needs a spec before code*
+### Phase 9 — modular economy · *code complete 2026-08-11, one verification gap*
 
-`economy/` holds only `score.ts` and `save.ts`. Everything in plan.md §10 Phase 9 is unwritten:
-`types/inventory.ts`, the 80-part JSON catalogue (4 categories × 20), `Garage.ts` as a pure
-baseline+mod resolver feeding `physics/Vehicle.ts`, payout logic, and `ui/GarageScreen`. The
-source spec is `docs/superpowers/specs/2026-08-05-phase-9-modular-economy.md`; the garage *screen*
-still needs its own spec on top of it.
+Built on branch `phase-9-modular-economy` (spec:
+`docs/superpowers/specs/2026-08-11-phase-9-modular-economy-shop.md`, plan:
+`docs/superpowers/plans/2026-08-11-phase-9-modular-economy-shop.md`). The 2026-08-05 spec is
+superseded: its payout model (placement 1st/2nd/3rd, fastest lap) assumes rivals and laps that
+this game does not have, so payout was re-based on route stages, banked time, passed cars and
+collisions — all signals already in the tree.
+
+- `physics/Vehicle.ts` — `VehicleParams` (gear ceilings, gear accel, steer authority,
+  centrifugal) injected at construction, defaulted to the old constants so a stock car is
+  bit-for-bit the pre-Phase-9 car. Every prior Vehicle test passes untouched.
+- `types/inventory.ts` + `economy/partCurves.ts` — 80 parts (4 categories × 20) generated from
+  tier curves, snapshotted to `economy/parts.json` behind a golden test (`UPDATE_PARTS=1 npm test`
+  regenerates). Balance guards assert every tier-20 part carries a penalty and that no loadout
+  leads on all four metrics.
+- `economy/Garage.ts` — pure `resolveMetrics` (baseline 50 + mods, clamped 5..95) and
+  `metricsToParams`, calibrated so metric 50 = ×1.0 exactly.
+- `economy/GarageState.ts` — credits, inventory, fitted loadout, `bestStage`; five part states
+  (locked → unaffordable → purchasable → owned → equipped); corrupt-save tolerant; persists
+  through the existing `SaveBackend`, so Supabase cross-device comes free.
+- `economy/payout.ts` — pure ledger: stages×250 + 1000 completion + 10c/banked-second +
+  points/10, ×1.1 clean-race. `ScoreState` gained a collisions counter.
+- `ui/SummaryScreen.ts` (auto on run end) + `ui/GarageScreen.ts` (**F6**, stat-diff bars driven by
+  the same resolver the physics uses).
+
+491 vitest / 56 files green (was 436/49), `npm run build` clean. Headless drive confirmed: the
+summary panel renders its ledger on expiry, F6 buys + fits a part, and credits/loadout survive a
+reload (50,000 → 46,311 for a tier-10 engine, matching the cost curve).
+
+**Still open:** no in-browser run has yet earned a *non-zero* payout — the headless driver has no
+steering feedback and ends up in the grass, so every scripted run expired at stage 0 with no
+overtakes. The award path's parts are all unit-tested and the commit path is proven (the summary
+appears with the real ledger; the buy path proves credit mutation + persistence), but a human
+should drive one real route and confirm the earned figure lands in the wallet.
+
+**Also seen during verification:** with the repo `.env` in place the save backend is
+`SupabaseBackend` and every call failed with `Invalid schema: retroline` (plus one
+`JWT issued at future`, i.e. clock skew) — despite the note above recording that schema as exposed
+on 2026-08-11. Worth re-checking Settings → API → Exposed schemas against the project those local
+keys point at; Phase 9 code is backend-agnostic and was verified against the localStorage backend.
 
 ### Phase 10 — audio · *nothing exists*
 
