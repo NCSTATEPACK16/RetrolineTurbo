@@ -123,6 +123,34 @@ describe('Vehicle skid + recovery (PRD: grip −60%)', () => {
     run(v, 60, () => {}, 0);
     expect(v.speedKmh).toBeLessThan(before);
   });
+
+  it('skidMagnitude is 0 while gripped, jumps to 1 the step a skid triggers', () => {
+    const v = fastVehicle();
+    expect(v.skidMagnitude).toBe(0);
+    run(v, 1, (c) => { c.throttle = 1; }, 0.6); // trigger
+    expect(v.skidding).toBe(true);
+    expect(v.skidMagnitude).toBe(1);
+  });
+
+  it('skidMagnitude stays at 1 while sliding uncontrolled (no recovery attempt)', () => {
+    const v = fastVehicle();
+    run(v, 1, (c) => { c.throttle = 1; }, 0.6); // trigger
+    run(v, 20, () => {}, 0); // no counter-steer input: recoverySteps never counts up
+    expect(v.skidding).toBe(true);
+    expect(v.skidMagnitude).toBe(1);
+  });
+
+  it('skidMagnitude eases toward 0 as a sustained recovery attempt progresses', () => {
+    const v = fastVehicle();
+    run(v, 1, (c) => { c.throttle = 1; }, 0.6); // trigger
+    run(v, SKID_RECOVERY_STEPS - 1, (c) => { c.steer = 1; }, 0); // counter-steer, throttle released
+    expect(v.skidding).toBe(true); // one step short of recovery
+    expect(v.skidMagnitude).toBeGreaterThan(0);
+    expect(v.skidMagnitude).toBeLessThan(1);
+    run(v, 1, (c) => { c.steer = 1; }, 0); // final recovery step
+    expect(v.skidding).toBe(false);
+    expect(v.skidMagnitude).toBe(0);
+  });
 });
 
 describe('Vehicle off-road drag (PRD: μ = 0.85)', () => {

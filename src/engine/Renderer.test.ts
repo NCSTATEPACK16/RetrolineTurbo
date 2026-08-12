@@ -486,7 +486,7 @@ describe('baked player car', () => {
   });
 
   const state = (over: Partial<PlayerState> = {}): PlayerState =>
-    ({ z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, braking: false, ...over });
+    ({ z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, skidMagnitude: 0, braking: false, ...over });
 
   function draw(over: Partial<PlayerState> = {}) {
     const backend = new RecordingBackend();
@@ -568,7 +568,7 @@ describe('baked player car', () => {
 
 describe('effects atlas is droppable', () => {
   const player: PlayerState =
-    { z: 0, x: 0, speed: 900, gear: 3, steer: 0, skidding: true, braking: false };
+    { z: 0, x: 0, speed: 900, gear: 3, steer: 0, skidding: true, skidMagnitude: 1, braking: false };
 
   it('stays fully playable when the effects atlas is missing', () => {
     const backend = new RecordingBackend();

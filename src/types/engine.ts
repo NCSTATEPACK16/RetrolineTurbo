@@ -46,6 +46,10 @@ export interface PlayerState {
   readonly steer: number;
   /** True while the car is in a skid — selects the skid sprite frame. */
   readonly skidding: boolean;
+  /** Continuous skid intensity, 0..1. 0 whenever `skidding` is false; while
+   * skidding, 1 at trigger and easing toward 0 as recovery completes. Drives
+   * the tire-squeal gain — a plain boolean can't express "gain by magnitude". */
+  readonly skidMagnitude: number;
   /** True while the driver is on the brakes — lights the brake-light overlay. */
   readonly braking: boolean;
 }

@@ -85,6 +85,17 @@ export class Vehicle implements PlayerState {
     return this.isSkidding;
   }
 
+  /** 1 at the moment a skid triggers, easing toward 0 as `recoverySteps` counts
+   * up toward `SKID_RECOVERY_STEPS` (recovery resets the counter every step the
+   * driver isn't actively counter-steering, so this reads as "still sliding"
+   * for as long as the skid is uncontrolled, and only fades on a genuine,
+   * sustained recovery attempt). Always 0 when not skidding. */
+  get skidMagnitude(): number {
+    if (!this.isSkidding) return 0;
+    const m = 1 - this.recoverySteps / SKID_RECOVERY_STEPS;
+    return m < 0 ? 0 : m;
+  }
+
   /** Steer the driver actually applied last step, clamped to -1..1.
    * Reported rather than derived from lateral velocity so the sprite follows the
    * stick immediately — a car that visually straightens mid-corner reads as a bug. */

@@ -16,26 +16,33 @@
         overflow: hidden;
       }
       /* Letterbox the game and preserve crisp nearest-neighbour upscaling
-         of the fixed 480x270 logical framebuffer. */
+         of the fixed 480x270 logical framebuffer. Grid (not flex) so #game
+         and #crt can occupy the same cell — only one is ever visible at a
+         time (Phase 10: main.ts toggles which, based on CRT support/setting). */
       #stage {
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: grid;
+        place-items: center;
         width: 100vw;
         height: 100vh;
       }
-      #game {
+      #game,
+      #crt {
         display: block;
         image-rendering: pixelated;
         image-rendering: crisp-edges;
         max-width: 100%;
         max-height: 100%;
+        grid-area: 1 / 1;
+      }
+      #crt {
+        display: none; /* shown only once main.ts confirms WebGL2 CRT support */
       }
     </style>
   </head>
   <body>
     <div id="stage">
       <canvas id="game" width="480" height="270"></canvas>
+      <canvas id="crt" width="480" height="270"></canvas>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
