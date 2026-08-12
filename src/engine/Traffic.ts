@@ -5,6 +5,30 @@
  */
 export interface TrafficCar { z: number; offset: number; speed: number; sprite: string; variant: number; }
 
+/** The three lanes traffic occupies, in road half-widths. Adjacent lanes must
+ * stay further apart than CAR_COLLIDE_HALF_WIDTH or there is no threadable gap. */
+export const TRAFFIC_LANES = [-0.62, 0, 0.62] as const;
+
+/**
+ * The starting traffic roster.
+ *
+ * Lives here rather than in main.ts so the invariants that make traffic
+ * *passable* — every car slower than the player, lanes wide enough to thread —
+ * are unit-testable. Both were violated at once before: the pool ran at
+ * 3500–5000 u/s against a 2400 u/s Low-gear player, so it simply drove away.
+ */
+export function defaultTraffic(): TrafficCar[] {
+  const sprites = ['car0', 'car1', 'car2', 'car3'];
+  const speeds = [1800, 2200, 1500, 2600, 1400, 2400, 1700, 2100, 1900, 2500, 1600, 2300];
+  return speeds.map((speed, i) => ({
+    z: 3000 + i * 4900,
+    offset: TRAFFIC_LANES[i % TRAFFIC_LANES.length]!,
+    speed,
+    sprite: sprites[i % sprites.length]!,
+    variant: i % 4,
+  }));
+}
+
 /** A fixed pool of AI cars moving down-track at constant speed. Deterministic;
  * `update` mutates each car in place (no allocation). Phase 4: constant-speed
  * lane traffic — no avoidance AI (that is Phase 7 behavioural work). */

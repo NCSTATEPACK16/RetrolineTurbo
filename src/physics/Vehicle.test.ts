@@ -4,7 +4,7 @@ import {
 } from './Vehicle.js';
 import {
   STEP_S, GEAR_MAX_KMH, GEAR_ACCEL_KMH_S, STEER_MAX_WPS, CENTRIFUGAL,
-  SKID_GRIP, SKID_RECOVERY_STEPS,
+  SKID_GRIP, SKID_RECOVERY_STEPS, MAX_LATERAL_ROADWIDTHS,
 } from '../constants.js';
 import type { PlayerState } from '../types/engine.js';
 
@@ -301,5 +301,53 @@ describe('VehicleParams injection', () => {
     cmd.throttle = 1;
     for (let i = 0; i < 600; i++) { base.step(cmd, 0.2, STEP_S); stuck.step(cmd, 0.2, STEP_S); }
     expect(stuck.x).toBeGreaterThan(base.x); // pushed less far in the -x direction
+  });
+});
+
+describe('Vehicle steering authority (bug: car launches sideways on curves)', () => {
+  /** Spin the car to its high-gear top speed on a straight. */
+  function toTopSpeed(v: Vehicle): void {
+    shiftUp(v);
+    run(v, 60 * 60, (c) => { c.throttle = 1; });
+  }
+
+  it('lets full counter-steer hold the road through the sharpest generated curve', () => {
+    // generate.ts emits |curve| up to MAX_CURVE = 5. At top speed the driver must
+    // be able to fight a curve that sharp — not be shoved off with the stick pinned.
+    const v = new Vehicle(ROAD);
+    toTopSpeed(v);
+    // Positive curve pushes negative-x, so full right (+1) is the counter-steer.
+    run(v, 60, (c) => { c.throttle = 1; c.steer = 1; }, 5);
+    expect(Math.abs(v.x)).toBeLessThan(ROAD);
+  });
+
+  it('keeps the car inside a bounded corridor no matter how long it is held off', () => {
+    // Without a clamp posX is unbounded: a stuck steer bias sails the car into
+    // the void, where nothing can bring it back.
+    const v = new Vehicle(ROAD);
+    toTopSpeed(v);
+    run(v, 60 * 30, (c) => { c.throttle = 1; c.steer = 1; });
+    expect(Math.abs(v.x)).toBeLessThanOrEqual(ROAD * MAX_LATERAL_ROADWIDTHS);
+  });
+
+  it('ramps steering in rather than snapping to full lock in one step', () => {
+    // A digital key press is 0 -> 1 instantly; applying that raw makes the car
+    // dart. The applied steer must ease in over a few frames.
+    const snap = new Vehicle(ROAD);
+    toTopSpeed(snap);
+    const x0 = snap.x;
+    run(snap, 1, (c) => { c.throttle = 1; c.steer = 1; });
+    const firstStep = Math.abs(snap.x - x0);
+    const full = STEER_MAX_WPS * STEP_S;
+    expect(firstStep).toBeLessThan(full * 0.5);
+  });
+
+  it('still reaches full lateral rate once the ramp completes', () => {
+    const v = new Vehicle(ROAD);
+    toTopSpeed(v);
+    run(v, 60, (c) => { c.throttle = 1; c.steer = 1; }); // hold long enough to saturate
+    const before = v.x;
+    run(v, 1, (c) => { c.throttle = 1; c.steer = 1; });
+    expect(Math.abs(v.x - before)).toBeCloseTo(STEER_MAX_WPS * STEP_S, 0);
   });
 });
