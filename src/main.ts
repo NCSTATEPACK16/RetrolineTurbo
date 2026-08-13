@@ -6,9 +6,9 @@ import { TrackManager } from './engine/TrackManager.js';
 import { Background } from './engine/Background.js';
 import { generateAtlas } from './assets/generateSprites.js';
 import { SpriteAtlas } from './engine/SpriteAtlas.js';
-import { Traffic, type TrafficCar } from './engine/Traffic.js';
+import { Traffic, defaultTraffic, type TrafficCar } from './engine/Traffic.js';
 import { HUD } from './ui/HUD.js';
-import { hitCar, responseDelta } from './engine/Collision.js';
+import { hitCar, responseDelta, shoveSign, ContactLatch } from './engine/Collision.js';
 import { Vehicle, createCommand } from './physics/Vehicle.js';
 import { InputManager, mouseSteerCurve } from './input/InputManager.js';
 import { chooseSaveBackend } from './net/saveBackend.js';
@@ -34,9 +34,11 @@ import { computePayout } from './economy/payout.js';
 import { SummaryScreen } from './ui/SummaryScreen.js';
 import { GarageScreen } from './ui/GarageScreen.js';
 import { parseTrackFile } from './track/schema.js';
+import { SoundEngine } from './audio/SoundEngine.js';
+import { CrtEffect, crtDefaultEnabled } from './ui/CrtEffect.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
-  PLAYER_CAR_ID,
+  PLAYER_CAR_ID, CAR_COLLIDE_HALF_WIDTH,
 } from './constants.js';
 import type { Camera } from './types/engine.js';
 
@@ -48,8 +50,29 @@ const stage = canvas.parentElement ?? document.body;
 
 const backend = new Canvas2DBackend(canvas);
 
+// --- Phase 10: CRT post-pass ------------------------------------------------
+// A second canvas (#crt, index.html) stacked in the same grid cell as #game:
+// a canvas can only ever have one context type, so the WebGL2 shader output
+// cannot share #game's 2D context. Only one of the two is ever visible.
+const crtCanvasEl = document.getElementById('crt');
+if (!(crtCanvasEl instanceof HTMLCanvasElement)) {
+  throw new Error('main: #crt canvas not found');
+}
+const crt = new CrtEffect(crtCanvasEl);
+// TS doesn't carry the instanceof-narrowing above into a nested function body,
+// so re-bind both as explicitly-typed, non-null locals for use inside one.
+const gameSurfaceEl: HTMLCanvasElement = canvas;
+const crtSurfaceEl: HTMLCanvasElement = crtCanvasEl;
+let crtEnabled = crt.supported && crtDefaultEnabled(window.innerWidth);
+function applyCrtVisibility(): void {
+  crtSurfaceEl.style.display = crtEnabled ? 'block' : 'none';
+  gameSurfaceEl.style.display = crtEnabled ? 'none' : 'block';
+}
+applyCrtVisibility();
+
 function fit(): void {
   backend.resize(stage.clientWidth, stage.clientHeight);
+  crt.resize(stage.clientWidth, stage.clientHeight);
 }
 fit();
 window.addEventListener('resize', fit);
@@ -66,12 +89,7 @@ const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
 const hud = new HUD(atlas);
 
 const trackLength = track.length * DEFAULT_TRACK_CONFIG.segmentLength;
-const cars: TrafficCar[] = [
-  { z: 4000, offset: -0.4, speed: 4000, sprite: 'car0', variant: 0 },
-  { z: 9000, offset: 0.4, speed: 3500, sprite: 'car1', variant: 1 },
-  { z: 15000, offset: 0, speed: 5000, sprite: 'car2', variant: 2 },
-  { z: 22000, offset: -0.5, speed: 4500, sprite: 'car3', variant: 3 },
-];
+const cars: TrafficCar[] = defaultTraffic();
 const traffic = new Traffic(cars, trackLength);
 
 const save = chooseSaveBackend();
@@ -130,6 +148,7 @@ void loadAtlases().then((loaded) => {
 
 const input = new InputManager();
 let vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
+const sound = new SoundEngine(); // inert (no thrown errors) wherever Web Audio is unavailable
 
 // --- Phase 9: economy ------------------------------------------------------
 // The garage loads asynchronously; until it lands the car is stock, which is
@@ -197,6 +216,15 @@ void loadBindings(save).then((b) => { input.setBindings(b); });
 // Screens see every key first (remap, then editor); leftovers drive the InputManager.
 // While a screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
 window.addEventListener('keydown', (e) => {
+  // Any keydown is a valid autoplay-policy user gesture — resume here too, not
+  // just on the canvas click, so a keyboard-only driver who never clicks still
+  // hears audio. Idempotent: resume() no-ops once the context is running.
+  sound.resume();
+  if (e.code === 'KeyV' && crt.supported) {
+    crtEnabled = !crtEnabled;
+    applyCrtVisibility();
+    return;
+  }
   const screenOpen = remap.open || editor.open || leaderboard.open || trackBrowser.open
     || account.open || shop.open;
   if (screenOpen && (e.metaKey || e.ctrlKey)) return;
@@ -233,6 +261,7 @@ window.addEventListener('keydown', (e) => {
     summary.clear();
     routeMap.flashMs = 0;
     bootScene();
+    contact.reset(); // a fresh run must not inherit the last run's contact
     traffic.rescope(0, track.length * DEFAULT_TRACK_CONFIG.segmentLength);
     return;
   }
@@ -245,9 +274,40 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyI') void navigator.clipboard?.readText?.().then((json) => { editor.importJson(json); });
 });
 window.addEventListener('keyup', (e) => { input.release(e.code); });
-window.addEventListener('mousemove', (e) => {
-  input.setMouseSteer(mouseSteerCurve((e.clientX / window.innerWidth) * 2 - 1));
+// --- Mouse steering ---------------------------------------------------------
+// Opt-in, and relative rather than absolute. Mapping the raw cursor X across the
+// window (the previous behaviour) meant the pointer's resting position WAS a
+// permanent steering command: park the cursor in the left third of the window
+// and the car drove hard left forever, with nothing to release. Pointer lock
+// gives deltas instead, so steering only exists while the driver is actually
+// moving the mouse, and it self-centres when they stop.
+const MOUSE_PIXELS_TO_LOCK = 400; // cursor travel for full lock
+const MOUSE_RECENTRE_PER_S = 2.5; // self-centring rate when the mouse is still
+let mouseSteerRaw = 0;
+
+canvas.addEventListener('click', () => {
+  sound.resume();
+  if (document.pointerLockElement !== canvas) void canvas.requestPointerLock?.();
 });
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement !== canvas) {
+    mouseSteerRaw = 0;
+    input.setMouseSteer(null); // released: the mouse stops voting entirely
+  }
+});
+window.addEventListener('mousemove', (e) => {
+  if (document.pointerLockElement !== canvas) return;
+  mouseSteerRaw += e.movementX / MOUSE_PIXELS_TO_LOCK;
+  mouseSteerRaw = Math.max(-1, Math.min(1, mouseSteerRaw));
+});
+/** Bleed the virtual cursor back to centre so a flick does not become a hold. */
+function tickMouseSteer(dt: number): void {
+  if (document.pointerLockElement !== canvas) return;
+  const decay = MOUSE_RECENTRE_PER_S * dt;
+  mouseSteerRaw = mouseSteerRaw > decay ? mouseSteerRaw - decay
+    : mouseSteerRaw < -decay ? mouseSteerRaw + decay : 0;
+  input.setMouseSteer(mouseSteerCurve(mouseSteerRaw));
+}
 
 const padSnapshot = { steer: 0, throttle: 0, brake: 0 }; // reused; no per-step alloc
 function pollGamepad(): void {
@@ -262,8 +322,9 @@ function pollGamepad(): void {
 const cfg = {
   roadWidth: DEFAULT_TRACK_CONFIG.roadWidth,
   segmentLength: DEFAULT_TRACK_CONFIG.segmentLength,
-  carHalfWidthPx: 900,
+  carHalfWidthPx: CAR_COLLIDE_HALF_WIDTH,
 };
+const contact = new ContactLatch(); // one response per bump, not one per step
 let elapsedMs = 0;
 let payoutDone = false; // the run pays out exactly once, on the step it ends
 const roadCenters = [0, 0, 0]; // pre-allocated branch road centres (hard rule 4)
@@ -271,6 +332,7 @@ const roadCenters = [0, 0, 0]; // pre-allocated branch road centres (hard rule 4
 createLoop({
   update: (dt: number): void => {
     pollGamepad();
+    tickMouseSteer(dt);
     input.read(cmd);
     if (remap.open || editor.open || leaderboard.open || trackBrowser.open || account.open
         || shop.open) { // pause driving while a screen is up
@@ -301,10 +363,18 @@ createLoop({
     score.addOvertakes(traffic.countOvertakes(vehicle.z));
 
     // Off-road drag is the Vehicle's own μ path; responseDelta applies on hits only.
-    if (hitCar(vehicle, cars, cfg) != null) {
+    // The latch collapses the several steps a single bump spans into one response
+    // — applied per-step, the 0.6 speed factor compounded to a near-stop and one
+    // bump scored as four collisions.
+    const struck = hitCar(vehicle, cars, cfg);
+    if (contact.enter(struck) && struck !== null) {
       const d = responseDelta({ offRoad: false, hit: true });
-      vehicle.applyCollision(d.speedFactor, (vehicle.x >= 0 ? -1 : 1) * d.xPush * dt);
+      // Shove away from the car actually hit, not toward the road centre: the
+      // old sign test pushed a left-lane hit back into the car it just struck.
+      const push = shoveSign(vehicle.x, struck.offset * DEFAULT_TRACK_CONFIG.roadWidth) * d.xPush;
+      vehicle.applyCollision(d.speedFactor, push); // an impulse, not a per-second rate
       score.addCollision(); // zero hits earns the clean-race multiplier
+      sound.collisionCue(); // one-shot per latch entry, not per step the bump spans
     }
 
     // Route progression: countdown, fork hand-off, final-stage finish.
@@ -371,6 +441,7 @@ createLoop({
     renderer.updateEffects(dt, vehicle);
   },
   render: (): void => {
+    sound.step(vehicle); // once per rendered frame, not the fixed physics step
     const base = Math.floor(camera.z / DEFAULT_TRACK_CONFIG.segmentLength);
     const backdrop = backdrops.get(backdropIdForStage(route.stage));
     renderer.render(camera, track, backend, background, traffic, track.segment(base).curve, backdrop, vehicle);
@@ -384,7 +455,11 @@ createLoop({
     shop.render(backend);
     routeMap.render(route, backend);
     summary.render(backend);
-    backend.present(); // HUD + screens composited onto the logical frame, then blit
+    // CRT reads the finished logical frame as a texture and draws its own
+    // canvas; #game's own present() is skipped so the two never fight over
+    // the same visible pixels (index.html shows exactly one at a time).
+    if (crtEnabled) crt.render(backend.surface);
+    else backend.present(); // HUD + screens composited onto the logical frame, then blit
   },
 }).start();
 

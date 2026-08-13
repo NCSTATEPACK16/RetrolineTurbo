@@ -3,7 +3,9 @@ import type { PlayerState, Segment, Sprite, SpriteFrame } from './engine.js';
 
 describe('engine domain types', () => {
   it('PlayerState is satisfiable by a plain readonly object', () => {
-    const p: PlayerState = { z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, braking: false };
+    const p: PlayerState = {
+      z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, skidMagnitude: 0, braking: false,
+    };
     expect(p.gear).toBe(1);
   });
 

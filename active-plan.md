@@ -322,9 +322,77 @@ should drive one real route and confirm the earned figure lands in the wallet.
 on 2026-08-11. Worth re-checking Settings → API → Exposed schemas against the project those local
 keys point at; Phase 9 code is backend-agnostic and was verified against the localStorage backend.
 
-### Phase 10 — audio · *nothing exists*
+### Carried fix — centrifugal-vs-steer-authority + input correctness · *2026-08-12*
 
-`src/audio/` is absent entirely. Greenfield.
+Landed on `phase-9-modular-economy` alongside the Phase 9 commits (not part of the economy
+spec — a driving-feel bug found while playtesting that phase): `CENTRIFUGAL` was 9000 against
+`STEER_MAX_WPS` 2500, so the sharpest curves `generate.ts` emits could out-pull full steering
+lock and shove the driver off-road with the stick pinned. Dropped to 600. Landed alongside it:
+rate-limited steer approach (~170ms to full lock, sprite still leans instantly on the raw
+command), a hard lateral clamp (off-road drag alone didn't stop a stuck steer input walking the
+car out of the world), pointer-lock + relative-delta mouse steering (the old absolute-cursor
+mapping made the resting cursor spot a permanent steer command), a gamepad deadzone, one device
+voting per read instead of summing all three, and a `ContactLatch` so one collision produces one
+response instead of one per physics step it spans (was compounding into a near-stop and
+over-counting hits against the clean-race payout multiplier). Verified via headless
+`drive_game.mjs` — car tracks cleanly through both turn directions. 509/56 tests, build clean.
+
+### Phase 10 — audio + CRT · *code complete 2026-08-12, one scope note*
+
+Built on branch `phase-10-audio-crt` (spec:
+`docs/superpowers/specs/2026-08-12-phase-10-audio.md`, brainstormed and finalized the same
+session). Bundles audio and the CRT post-pass together rather than deferring CRT to Phase 11,
+per an explicit user call during design — the spec's own first draft had recommended splitting
+them.
+
+- `src/audio/engineTone.ts` — pure `computeEngineTone` (sawtooth pitch + lowpass cutoff as a
+  0..1 function of speed-in-gear) and `squealGain` (skid-magnitude-scaled), fully unit-tested.
+- `src/audio/SoundEngine.ts` — the Web Audio edge: one persistent AudioContext + node graph
+  (engine tone, tire squeal, music/SFX buses), gesture-gated `resume()` wired into both the
+  existing pointer-lock click handler and the top of the main keydown handler (so keyboard-only
+  drivers who never click still get audio), and a one-shot `collisionCue()` triggered directly
+  off `ContactLatch.enter()` in the physics update. Never throws — no Web Audio support (this
+  repo's own `environment: 'node'` vitest run included) degrades the whole engine to inert
+  no-ops, same contract as `net/supabase.ts`/`loadAtlases.ts`.
+- `physics/Vehicle.ts` / `types/engine.ts` — `PlayerState.skidMagnitude`, a real field (not an
+  approximation) derived from existing `recoverySteps` state: 1 at trigger, easing to 0 only
+  on a sustained recovery attempt.
+- `src/ui/CrtEffect.ts` — a raw WebGL2 fragment shader (scanlines + barrel distortion + a
+  cheap single-pass neighbour-bloom) reading the game's existing offscreen Canvas2D buffer as a
+  texture and drawing to a second `#crt` canvas (`index.html`); `#game`/`#crt` share one CSS
+  grid cell and main.ts toggles which is visible. `Canvas2DBackend` gained one read-only
+  `surface` getter — its drawing path is otherwise untouched. Off by default under
+  `CRT_MOBILE_MAX_WIDTH` (768px), toggleable with `KeyV`. Never throws — no WebGL2, or a driver
+  that rejects the shader, leaves `supported` false and the game renders the plain Canvas2D path
+  regardless.
+  ⚠️ **Caught and fixed this session, not upstream**: the first working version rendered the
+  whole frame upside down — `texImage2D` from a canvas source needs
+  `UNPACK_FLIP_Y_WEBGL` set, since canvas pixel data is top-down but WebGL texture V=0 is
+  conventionally the bottom of the image. Only visible via an actual screenshot; the unit tests
+  (which only exercise the no-WebGL2-support path, per the spec's own "thin at the edge" call)
+  could not have caught it. Worth remembering for any future WebGL work in this repo.
+
+531 vitest / 59 files green (was 512/56 before this phase, +19 from `skidMagnitude` +
+`engineTone` + `SoundEngine` + `CrtEffect` tests), `npm run build` clean. Verified via headless
+`drive_game.mjs` (no new console errors, frame time unchanged) plus a throwaway Playwright
+script (not committed) confirming: a mobile-width viewport defaults CRT off, `KeyV` toggles it
+on and off correctly, a desktop-width viewport defaults CRT on, and the corrected orientation
+holds — screenshots inspected directly, not just asserted programmatically.
+
+**Scope note — the spec's "hybrid streamed music / preloaded SFX-from-file" layer was not
+built.** No music or SFX asset files exist anywhere in this repo and there is no bake pipeline
+for audio content (unlike sprites/props/backgrounds, which all have one) — wiring a generic
+loader with nothing to call it would be dead, untested code, which the project's own engineering
+discipline rules out. The music/SFX bus split the spec calls for is real and already routes the
+procedural cues that do exist (engine tone, squeal, collision thud); it's ready for real files
+whenever a future session has content to load. This is a content gap, not a missed
+implementation detail.
+
+**Still open:** no human has heard this yet — `npm run dev` and a real drive is the actual gate,
+same as every prior phase's headless-de-risked-but-not-human-confirmed visual items. The pitch/
+filter/shader tuning constants (`ENGINE_F_BASE_LOW` etc., `CRT_SCANLINE_INTENSITY` etc.) are
+shipped as reasonable defaults per the spec's own instruction, not ear/eye-tuned — expect a pass
+similar to `CENTRIFUGAL`'s this session once someone actually listens/looks.
 
 ### Phases 11–12 — polish, then iOS
 

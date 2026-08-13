@@ -8,7 +8,7 @@ import type { AtlasFrameMeta } from './AtlasManifest.js';
 import type { PlayerState } from '../types/engine.js';
 
 const player = (over: Partial<PlayerState> = {}): PlayerState => ({
-  z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, braking: false, ...over,
+  z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, skidMagnitude: 0, braking: false, ...over,
 });
 
 /** Synthetic manifest frames in the shape pack_atlas.py emits for effects.png. */

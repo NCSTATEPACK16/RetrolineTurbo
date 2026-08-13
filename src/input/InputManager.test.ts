@@ -3,6 +3,7 @@ import {
   InputManager, DEFAULT_BINDINGS, rebind, serializeBindings, parseBindings, mouseSteerCurve,
 } from './InputManager.js';
 import { createCommand } from '../physics/Vehicle.js';
+import { PAD_STEER_DEADZONE } from '../constants.js';
 
 const read = (im: InputManager) => { const c = createCommand(); im.read(c); return c; };
 
@@ -33,13 +34,16 @@ describe('input schemes resolve to one normalized command (parity)', () => {
     const im = new InputManager();
     im.setGamepad({ steer: -0.5, throttle: 0.8, brake: 0.2 });
     const c = read(im);
-    expect(c.steer).toBe(-0.5); expect(c.throttle).toBe(0.8); expect(c.brake).toBe(0.2);
+    // Steer is rescaled from the deadzone edge, so a half-deflected stick reads
+    // slightly under half; the trigger axes are passed through untouched.
+    expect(c.steer).toBeCloseTo(-(0.5 - PAD_STEER_DEADZONE) / (1 - PAD_STEER_DEADZONE), 5);
+    expect(c.throttle).toBe(0.8); expect(c.brake).toBe(0.2);
   });
 
-  it('combined sources clamp steer to ±1', () => {
+  it('resolves steer from the highest-priority active device, never a sum', () => {
     const im = new InputManager();
     im.press('KeyD'); im.setMouseSteer(0.8);
-    expect(read(im).steer).toBe(1);
+    expect(read(im).steer).toBe(1); // the key, not 1 + 0.8 clamped
   });
 
   it('Space is handbrake; Q/E and Shift/Ctrl shift gears', () => {
@@ -128,5 +132,40 @@ describe('rebinding', () => {
     expect(read(im).steer).toBe(-1); // pure keyboard, no +0.6 bias
     im.release('KeyA');
     expect(read(im).steer).toBe(0); // bias stays cleared until the mouse moves again
+  });
+});
+
+describe('InputManager steering arbitration (bug: steer bias adds up)', () => {
+  it('does not sum devices — a held key wins outright over a mouse bias', () => {
+    const im = new InputManager();
+    const out = createCommand();
+    im.press('KeyD'); // driver is holding right
+    im.setMouseSteer(-0.6); // ...and the cursor drifts left mid-hold
+    im.read(out);
+    expect(out.steer).toBe(1);
+  });
+
+  it('ignores gamepad stick drift inside the deadzone', () => {
+    const im = new InputManager();
+    const out = createCommand();
+    im.setGamepad({ steer: 0.06, throttle: 0, brake: 0 }); // worn stick at rest
+    im.read(out);
+    expect(out.steer).toBe(0);
+  });
+
+  it('still passes a real gamepad deflection through, rescaled from the deadzone', () => {
+    const im = new InputManager();
+    const out = createCommand();
+    im.setGamepad({ steer: 1, throttle: 0, brake: 0 });
+    im.read(out);
+    expect(out.steer).toBeCloseTo(1, 5);
+  });
+
+  it('falls back to the mouse only when no key or stick is active', () => {
+    const im = new InputManager();
+    const out = createCommand();
+    im.setMouseSteer(0.5);
+    im.read(out);
+    expect(out.steer).toBeCloseTo(0.5, 5);
   });
 });

@@ -1,4 +1,5 @@
 import type { Command } from '../physics/Vehicle.js';
+import { PAD_STEER_DEADZONE } from '../constants.js';
 
 export type Action =
   | 'throttle' | 'brake' | 'steerLeft' | 'steerRight'
@@ -131,14 +132,37 @@ export class InputManager {
     return false;
   }
 
+  /**
+   * Steering from exactly one device per read, in priority order: keys, then
+   * stick, then mouse.
+   *
+   * These used to be summed, which meant an idle device's resting bias — a
+   * cursor parked left of centre, a worn stick — was added to whatever the
+   * driver was actually doing. The result was a car that drove itself sideways,
+   * and steering that felt misaligned rather than simply wrong. Only an actively
+   * deflected device gets a vote, and the most deliberate one wins.
+   */
+  private readSteer(): number {
+    const keys = (this.held('steerLeft') ? -1 : 0) + (this.held('steerRight') ? 1 : 0);
+    if (keys !== 0) return keys;
+
+    const raw = this.pad?.steer ?? 0;
+    const mag = Math.abs(raw);
+    if (mag > PAD_STEER_DEADZONE) {
+      // Rescale from the deadzone edge so the stick still reaches full lock.
+      const t = (mag - PAD_STEER_DEADZONE) / (1 - PAD_STEER_DEADZONE);
+      return Math.sign(raw) * Math.min(1, t);
+    }
+
+    const mouse = this.mouseSteer ?? 0;
+    return mouse < -1 ? -1 : mouse > 1 ? 1 : mouse;
+  }
+
   /** Fill `out` with the current normalized command (edge-consumes gear flags). */
   read(out: Command): void {
     out.throttle = Math.max(this.held('throttle') ? 1 : 0, this.pad?.throttle ?? 0);
     out.brake = Math.max(this.held('brake') ? 1 : 0, this.pad?.brake ?? 0);
-    let steer = (this.held('steerLeft') ? -1 : 0) + (this.held('steerRight') ? 1 : 0);
-    steer += this.mouseSteer ?? 0;
-    steer += this.pad?.steer ?? 0;
-    out.steer = Math.max(-1, Math.min(1, steer));
+    out.steer = this.readSteer();
     out.handbrake = this.held('handbrake');
     out.nitro = this.held('nitro');
     out.gearUp = this.gearUpArmed;

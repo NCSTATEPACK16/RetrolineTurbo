@@ -79,12 +79,68 @@ export const COAST_KMH_S = 20; // engine-drag decel at zero throttle
 export const MU_OFFROAD = 0.85; // per-second speed retention factor off-road
 export const OFFROAD_MAX_KMH = 60; // off-road drag only bleeds speed above this
 export const STEER_MAX_WPS = 2500; // lateral world u/s at full steer authority
-export const CENTRIFUGAL = 9000; // curvature × speedRatio² lateral push (world u/s)
+/**
+ * Curvature × speedRatio² lateral push (world u/s).
+ *
+ * MUST stay below STEER_MAX_WPS across the curvature band generate.ts emits
+ * (|curve| ≤ 5), or the driver is shoved off the road with the stick pinned and
+ * the car reads as "steering itself". At 600 the sharpest corner taken flat out
+ * costs 5 × 600 = 3000 u/s against 2500 u/s of steering — the driver loses
+ * ground slowly and must lift, which is the intended arcade tension. Gentle arcs
+ * (curve 1) cost 24% of the stick and are held one-handed.
+ */
+export const CENTRIFUGAL = 600;
+/** Steer lock-to-lock rate (units of −1..+1 per second). A key press is a 0→1
+ * step; applying it raw darts the car. ~170ms to full lock stays responsive
+ * while giving the driver a usable analogue band on a digital input. */
+export const STEER_RATE_PER_S = 6;
+/** Hard bound on |posX|, in road half-widths. The off-road μ only bleeds speed —
+ * nothing else stops the car leaving the world, so a stuck steer input would
+ * otherwise sail it somewhere it can never be driven back from. */
+export const MAX_LATERAL_ROADWIDTHS = 2;
+/** Gamepad stick deadzone. A worn stick rests off-centre; without this its drift
+ * becomes a constant steer bias indistinguishable from the reported bug. */
+export const PAD_STEER_DEADZONE = 0.15;
+
+/**
+ * Combined player+traffic half-width for the collision test, in world units.
+ *
+ * This is the centre-to-centre distance at which two cars are touching, so it
+ * must stay well under the lane spacing (roadWidth 2000 over 3 lanes ≈ 1300 per
+ * lane) or there is no gap wide enough to thread and every pass is a crash.
+ */
+export const CAR_COLLIDE_HALF_WIDTH = 460;
 export const SKID_CURVE_THRESHOLD = 0.4; // |segment curve| that can trigger a skid
 export const SKID_SPEED_KMH = 200; // min speed for a skid trigger
 export const SKID_GRIP = 0.4; // steering grip while skidding (−60%)
 export const SKID_SPEED_DECAY = 0.9; // per-second speed retention while skidding
 export const SKID_RECOVERY_STEPS = 12; // consecutive counter-steer steps to recover
+
+/**
+ * Phase 10 audio + CRT tuning (spec: docs/superpowers/specs/2026-08-12-phase-10-audio.md).
+ * None of these are numerically specified upstream — they're ear/eye-tuned
+ * starting points, shipped so the mechanism is correct and directionally
+ * right, flagged for a human pass at `npm run dev`, same as CENTRIFUGAL above.
+ */
+export const ENGINE_F_BASE_LOW = 90; // Hz, idle oscillator tone in Low gear
+export const ENGINE_F_BASE_HIGH = 60; // Hz, idle tone in High gear (lower, throatier)
+export const ENGINE_F_RANGE = 260; // Hz added on top of f_base at each gear's redline
+export const ENGINE_FILTER_MIN_HZ = 400; // lowpass cutoff at idle
+export const ENGINE_FILTER_MAX_HZ = 4000; // lowpass cutoff at redline
+export const ENGINE_GAIN = 0.18; // engine oscillator gain (headroom under SFX)
+export const SQUEAL_FILTER_HZ = 1200; // highpass cutoff for tire squeal noise
+export const SQUEAL_GAIN_MAX = 0.35; // peak squeal gain at skidMagnitude = 1
+export const AUDIO_RAMP_S = 0.08; // setTargetAtTime time-constant for param changes
+export const MUSIC_BUS_GAIN = 0.6;
+export const SFX_BUS_GAIN = 0.8;
+export const COLLISION_CUE_GAIN = 0.5; // one-shot collision thud gain
+export const COLLISION_CUE_DECAY_S = 0.18; // one-shot collision thud decay time
+
+export const CRT_MOBILE_MAX_WIDTH = 768; // px; CRT defaults off at/under this viewport width
+export const CRT_SCANLINE_INTENSITY = 0.18; // 0..1 darkening between scanlines
+export const CRT_DISTORTION = 0.06; // barrel distortion strength
+export const CRT_BLOOM_THRESHOLD = 0.75; // luminance threshold that starts blooming
+export const CRT_BLOOM_STRENGTH = 0.35; // bloom blend strength
 
 /**
  * Retro palette, derived from the shared master palette (`assets/palette.json`)
