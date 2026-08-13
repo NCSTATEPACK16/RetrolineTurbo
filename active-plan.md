@@ -394,10 +394,66 @@ filter/shader tuning constants (`ENGINE_F_BASE_LOW` etc., `CRT_SCANLINE_INTENSIT
 shipped as reasonable defaults per the spec's own instruction, not ear/eye-tuned — expect a pass
 similar to `CENTRIFUGAL`'s this session once someone actually listens/looks.
 
-### Phases 11–12 — polish, then iOS
+### Phase 11 — UI shell · *DOM shell code complete 2026-08-12, one manual gap left*
 
-Phase 11 needs a real frame-time baseline before anything else; two deferred items are explicitly
-waiting on one (see below). Phase 12 (Capacitor) stays off the critical path by design.
+Built on branch `phase-11-ui-shell` (spec: `docs/superpowers/specs/2026-08-12-phase-11-ui-shell-design.md`,
+plan: `docs/superpowers/plans/2026-08-12-phase-11-ui-shell.md`). Covers only the menu/flow-polish
+slice of `plan.md`'s Phase 11 — PWA shell, texture atlases, capped canvas resolution, WKWebView
+memory pass, and the profiling pass (see the item below, carried from Phase 7.5) remain separate,
+un-started work under the same phase number.
+
+- `src/ui-shell/ShellRouter.ts` — pure `hub/guide/garage/settings/playing/paused` state machine
+  with a `subscribe`/`notify` hook, added after headless testing caught that screens navigate by
+  calling router methods from their own click handlers with no path back to the render loop
+  (vitest, 10 tests).
+- `src/ui-shell/ShellBridge.ts` — facade over `GarageState`/`InputManager`/`SoundEngine`/
+  `CrtEffect`/`net/account.ts`; every method is a one-line pass-through, which is the seam vitest
+  targets (screens themselves aren't unit-tested — this repo's vitest runs `environment: 'node'`,
+  no jsdom, so DOM code is out of reach the same way WebGL2/AudioContext already are for
+  `CrtEffect`/`SoundEngine`) (vitest, 9 tests).
+- `SoundEngine.getVolume/setVolume` and `CrtEffect.getSettings/setSettings` — new mutable-settings
+  seams the Settings screen needed; both work identically with or without a live AudioContext/
+  WebGL2 context, same never-throws contract as the rest of those two classes.
+- `src/ui-shell/screens/` — Hub (net new), Driver's Guide (net new), Garage & Marketplace (data-
+  driven off `PART_CATEGORIES`, replaces canvas `GarageScreen`), Settings (4 tabs: controls/audio/
+  display/account, replaces `RemapScreen` + `AccountScreen`), Post-Race Summary (replaces canvas
+  `SummaryScreen`), Pause overlay (net new) — all plain DOM, zero runtime deps, `tokens.css`/
+  `shell.css` Midnight Synth tokens per the design system prompt.
+- `main.ts` — mounts `#ui-shell` additively above the untouched canvas/`RenderBackend`/`Renderer`;
+  retires `RemapScreen`/`AccountScreen`/canvas `GarageScreen`/canvas `SummaryScreen` and their
+  F5/F6 keybindings (F6 now opens the shell Garage directly; F5/Account moved under Settings);
+  `router.state !== 'playing'` replaces the retired screens' `.open` flags in the input-gating
+  checks. Post-Race Summary isn't a `ShellRouter` state (reached only by the finish event, not
+  navigation) — `showSummary()` writes directly into `#ui-shell` with a `showingSummary` flag so
+  `Esc` doesn't pave over it with the pause overlay while it's up.
+- Editor/leaderboard/track browser stay canvas-rendered on F2/F3/F4/Tab, unchanged — explicitly
+  out of scope per the spec (§2): no full-screen design exists yet for either.
+
+556 vitest / 61 files green (was 531/59 before this phase), `npm run build` clean, bundle
+**shrank** slightly (119→117 modules) once the retired canvas screens dropped out.
+
+**Caught by headless testing, not upstream** (Playwright, not committed — same "de-risk before a
+human's own eyes" pattern as every prior phase's visual gate): (1) the router-subscribe bug above,
+found because a Garage nav click silently did nothing in the driven browser; (2) composite rows
+(a part's name + price + buy button, a control's label + binding + rebind button) used bare
+`<span>` siblings, which render as unbroken inline text with no separator — "stock inline-4" +
+"400c (need more)" read as "stock inline-4400c (need more)" until `.rt-row`/`.rt-row-between`/
+`.rt-col` utility classes were added and applied across Garage/Settings/Summary/Pause.
+
+**Still open:** no human has clicked through this at `npm run dev` yet, and specifically nobody
+has driven a real race to a real finish to confirm the Summary screen's Race Again/Upgrade in
+Garage/Return to Hub buttons against a live payout — the headless pass exercised Hub→Garage→
+Settings (all 4 tabs)→Guide→Race Route→Esc→pause→Quit-to-Hub and F6, but simulating a full
+~5-stage route finish headlessly wasn't attempted this session. Responsive verification at the
+1440/834×1194/390×844 breakpoints (spec §8) is also still a human-eyes gate — the CSS uses real
+flex/grid and a `rt-garage-layout` media query, but nobody has resized a real viewport against it.
+Font deviation from spec §7 (self-hosted Space Grotesk/Outfit/Inter): no font files exist in this
+repo and sourcing/licensing binary assets was out of scope for this plan — shipped a `system-ui`
+stack instead, a one-line token swap in `tokens.css` whenever fonts land.
+
+### Phase 12 — iOS
+
+Phase 12 (Capacitor) stays off the critical path by design.
 
 ### Loose threads carried across phases
 

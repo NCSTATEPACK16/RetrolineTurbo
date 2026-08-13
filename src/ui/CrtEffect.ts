@@ -96,6 +96,12 @@ interface Uniforms {
   uBloomStrength: WebGLUniformLocation | null;
 }
 
+interface CrtSettings {
+  scanline: boolean;
+  aberration: boolean;
+  bloom: number;
+}
+
 /**
  * WebGL2 post-pass (spec §7). Sits strictly after the existing render path:
  * `Canvas2DBackend` draws the game exactly as it always has, into its own
@@ -117,6 +123,7 @@ export class CrtEffect {
   private texture: WebGLTexture | null = null;
   private uniforms: Uniforms | null = null;
   private scale = 1;
+  private settings: CrtSettings = { scanline: true, aberration: true, bloom: CRT_BLOOM_STRENGTH };
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     try {
@@ -167,6 +174,16 @@ export class CrtEffect {
     return this.ok;
   }
 
+  getSettings(): CrtSettings {
+    return { ...this.settings };
+  }
+
+  setSettings(next: Partial<CrtSettings>): void {
+    if (next.scanline !== undefined) this.settings.scanline = next.scanline;
+    if (next.aberration !== undefined) this.settings.aberration = next.aberration;
+    if (next.bloom !== undefined) this.settings.bloom = Math.max(0, Math.min(1, next.bloom));
+  }
+
   /** Match Canvas2DBackend's integer-scale rule so the two canvases stay
    * pixel-for-pixel comparable when main.ts swaps which one is visible. */
   resize(cssWidth: number, cssHeight: number): void {
@@ -187,10 +204,10 @@ export class CrtEffect {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
     gl.useProgram(this.program);
     gl.uniform1i(this.uniforms.uFrame, 0);
-    gl.uniform1f(this.uniforms.uScanlineIntensity, CRT_SCANLINE_INTENSITY);
-    gl.uniform1f(this.uniforms.uDistortion, CRT_DISTORTION);
+    gl.uniform1f(this.uniforms.uScanlineIntensity, this.settings.scanline ? CRT_SCANLINE_INTENSITY : 0);
+    gl.uniform1f(this.uniforms.uDistortion, this.settings.aberration ? CRT_DISTORTION : 0);
     gl.uniform1f(this.uniforms.uBloomThreshold, CRT_BLOOM_THRESHOLD);
-    gl.uniform1f(this.uniforms.uBloomStrength, CRT_BLOOM_STRENGTH);
+    gl.uniform1f(this.uniforms.uBloomStrength, this.settings.bloom);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 }

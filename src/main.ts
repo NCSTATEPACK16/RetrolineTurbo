@@ -18,10 +18,9 @@ import { backdropIdForStage, type Backdrop } from './engine/Backdrop.js';
 import { loadAtlases, ATLAS_IDS, type LoadedAtlas } from './engine/loadAtlases.js';
 import { buildCarFrameSet } from './engine/CarFrameSet.js';
 import { buildEffectSet } from './engine/Effects.js';
-import { RemapScreen, loadBindings } from './ui/RemapScreen.js';
+import { loadBindings } from './ui/RemapScreen.js';
 import { LeaderboardScreen } from './ui/LeaderboardScreen.js';
 import { TrackBrowserScreen } from './ui/TrackBrowserScreen.js';
-import { AccountScreen } from './ui/AccountScreen.js';
 import { EditorScreen } from './track/editor/EditorScreen.js';
 import { RouteState, sceneTrack, resolveFork, nextSceneIdx, STAGES, routeIdentity } from './track/route.js';
 import { recordRaceResult } from './net/raceResults.js';
@@ -30,12 +29,18 @@ import { chosenOffsetAtNode, branchSpread, fillRoadOffsets } from './engine/Bran
 import { RouteMap } from './ui/RouteMap.js';
 import { GarageState, loadGarage, persistGarage } from './economy/GarageState.js';
 import { metricsToParams, resolveMetrics } from './economy/Garage.js';
-import { computePayout } from './economy/payout.js';
-import { SummaryScreen } from './ui/SummaryScreen.js';
-import { GarageScreen } from './ui/GarageScreen.js';
+import { computePayout, type PayoutLedger } from './economy/payout.js';
 import { parseTrackFile } from './track/schema.js';
 import { SoundEngine } from './audio/SoundEngine.js';
 import { CrtEffect, crtDefaultEnabled } from './ui/CrtEffect.js';
+import { ShellRouter } from './ui-shell/ShellRouter.js';
+import { ShellBridge } from './ui-shell/ShellBridge.js';
+import { renderHub } from './ui-shell/screens/HubScreen.js';
+import { renderGuide } from './ui-shell/screens/GuideScreen.js';
+import { renderGarage as renderGarageShell } from './ui-shell/screens/GarageScreen.js';
+import { renderSettings } from './ui-shell/screens/SettingsScreen.js';
+import { renderSummary } from './ui-shell/screens/SummaryScreen.js';
+import { renderPauseOverlay } from './ui-shell/screens/PauseOverlay.js';
 import {
   DEFAULT_TRACK_CONFIG, DEFAULT_FOCAL_LENGTH, DEFAULT_CAMERA_HEIGHT, HORIZON_Y,
   PLAYER_CAR_ID, CAR_COLLIDE_HALF_WIDTH,
@@ -153,19 +158,15 @@ const sound = new SoundEngine(); // inert (no thrown errors) wherever Web Audio 
 // --- Phase 9: economy ------------------------------------------------------
 // The garage loads asynchronously; until it lands the car is stock, which is
 // exactly what an empty loadout resolves to anyway. `garage` is hydrated in
-// place rather than rebound: GarageScreen captures this exact instance.
+// place rather than rebound: the ui-shell Garage screen (via ShellBridge)
+// captures this exact instance, same as the retired canvas GarageScreen did.
 const garage = new GarageState();
-const summary = new SummaryScreen(atlas);
 const rebuildVehicle = (): void => {
   vehicle = new Vehicle(
     DEFAULT_TRACK_CONFIG.roadWidth,
     metricsToParams(resolveMetrics(garage.equipped)),
   );
 };
-const shop = new GarageScreen(atlas, garage, undefined, () => {
-  void persistGarage(save, garage);
-  rebuildVehicle(); // fitted parts take effect on the next step
-});
 void loadGarage(save).then((loaded) => {
   garage.credits = loaded.credits;
   garage.bestStage = loaded.bestStage;
@@ -174,9 +175,73 @@ void loadGarage(save).then((loaded) => {
   rebuildVehicle();
 });
 
-const remap = new RemapScreen(atlas, save, input);
+// --- Phase 11: DOM UI shell ---------------------------------------------
+const shellDiv = document.getElementById('ui-shell');
+if (!(shellDiv instanceof HTMLElement)) {
+  throw new Error('main: #ui-shell not found');
+}
+// TS doesn't carry the instanceof-narrowing above into a nested function
+// body (same pattern as gameSurfaceEl/crtSurfaceEl above), so re-bind as an
+// explicitly-typed, non-null local for use inside renderShell().
+const shellEl: HTMLElement = shellDiv;
+const router = new ShellRouter();
+const bridge = new ShellBridge({
+  garage, input, sound, crt,
+  onGarageChange: () => {
+    void persistGarage(save, garage);
+    rebuildVehicle();
+  },
+});
+
+function renderShell(): void {
+  shellEl.innerHTML = '';
+  shellEl.setAttribute('data-hidden', String(router.state === 'playing'));
+  if (router.state === 'hub') {
+    shellEl.appendChild(renderHub(router, bridge, () => router.startPlaying()));
+  } else if (router.state === 'guide') {
+    shellEl.appendChild(renderGuide(router));
+  } else if (router.state === 'garage') {
+    shellEl.appendChild(renderGarageShell(router, bridge));
+  } else if (router.state === 'settings') {
+    // Settings renders as an overlay on top of whatever's underneath.
+    const under = router.settingsOpener === 'garage' ? renderGarageShell(router, bridge)
+      : router.settingsOpener === 'guide' ? renderGuide(router) : renderHub(router, bridge, () => {});
+    shellEl.append(under, renderSettings(router, bridge));
+  } else if (router.state === 'paused') {
+    shellEl.appendChild(renderPauseOverlay(
+      () => router.resume(),
+      () => router.openSettings(),
+      () => router.quitToHub(),
+    ));
+  }
+  // 'playing': shellEl stays empty and hidden — the canvas owns the screen.
+}
+router.subscribe(renderShell); // screens navigate by calling router methods directly
+renderShell();
+
+// The Post-Race Summary (spec §4) isn't one of ShellRouter's states — it's
+// reached only by the finish event below, not by navigation — so it's shown
+// by writing directly into shellEl rather than through router.state/renderShell.
+let showingSummary = false;
+function showSummary(title: string, ledger: PayoutLedger, balance: number): void {
+  showingSummary = true;
+  shellEl.innerHTML = '';
+  shellEl.setAttribute('data-hidden', 'false');
+  shellEl.appendChild(renderSummary(
+    title, ledger, balance,
+    () => { showingSummary = false; restartRun(); },
+    () => { showingSummary = false; router.goGarage(); },
+    () => { showingSummary = false; router.goHub(); },
+  ));
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && !showingSummary && (router.state === 'playing' || router.state === 'paused')) {
+    router.toggleEsc();
+  }
+});
+
 const leaderboard = new LeaderboardScreen(atlas);
-const account = new AccountScreen(atlas);
 const cmd = createCommand(); // pre-allocated; refilled each step (hard rule 4)
 
 // --- Phase 7: route mode — the pyramid drives which scene is loaded ----------
@@ -213,8 +278,23 @@ const camera: Camera = {
 
 void loadBindings(save).then((b) => { input.setBindings(b); });
 
-// Screens see every key first (remap, then editor); leftovers drive the InputManager.
-// While a screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
+/** Reset for a new run: picks up anything bought/fitted since the last one.
+ * Shared by the KeyR shortcut and the Summary screen's "Race Again" button. */
+function restartRun(): void {
+  route = new RouteState(1);
+  rebuildVehicle();
+  score.reset();
+  elapsedMs = 0;
+  payoutDone = false;
+  routeMap.flashMs = 0;
+  bootScene();
+  contact.reset(); // a fresh run must not inherit the last run's contact
+  traffic.rescope(0, track.length * DEFAULT_TRACK_CONFIG.segmentLength);
+  router.startPlaying();
+}
+
+// The editor sees every key first; leftovers drive the InputManager. While a
+// screen is open, OS shortcuts (Cmd/Ctrl combos) pass through untouched.
 window.addEventListener('keydown', (e) => {
   // Any keydown is a valid autoplay-policy user gesture — resume here too, not
   // just on the canvas click, so a keyboard-only driver who never clicks still
@@ -225,16 +305,10 @@ window.addEventListener('keydown', (e) => {
     applyCrtVisibility();
     return;
   }
-  const screenOpen = remap.open || editor.open || leaderboard.open || trackBrowser.open
-    || account.open || shop.open;
+  const screenOpen = editor.open || leaderboard.open || trackBrowser.open || router.state !== 'playing';
   if (screenOpen && (e.metaKey || e.ctrlKey)) return;
-  if (e.code === 'Tab' || e.code === 'F2' || e.code === 'F3' || e.code === 'F4'
-      || e.code === 'F5' || e.code === 'F6' || input.isBound(e.code)) e.preventDefault();
-  if (remap.handleKey(e.code)) {
-    // Spec §6 mutual exclusion: opening remap closes the editor.
-    if (remap.open && editor.open) editor.handleKey('Escape');
-    return;
-  }
+  if (e.code === 'Tab' || e.code === 'F2' || e.code === 'F3' || e.code === 'F4' || e.code === 'F6'
+      || input.isBound(e.code)) e.preventDefault();
   if (editor.handleKey(e.code)) return;
   if (e.code === 'F3') {
     leaderboard.toggle(routeIdentity(route).trackId);
@@ -243,33 +317,22 @@ window.addEventListener('keydown', (e) => {
   if (leaderboard.handleKey(e.code)) return;
   if (e.code === 'F4') { trackBrowser.toggle(); return; }
   if (trackBrowser.handleKey(e.code)) return;
-  if (e.code === 'F5') { account.toggle(); return; }
-  if (account.handleKey(e.code)) return;
-  if (e.code === 'F6') { shop.toggle(); return; }
-  if (shop.handleKey(e.code)) return;
+  if (e.code === 'F6') { router.goGarage(); return; } // shell Garage screen (F5 Account is under Settings now)
   if (e.code === 'KeyM') {
     // Toggled on: pinned forever on the ending screen, timed elsewhere.
     routeMap.flashMs = routeMap.flashMs > 0 ? 0 : (route.finished ? Number.MAX_SAFE_INTEGER : 60_000);
     return;
   }
   if (e.code === 'KeyR' && (route.expired || route.finished)) {
-    route = new RouteState(1);
-    rebuildVehicle(); // picks up anything bought since the last run
-    score.reset();
-    elapsedMs = 0;
-    payoutDone = false;
-    summary.clear();
-    routeMap.flashMs = 0;
-    bootScene();
-    contact.reset(); // a fresh run must not inherit the last run's contact
-    traffic.rescope(0, track.length * DEFAULT_TRACK_CONFIG.segmentLength);
+    showingSummary = false;
+    restartRun();
     return;
   }
   input.press(e.code);
 });
 // Clipboard edge for the editor (kept here so EditorScreen stays clipboard-free).
 window.addEventListener('keydown', (e) => {
-  if (!editor.open || remap.open || e.metaKey || e.ctrlKey) return;
+  if (!editor.open || e.metaKey || e.ctrlKey) return;
   if (e.code === 'KeyE') void navigator.clipboard?.writeText(editor.exportJson());
   else if (e.code === 'KeyI') void navigator.clipboard?.readText?.().then((json) => { editor.importJson(json); });
 });
@@ -334,8 +397,10 @@ createLoop({
     pollGamepad();
     tickMouseSteer(dt);
     input.read(cmd);
-    if (remap.open || editor.open || leaderboard.open || trackBrowser.open || account.open
-        || shop.open) { // pause driving while a screen is up
+    if (editor.open || leaderboard.open || trackBrowser.open || router.state !== 'playing') {
+      // pause driving while a screen (editor/leaderboard/track browser, or
+      // anything but the shell's 'playing' state — hub/garage/guide/settings/
+      // paused) is up
       cmd.throttle = 0; cmd.brake = 0; cmd.steer = 0; cmd.handbrake = true;
     } else if (route.expired || route.finished) {
       cmd.throttle = 0; cmd.steer = 0; cmd.brake = 1; // roll to a stop on the end screens
@@ -378,7 +443,7 @@ createLoop({
     }
 
     // Route progression: countdown, fork hand-off, final-stage finish.
-    if (!route.finished && !route.expired && !remap.open && !editor.open) {
+    if (!route.finished && !route.expired && !editor.open) {
       route.tick(dt * 1000);
       const branch = track.activeBranch;
       if (branch) {
@@ -425,7 +490,7 @@ createLoop({
       });
       garage.award(ledger.total);
       void persistGarage(save, garage);
-      summary.show(route.finished ? 'route complete' : 'time up', ledger, garage.credits);
+      showSummary(route.finished ? 'route complete' : 'time up', ledger, garage.credits);
       const { trackId, path } = routeIdentity(route);
       void recordRaceResult({ trackId, route: path, timeMs: elapsedMs, creditsEarned: ledger.total });
     }
@@ -447,14 +512,10 @@ createLoop({
     renderer.render(camera, track, backend, background, traffic, track.segment(base).curve, backdrop, vehicle);
     hud.render(vehicle, elapsedMs, track, camera, backend, route.remainingMs,
       route, score.passedCars, score.points);
-    remap.render(backend);
     editor.render(backend);
     leaderboard.render(backend);
     trackBrowser.render(backend);
-    account.render(backend);
-    shop.render(backend);
     routeMap.render(route, backend);
-    summary.render(backend);
     // CRT reads the finished logical frame as a texture and draws its own
     // canvas; #game's own present() is skipped so the two never fight over
     // the same visible pixels (index.html shows exactly one at a time).

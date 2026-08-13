@@ -1,0 +1,235 @@
+@import './tokens.css';
+
+#ui-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  font-family: var(--rt-font-body);
+  color: var(--rt-text);
+  background: linear-gradient(180deg, var(--rt-bg-top), var(--rt-bg-bottom));
+  overflow-y: auto;
+}
+
+#ui-shell[data-hidden="true"] {
+  display: none;
+}
+
+#ui-shell .rt-screen {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 24px clamp(16px, 4vw, 48px);
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+#ui-shell .rt-card {
+  background: var(--rt-surface);
+  border: 1px solid var(--rt-surface-border);
+  border-radius: 16px;
+  backdrop-filter: blur(var(--rt-blur));
+  -webkit-backdrop-filter: blur(var(--rt-blur));
+  padding: 20px;
+}
+
+#ui-shell .rt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+/* Utility layout classes — every screen composes rows of spans/buttons/
+   inputs that would otherwise run together as inline content with no
+   separator (e.g. a part name butting against its price). */
+#ui-shell .rt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#ui-shell .rt-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#ui-shell .rt-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#ui-shell .rt-navbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#ui-shell .rt-navbar button {
+  background: transparent;
+  border: none;
+  color: var(--rt-nav-inactive);
+  font-family: var(--rt-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: var(--rt-radius);
+  cursor: pointer;
+}
+
+#ui-shell .rt-navbar button[aria-current="true"] {
+  color: var(--rt-cyan);
+  box-shadow: inset 0 -2px 0 var(--rt-cyan);
+}
+
+#ui-shell .rt-btn {
+  border-radius: var(--rt-radius);
+  border: none;
+  padding: 10px 20px;
+  font-family: var(--rt-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+#ui-shell .rt-btn-primary {
+  background: var(--rt-cyan);
+  color: #0B0C10;
+}
+
+#ui-shell .rt-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 16px var(--rt-cyan);
+}
+
+#ui-shell .rt-btn-ghost {
+  background: transparent;
+  color: var(--rt-text);
+  border: 1px solid var(--rt-surface-border);
+}
+
+#ui-shell .rt-tabbar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--rt-surface-border);
+}
+
+#ui-shell .rt-tabbar button {
+  background: transparent;
+  border: none;
+  color: var(--rt-text-muted);
+  padding: 10px 16px;
+  cursor: pointer;
+  font-family: var(--rt-font-display);
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+
+#ui-shell .rt-tabbar button[aria-selected="true"] {
+  color: var(--rt-cyan);
+  box-shadow: inset 0 -2px 0 var(--rt-cyan);
+}
+
+#ui-shell .rt-toggle {
+  --rt-toggle-w: 40px;
+  width: var(--rt-toggle-w);
+  height: 22px;
+  border-radius: 11px;
+  background: var(--rt-text-dim);
+  border: none;
+  position: relative;
+  cursor: pointer;
+}
+
+#ui-shell .rt-toggle[aria-checked="true"] {
+  background: var(--rt-cyan);
+}
+
+#ui-shell .rt-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--rt-text);
+  transition: left 120ms ease;
+}
+
+#ui-shell .rt-toggle[aria-checked="true"]::after {
+  left: calc(var(--rt-toggle-w) - 20px);
+}
+
+#ui-shell .rt-slider {
+  width: 100%;
+  accent-color: var(--rt-cyan);
+}
+
+#ui-shell .rt-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+#ui-shell .rt-modal {
+  width: min(720px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#ui-shell .rt-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+#ui-shell .rt-stat-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+#ui-shell .rt-stat-bar-fill {
+  height: 100%;
+}
+
+#ui-shell .rt-stat-bar-fill[data-sign="positive"] {
+  background: var(--rt-cyan);
+}
+
+#ui-shell .rt-stat-bar-fill[data-sign="negative"] {
+  background: var(--rt-red);
+}
+
+#ui-shell .rt-pause-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 12, 16, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 15;
+}
+
+@media (max-width: 760px) {
+  #ui-shell .rt-garage-layout {
+    flex-direction: column;
+  }
+}

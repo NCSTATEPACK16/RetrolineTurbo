@@ -38,12 +38,14 @@
         display: none; /* shown only once main.ts confirms WebGL2 CRT support */
       }
     </style>
+    <link rel="stylesheet" href="/src/ui-shell/shell.css" />
   </head>
   <body>
     <div id="stage">
       <canvas id="game" width="480" height="270"></canvas>
       <canvas id="crt" width="480" height="270"></canvas>
     </div>
+    <div id="ui-shell"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
