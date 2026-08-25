@@ -73,6 +73,19 @@ export const GEAR_MAX_KMH = [120, 290] as const; // Low, High top speeds
  * because the streaks are a camera effect and the car's ceiling never varies. */
 export const TOP_SPEED_WORLD = GEAR_MAX_KMH[GEAR_MAX_KMH.length - 1]! * WORLD_PER_KMH;
 export const GEAR_ACCEL_KMH_S = [60, 25] as const; // zero-speed accel per gear (Low torquey)
+/** Bottom of each gear's torque band. Overlaps the previous gear's ceiling so
+ * every gear has a usable window rather than one correct instant. */
+export const GEAR_MIN_KMH = [0, 70, 120, 180] as const;
+/** Exponent on the head-room term. Below 1 holds torque through the band then
+ * drops it sharply near the ceiling — the shape a gear should have. Squaring
+ * instead (an exponent above 1) sags early, which is the wrong way round. */
+export const TORQUE_SHAPE = 0.6;
+/** Accel multiplier below a gear's band: the cost of upshifting too early.
+ * Recoverable by design — see the spec's §3c on bog-not-position. */
+export const BOG_FACTOR = 0.35;
+/** Decel applied when downshifting above a gear's ceiling (engine braking),
+ * which makes the downshift a corner-entry tactic and not only a recovery. */
+export const ENGINE_BRAKE_KMH_S = 45;
 export const BRAKE_KMH_S = 180; // full-brake decel
 export const HANDBRAKE_KMH_S = 270; // handbrake decel
 export const COAST_KMH_S = 20; // engine-drag decel at zero throttle
