@@ -87,7 +87,7 @@ A new self-contained module so the torque curve is testable without constructing
   - `export function gearAccel(kmh: number, g: number, t: GearTable): number`
   - `export function shouldUpshift(kmh: number, g: number, t: GearTable): boolean`
 
-- [ ] **Step 1: Add the shape constants to `src/constants.ts`**
+- [x] **Step 1: Add the shape constants to `src/constants.ts`**
 
 Append near the existing gear constants (around line 75):
 
@@ -104,7 +104,7 @@ export const BOG_FACTOR = 0.35;
 export const ENGINE_BRAKE_KMH_S = 45;
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `src/physics/gearbox.test.ts`:
 
@@ -171,12 +171,12 @@ describe('shouldUpshift', () => {
 });
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Run: `npx vitest run src/physics/gearbox.test.ts`
 Expected: FAIL — cannot resolve `./gearbox.js`.
 
-- [ ] **Step 4: Implement `src/physics/gearbox.ts`**
+- [x] **Step 4: Implement `src/physics/gearbox.ts`**
 
 ```ts
 /**
@@ -228,17 +228,17 @@ export function shouldUpshift(kmh: number, g: number, t: GearTable): boolean {
 }
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run: `npx vitest run src/physics/gearbox.test.ts`
 Expected: PASS — all tests.
 
-- [ ] **Step 6: Full suite + build**
+- [x] **Step 6: Full suite + build**
 
 Run: `npm test && npm run build`
 Expected: both green. Nothing else consumes `gearbox.ts` yet, so no regressions are possible.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/physics/gearbox.ts src/physics/gearbox.test.ts src/constants.ts
