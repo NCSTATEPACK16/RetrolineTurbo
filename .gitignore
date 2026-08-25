@@ -30,6 +30,10 @@ coverage/
 art/models/*/
 art/models/*.zip
 
+# Downloaded CC0 source music (18-56 MB WAV/FLAC; provenance in art/LICENSES.md).
+# Only the transcoded public/assets/music/ output ships — `npm run bake:music`.
+art/music/
+
 # Intermediate bake output. Only the packed atlas under public/assets/sprites/
 # is committed; these are reproducible with `npm run bake:cars`.
 art/build/
