@@ -7,7 +7,7 @@ import {
   SKID_CURVE_THRESHOLD, SKID_SPEED_KMH, SKID_GRIP, SKID_SPEED_DECAY, SKID_RECOVERY_STEPS,
   STEER_RATE_PER_S, MAX_LATERAL_ROADWIDTHS,
 } from '../constants.js';
-import { gearAccel, type GearTable } from './gearbox.js';
+import { gearAccel, shouldUpshift, type GearTable } from './gearbox.js';
 
 /** Normalized per-step driver intent. Filled by InputManager; owned by physics
  * so the dependency points input → physics, not both ways. `gearUp`/`gearDown`
@@ -126,6 +126,13 @@ export class Vehicle implements PlayerState {
   /** Brake or handbrake held on the last step. Drives the brake-light overlay. */
   get braking(): boolean {
     return this.lastBraking;
+  }
+
+  /** True when upshifting now would out-accelerate holding this gear. Reads the
+   * same predicate the transmission does, against this car's own gear table, so
+   * the HUD lamp can never drift from the physics it is teaching. */
+  get shiftReady(): boolean {
+    return shouldUpshift(this.kmh, this.gearIdx - 1, this.gears);
   }
 
   /** Advance one fixed step. `curvature` is the current segment's K_i.

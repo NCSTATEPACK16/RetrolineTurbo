@@ -16,8 +16,12 @@ import type { Camera, PlayerState } from '../types/engine.js';
 const atlas = new SpriteAtlas({} as CanvasImageSource, packAtlas(SPRITE_MANIFEST, 256).frames);
 const camera: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
 const player: PlayerState = {
-  z: 0, x: 0, speed: 6000, gear: 2, steer: 0, skidding: false, skidMagnitude: 0, braking: false,
+  z: 0, x: 0, speed: 6000, gear: 2, steer: 0, skidding: false, skidMagnitude: 0,
+  braking: false, shiftReady: false,
 };
+
+/** A player with selected fields overridden, for the single-signal assertions. */
+const playerWith = (over: Partial<PlayerState>): PlayerState => ({ ...player, ...over });
 
 describe('HUD helpers', () => {
   it('formatTime renders minutes:seconds.tenths', () => {
@@ -44,6 +48,41 @@ describe('HUD render', () => {
     const withCountdown = new RecordingBackend();
     new HUD(atlas).render(player, 0, track, camera, withCountdown, 42_000);
     expect(withCountdown.sprites.length).toBeGreaterThan(without.sprites.length); // "time 42" glyphs
+  });
+});
+
+describe('HUD shift light', () => {
+  const draw = (p: PlayerState): RecordingBackend => {
+    const b = new RecordingBackend();
+    new HUD(atlas).render(p, 0, new TrackManager(DEFAULT_TRACK_CONFIG), camera, b);
+    return b;
+  };
+  const lamp = (b: RecordingBackend, color: string): boolean =>
+    b.quads.some((q) => q.color === color && q.y1 === HUD.SHIFT_LAMP_Y);
+
+  it('lights gold the moment the next gear out-accelerates the current one', () => {
+    expect(lamp(draw(playerWith({ shiftReady: true })), HUD.SHIFT_LAMP_ON)).toBe(true);
+  });
+
+  it('shows the dim lamp when holding the current gear is still faster', () => {
+    const b = draw(playerWith({ shiftReady: false }));
+    expect(lamp(b, HUD.SHIFT_LAMP_OFF)).toBe(true);
+    expect(lamp(b, HUD.SHIFT_LAMP_ON)).toBe(false);
+  });
+
+  it('draws the lamp in exactly one state, never both', () => {
+    for (const shiftReady of [true, false]) {
+      const b = draw(playerWith({ shiftReady }));
+      const lamps = b.quads.filter((q) => q.y1 === HUD.SHIFT_LAMP_Y);
+      expect(lamps).toHaveLength(1);
+    }
+  });
+
+  it('keeps the lamp inside the safe right margin', () => {
+    const b = draw(playerWith({ shiftReady: true }));
+    const l = b.quads.find((q) => q.y1 === HUD.SHIFT_LAMP_Y)!;
+    expect(l.x1 + l.w1).toBeLessThanOrEqual(LOGICAL_WIDTH - HUD_MARGIN);
+    expect(l.x1 - l.w1).toBeGreaterThan(0);
   });
 });
 

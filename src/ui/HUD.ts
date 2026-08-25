@@ -35,6 +35,19 @@ export class HUD {
   static readonly TREE_PATH = PALETTE.ui.gold; // scene already visited (TX-1 yellow route line)
   static readonly TREE_ACTIVE = PALETTE.ui.cyan; // scene being driven now
 
+  /** Shift lamp: gold when upshifting now is faster, dim otherwise. Sits above
+   * the gear readout in the bottom-right cluster, so the two things the driver
+   * reads together — which gear, and whether to leave it — are adjacent. */
+  static readonly SHIFT_LAMP_ON = PALETTE.ui.gold;
+  /** `starOff`, not `treeNode`: this HUD already uses starOff to mean "indicator
+   * present but unlit" (the dark star slots), and reusing treeNode would make a
+   * dim lamp indistinguishable from a route-pyramid node — which is exactly what
+   * the tree-node count test caught. */
+  static readonly SHIFT_LAMP_OFF = PALETTE.ui.starOff;
+  static readonly SHIFT_LAMP_Y = HUD_ROW_Y - 16;
+  private static readonly SHIFT_LAMP_HALF_W = 11;
+  private static readonly SHIFT_LAMP_H = 3;
+
   private static readonly LABEL = 1; // scale for the small magenta/cyan captions
   private static readonly VALUE = 2; // scale for the big readouts
 
@@ -90,7 +103,8 @@ export class HUD {
     this.label(backend, 'score', HUD_MARGIN, HUD_ROW_Y - 7, 'magenta');
     this.value(backend, `${points}`, HUD_MARGIN, HUD_ROW_Y, 'cyan');
 
-    // gear then speed, right — both flush to the safe margin
+    // shift lamp, then gear, then speed — right, all flush to the safe margin
+    this.drawShiftLamp(player.shiftReady, backend);
     const gearText = `gear ${player.gear}`;
     this.label(
       backend, gearText,
@@ -111,6 +125,27 @@ export class HUD {
 
   private value(backend: RenderBackend, text: string, x: number, y: number, color: 'cyan' | 'red' | 'white'): void {
     drawText(backend, this.atlas, text, x, y, HUD.VALUE, color);
+  }
+
+  /**
+   * The shift lamp. Always drawn — in the lit or the dim colour, never absent —
+   * so the driver's eye learns a fixed position rather than hunting for
+   * something that blinks into existence.
+   *
+   * `lit` is `PlayerState.shiftReady`, derived in `Vehicle` from its own gear
+   * table. The HUD deliberately does not recompute it: an upgraded car's torque
+   * bands are scaled by its loadout, and a lamp reading the stock constants
+   * would point at the wrong speed.
+   */
+  private drawShiftLamp(lit: boolean, backend: RenderBackend): void {
+    const halfW = HUD.SHIFT_LAMP_HALF_W;
+    const cx = LOGICAL_WIDTH - HUD_MARGIN - halfW;
+    const y = HUD.SHIFT_LAMP_Y;
+    backend.drawQuad(
+      cx, y, halfW,
+      cx, y + HUD.SHIFT_LAMP_H, halfW,
+      lit ? HUD.SHIFT_LAMP_ON : HUD.SHIFT_LAMP_OFF,
+    );
   }
 
   /** Ten slots; one lights per overtaken car and the gauge saturates there. */

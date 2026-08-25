@@ -8,7 +8,7 @@ import type { PlayerState } from '../types/engine.js';
  * complete with a stubbed/null audio backend, same contract as the Supabase
  * null-client tests. */
 const player = (over: Partial<PlayerState> = {}): PlayerState => (
-  { z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, skidMagnitude: 0, braking: false, ...over }
+  { z: 0, x: 0, speed: 0, gear: 1, steer: 0, skidding: false, skidMagnitude: 0, braking: false, shiftReady: false, ...over }
 );
 
 describe('SoundEngine without Web Audio support', () => {
