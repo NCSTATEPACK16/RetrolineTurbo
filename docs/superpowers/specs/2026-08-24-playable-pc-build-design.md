@@ -53,11 +53,16 @@ actually had a gearbox, where hitting the shift point is the skill that separate
 ```ts
 export const GEAR_MAX_KMH   = [ 90, 150, 220, 290] as const;  // ceiling per gear
 export const GEAR_MIN_KMH   = [  0,  70, 120, 180] as const;  // bottom of the torque band
-export const GEAR_ACCEL_KMH_S = [95, 62, 38, 22] as const;    // peak accel per gear
-export const TORQUE_FALLOFF = 0.55;  // how hard accel tapers toward a gear's ceiling
+export const GEAR_ACCEL_KMH_S = [95, 62, 38, 26] as const;    // peak accel per gear
+export const TORQUE_SHAPE   = 0.6;   // <1 holds torque through the band, then drops fast
 export const BOG_FACTOR     = 0.35;  // accel multiplier when below the band (mis-shift)
 export const ENGINE_BRAKE_KMH_S = 45; // decel when downshifting above the band
 ```
+
+**Top-gear accel is 26, not 22** — corrected by deriving the crossovers numerically rather
+than eyeballing them. At 22 the 3→4 shift margin is **+0.07 km/h/s**, which is
+indistinguishable from noise and would make the shift light flicker on rounding. At 26 the
+margin is +4.07. Margins across the box: 1→2 `+23.5`, 2→3 `+3.6`, 3→4 `+4.1`.
 
 `GEAR_MIN_KMH` deliberately overlaps the previous gear's ceiling, so each gear has a real
 usable window rather than a single correct instant. Top speed stays **290 km/h**, preserving
@@ -65,19 +70,28 @@ usable window rather than a single correct instant. Top speed stays **290 km/h**
 
 ### 3b. The torque band — where the skill lives
 
-Acceleration is no longer flat within a gear. It peaks at the bottom of the band and tapers
-toward the ceiling:
+`Vehicle.ts:143` **already** tapers accel — `gearAccelKmhS[g] * throttle * (1 - kmh/gearMax)`,
+decaying to zero exactly at the cap. That asymptote is load-bearing: it's why
+`Vehicle.test.ts` can assert the car approaches but never exceeds a ceiling. The new model
+must preserve it, so the taper is *reshaped*, not replaced by a curve with a non-zero floor.
 
 ```
-r      = clamp((kmh - GEAR_MIN_KMH[g]) / (GEAR_MAX_KMH[g] - GEAR_MIN_KMH[g]), 0, 1)
-torque = 1 - TORQUE_FALLOFF * r²
+r      = (kmh - GEAR_MIN_KMH[g]) / (GEAR_MAX_KMH[g] - GEAR_MIN_KMH[g])
+head   = clamp(1 - r, 0, 1)              // still 0 at the ceiling — asymptote preserved
+torque = head ^ TORQUE_SHAPE             // 0.6 < 1: holds torque through the band
 accel  = GEAR_ACCEL_KMH_S[g] * torque
+if (kmh < GEAR_MIN_KMH[g]) accel *= BOG_FACTOR    // §3c
 ```
 
-The optimal shift point is where the next gear's accel exceeds the current gear's tapered
-accel. That point is *computable*, which makes it both unit-testable and teachable via the
-shift light (§3d). Squaring `r` keeps the taper gentle early and sharp near the ceiling, so
-the penalty for over-revving is felt rather than merely known.
+An exponent **below 1** holds torque high through the meat of the band and then drops it
+sharply near the ceiling — the opposite of squaring, which would sag early and is the wrong
+shape for a gear. Torque stays monotonically decreasing within a gear, which guarantees the
+next gear's curve crosses the current one exactly once: a single unambiguous shift point.
+
+**Derived result:** with these constants the crossover lands *exactly* on `GEAR_MIN_KMH[g+1]`
+for all three shifts. Below that speed the next gear is bogged (§3c) and strictly worse; at
+that speed the bog lifts and it is strictly better. This makes the shift light (§3d) exact
+rather than approximate, and gives the test suite a precise expected value per gear.
 
 ### 3c. Mis-shift penalty — bog, not position
 
