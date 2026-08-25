@@ -584,7 +584,7 @@ Eyeless ships as 55.8 MB WAV / 19 MB FLAC. Shipping that raw blows `plan.md` §1
 - Consumes: nothing
 - Produces: `public/assets/music/<id>.ogg`, `<id>.mp3`, and `public/assets/music/manifest.json` shaped `{ "tracks": [{ "id": string, "ogg": string, "mp3": string, "seconds": number }] }`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `scripts/test_bake_music.py`:
 
@@ -612,12 +612,12 @@ def test_manifest_skips_tracks_missing_an_encoding(tmp_path):
     assert build_manifest(out, {"half": 10.0})["tracks"] == []
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `.venv/bin/pytest scripts/test_bake_music.py -v`
 Expected: FAIL — no module named `bake_music`.
 
-- [ ] **Step 3: Implement `scripts/bake_music.py`**
+- [x] **Step 3: Implement `scripts/bake_music.py`**
 
 ```python
 #!/usr/bin/env python3
@@ -697,12 +697,12 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `.venv/bin/pytest scripts/test_bake_music.py -v`
 Expected: PASS — 2 tests.
 
-- [ ] **Step 5: Record provenance**
+- [x] **Step 5: Record provenance**
 
 Append to `art/LICENSES.md`:
 
@@ -720,7 +720,7 @@ Append to `art/LICENSES.md`:
 Add `art/music/` to `.gitignore` — sources are large and re-downloadable; only the baked
 output ships.
 
-- [ ] **Step 6: Add the npm script and commit**
+- [x] **Step 6: Add the npm script and commit**
 
 Add to `package.json` scripts: `"bake:music": "python3 scripts/bake_music.py"`
 
@@ -732,6 +732,24 @@ Source tracks are CC0 but 19-56 MB; raw they would blow plan.md §12 alone.
 Both encodings are required per track (OGG for Chrome/Firefox, MP3 for Safari)
 and a track missing either is dropped rather than shipped broken."
 ```
+
+> **Done 2026-08-24** (`ec40295`). 22 pytest (was 17) / 578 vitest green, build clean.
+> Two deviations from the step text, both forced by the environment:
+> - **The ogg encoder is probed, not hardcoded.** `libvorbis` does not exist in Homebrew's
+>   ffmpeg 8.1.2 — it carries `libopus` and the native `vorbis` encoder, which ffmpeg flags
+>   experimental. Step 3's fixed `-c:a libvorbis` therefore failed outright on this machine.
+>   Now `pick_ogg_args` walks a preference list (libvorbis → libopus) against `ffmpeg
+>   -encoders` and raises if neither is present, rather than falling back to the experimental
+>   encoder. Three tests added for the picker; the plan's own two manifest tests are unchanged.
+> - **Only one of the two named sources was taken.** Eyeless downloaded cleanly from
+>   OpenGameArt (CC0 confirmed on the page, 18 MB FLAC → 3.2 MB/encoding, 211s). The itch.io
+>   Retro Synthwave pack gates even free downloads behind an interactive click-through no
+>   script here can drive — recorded in `art/LICENSES.md` under "Considered, not taken". The
+>   pipeline already handles multiple tracks, so adding it later is a download plus a re-bake.
+>
+> The baked output is committed (`public/assets/music/`) — the plan's `git add` list omitted
+> it, and nothing plays without it. It streams via `<audio>`, so it does not load against
+> plan.md §12's initial-payload budget.
 
 ---
 
