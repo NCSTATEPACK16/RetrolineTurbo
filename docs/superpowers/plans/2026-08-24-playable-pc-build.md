@@ -950,7 +950,7 @@ silence on any failure. The Settings 'Soundtrack' slider now controls something.
   - `export interface TuningOverrides { torqueShape?: number; bogFactor?: number; skidCurveThreshold?: number; centrifugal?: number; steerRatePerS?: number; muOffroad?: number }`
   - `export function applyTuning(base: VehicleParams, o: TuningOverrides): VehicleParams`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src/physics/tuning.test.ts`:
 
@@ -978,12 +978,12 @@ describe('applyTuning', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run src/physics/tuning.test.ts`
 Expected: FAIL — cannot resolve `./tuning.js`.
 
-- [ ] **Step 3: Implement `src/physics/tuning.ts`**
+- [x] **Step 3: Implement `src/physics/tuning.ts`**
 
 ```ts
 /**
@@ -1018,12 +1018,12 @@ export function applyTuning(base: VehicleParams, o: TuningOverrides): VehiclePar
 > `TuningOverrides` and reading `o.x ?? MODULE_CONSTANT` at each use site. Keep the
 > production default `{}` so behaviour is byte-identical when the overlay is absent.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run src/physics/tuning.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Build the overlay screen**
+- [x] **Step 5: Build the overlay screen**
 
 Create `src/ui-shell/screens/TuningOverlay.ts` following the existing `SettingsScreen.ts`
 pattern (`rt-col` rows). Reuse the shared slider builder — its exact signature is:
@@ -1043,7 +1043,7 @@ Register in `ShellRouter` behind a DEV guard so it cannot reach production:
 if (import.meta.env.DEV) routes.tuning = makeTuningOverlay(bridge);
 ```
 
-- [ ] **Step 6: Full suite + commit**
+- [x] **Step 6: Full suite + commit**
 
 ```bash
 npm test && npm run build
@@ -1054,6 +1054,36 @@ Kept off VehicleParams on purpose: that type means 'what a Phase 9 part may
 move', and a dev slider must not be able to redefine it. Turns every feel
 question from an edit-rebuild-drive cycle into a slider drag."
 ```
+
+> **Done 2026-08-24** (`47e3c81`). 605 vitest / 66 files green (was 588/64), 22 pytest, build
+> clean, `visual-check` clean. The plan called this its least-specified task and it was — four
+> judgement calls, all documented at the code:
+> - **Step 5's `routes.tuning = ...` has no referent.** `ShellRouter` is a pure state machine
+>   with no route map; screens mount through a `renderShell()` if-chain in `main.ts`. Worse, a
+>   router state would be the wrong home regardless: `#ui-shell` is a full-bleed opaque panel
+>   that `display:none`s itself while `state === 'playing'`, so a screen there is either hidden
+>   exactly when the overlay must be visible, or covering the car it exists to tune. It mounts
+>   as its own fixed column outside the shell, DEV-gated behind a dynamic import, toggled on
+>   **F8** (the plan named no key; F8 was free).
+> - **Step 3's `applyTuning` only covers one of six fields.** Added `resolveTuning` +
+>   `ResolvedTuning` beside it, so the five module-constant fields collapse their
+>   `?? CONSTANT` defaults in one testable place instead of at six use sites in `Vehicle`.
+>   `torqueShape`/`bogFactor` ride on `GearTable` — which `Vehicle` already holds a prebuilt
+>   instance of — so reshaping the curve live costs no per-step allocation (hard rule 4).
+> - **`Vehicle.setTunables` swaps live instead of rebuilding.** A rebuild resets the car, and
+>   the 2→3 shift gets tuned by dragging *while sitting at that speed*. `rebuildVehicle()`
+>   re-applies the overrides for the same reason: `restartRun()` rebuilds, and a feel pass
+>   restarts constantly — without it every slider would be lost on the first spin-off.
+> - **Opening the panel narrows `#stage` rather than overlapping it.** Caught by screenshot,
+>   not by a test: at 320px of overlap the panel covered the gear/speed readout and the
+>   PASSED CARS gauge — exactly what a gearbox pass needs to watch.
+>
+> Verified in a real browser (throwaway Playwright, not committed): F8 toggles both ways, 18
+> sliders apply live mid-drive, driving still works after touching one, the copy-constants
+> clipboard fallback logs to console when blocked, and no new console errors. `tsc` also
+> caught the now-dead `params` field the refactor left behind. The production bundle was
+> grepped directly to confirm the overlay is absent — `import.meta.env.DEV` drops the module,
+> styles included, with no orphan chunk.
 
 ---
 
