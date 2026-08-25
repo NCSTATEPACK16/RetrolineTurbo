@@ -49,12 +49,18 @@ Expected: exactly two modified files, `src/engine/Renderer.ts` and `src/engine/R
 Run: `npm test`
 Expected: PASS — 61 files, 558 tests.
 
-> **Done 2026-08-24** (`ac6ec92`). `visual-check` also recorded a large perf win, measured
-> against a stashed baseline on the dev server: avg 24.3 → 17.0ms, p95 50.3 → 17.7ms,
-> max 83.8 → 35.0ms. The procedural-placeholder path was the expensive one, not the baked
-> atlas. Residual 17.0ms avg is a dev-server number, not comparable to §12's production
-> budget. The Supabase 406 / "Invalid schema: retroline" console errors are pre-existing
-> environment config, unrelated to this change.
+> **Done 2026-08-24** (`ac6ec92`).
+>
+> **Perf claim retracted.** This step originally recorded a "large perf win" from
+> `visual-check` (avg 24.3 → 17.0ms) against a stashed baseline. That was one run of each,
+> and repeated runs during Task 3 showed **identical code varying from 19.6 to 24.5ms avg**
+> (p95 33.7–66.7, max 99–232). The 24.3ms baseline sits inside the noise band for the
+> *fixed* code, so the paired sample supports no conclusion either way. Treat this dev-server
+> harness as a **crash/error gate, not a perf gate** — single-run comparisons on it are not
+> evidence. Real perf work needs a production build and many samples.
+>
+> The Supabase 406 / "Invalid schema: retroline" console errors are pre-existing environment
+> config, unrelated to this change.
 
 - [x] **Step 3: Commit**
 
@@ -270,7 +276,7 @@ The breaking change. `VehicleParams.gearMaxKmh` is `readonly [number, number]`; 
   - `VehicleParams.gearMaxKmh: readonly number[]`, `.gearAccelKmhS: readonly number[]`, new `.gearMinKmh: readonly number[]`
   - `EngineToneParams.fBase: readonly number[]` (replaces `fBaseLow`/`fBaseHigh`)
 
-- [ ] **Step 1: Update the constants to four gears**
+- [x] **Step 1: Update the constants to four gears**
 
 In `src/constants.ts`, replace lines 70 and 75:
 
@@ -290,7 +296,7 @@ export const ENGINE_F_BASE = [90, 78, 68, 60] as const;
 
 Delete `ENGINE_F_BASE_LOW` and `ENGINE_F_BASE_HIGH`.
 
-- [ ] **Step 2: Update the tests to expect four gears (they will fail)**
+- [x] **Step 2: Update the tests to expect four gears (they will fail)**
 
 `src/physics/Vehicle.test.ts` — the top-speed tests at ~lines 42-53 index `GEAR_MAX_KMH[0]`/`[1]`. The gear-1 test still holds. Change the top-speed test to drive through all four gears:
 
@@ -346,12 +352,12 @@ and the "uses the High-gear base" test becomes per-gear:
   });
 ```
 
-- [ ] **Step 3: Run to verify they fail**
+- [x] **Step 3: Run to verify they fail**
 
 Run: `npm test`
 Expected: FAIL — type errors on the tuple types and missing `fBase`.
 
-- [ ] **Step 4: Widen `VehicleParams` and rewire the transmission**
+- [x] **Step 4: Widen `VehicleParams` and rewire the transmission**
 
 In `src/physics/Vehicle.ts`, replace the interface (lines 34-39):
 
@@ -402,7 +408,7 @@ Import at the top: `import { gearAccel, type GearTable } from './gearbox.js';`
 > physics step. Hoist it to a private field built in the constructor and refreshed only when
 > `params` changes. Do this now rather than as a follow-up.
 
-- [ ] **Step 5: Update `Garage.ts` to map over all gears**
+- [x] **Step 5: Update `Garage.ts` to map over all gears**
 
 Replace lines 54-55 of `src/economy/Garage.ts`:
 
@@ -416,7 +422,7 @@ Import `GEAR_MIN_KMH` alongside the existing constants. Scaling the floors by th
 `speedF` as the ceilings keeps the bands proportional, so a maxed loadout does not end up
 with a floor above its own ceiling.
 
-- [ ] **Step 6: Generalise `engineTone.ts` to N gears**
+- [x] **Step 6: Generalise `engineTone.ts` to N gears**
 
 Replace the interface and the base-frequency lookup:
 
@@ -450,12 +456,12 @@ export function computeEngineTone(
 In `src/audio/SoundEngine.ts`, update the import and the call site (~line 151) to pass
 `fBase: ENGINE_F_BASE` instead of `fBaseLow`/`fBaseHigh`.
 
-- [ ] **Step 7: Run the full suite**
+- [x] **Step 7: Run the full suite**
 
 Run: `npm test && npm run build`
 Expected: both green, all 558+ tests.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A src/constants.ts src/physics src/economy src/audio
@@ -470,6 +476,13 @@ frequency, which becomes per-gear so each upshift drops pitch.
 Downshifting above a gear's ceiling now applies engine braking, making the
 downshift a corner-entry tactic rather than only a recovery."
 ```
+
+> **Done 2026-08-24** (`2fab7cf`). All 574 tests green, build clean. Three existing tests
+> changed premise rather than intent, each documented inline at the call site: `fastVehicle()`
+> must climb the whole box (SKID_SPEED_KMH 200 > gear 2's 150 ceiling), Traffic's "catchable
+> in the lowest gear" invariant retargets to second gear (first is now a ~2s launch gear),
+> and the top-speed test climbs all four gears. `visual-check` clean — no console errors
+> beyond the pre-existing Supabase ones; frame timings are noise-dominated (see Task 1).
 
 ---
 
