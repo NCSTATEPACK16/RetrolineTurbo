@@ -24,6 +24,9 @@ export interface CarFrameChoice { angle: number; flipX: boolean; skid: boolean }
 const STEER_FRAME_1 = 0.1;
 const STEER_FRAME_2 = 0.5;
 
+/** Matches Traffic.ts's roster sprite names ('car0'..'car3') — never a roadside prop name. */
+const TRAFFIC_CAR_RE = /^car\d+$/;
+
 /**
  * Steering-frame selection.
  *
@@ -371,6 +374,24 @@ export class Renderer {
       const dx = cx - bf.w * (bf.anchorX / bf.w);
       const dy = rec.y - bf.h * (bf.anchorY / bf.h);
       backend.drawSprite(this.bakedProps!.image, bf.x, bf.y, bf.w, bf.h, dx, dy, bf.w, bf.h, rec.maxy);
+      return;
+    }
+
+    // Traffic cars ('car0'..'car3') piggyback on the player's own baked body
+    // atlas rather than the 22x14 procedural placeholder billboard — that
+    // placeholder was never migrated onto Spec C's bake pipeline, and its tiny
+    // native pixel footprint made `ideal` collapse to single-digit widths at
+    // any realistic passing distance (the ladder math is correct; the input
+    // sprite was just far smaller than a real car). Reusing the body set gives
+    // traffic the same detail and the same 12-step ladder as the player car.
+    if (this.bakedCar && TRAFFIC_CAR_RE.test(name)) {
+      const body = this.bakedCar.body;
+      const colorIdx = Number(name.slice(3)) % body.colors;
+      const step = body.nearestStep(colorIdx, 0, ladderStepFor(ideal));
+      const bf = body.frame(colorIdx, 0, step);
+      const dx = cx - bf.w * (bf.anchorX / bf.w);
+      const dy = rec.y - bf.h * (bf.anchorY / bf.h);
+      backend.drawSprite(this.bakedCar.image, bf.x, bf.y, bf.w, bf.h, dx, dy, bf.w, bf.h, rec.maxy);
       return;
     }
 

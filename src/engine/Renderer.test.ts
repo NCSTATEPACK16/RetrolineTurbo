@@ -14,6 +14,7 @@ import type { Camera, PlayerState, Segment, Sprite } from '../types/engine.js';
 import { buildCarFrameSet } from './CarFrameSet.js';
 import { parseTrackFile } from '../track/schema.js';
 import { MIN_BAND_ROWS } from './roadBanding.js';
+import { Traffic } from './Traffic.js';
 
 const CAM: Camera = { x: 0, z: 0, height: DEFAULT_CAMERA_HEIGHT, focalLength: DEFAULT_FOCAL_LENGTH, horizon: HORIZON_Y };
 const camAt = (z: number): Camera =>
@@ -422,6 +423,53 @@ describe('baked roadside props', () => {
     const lampFrame = atlas.frame('lamp_post');
     const lamp = backend.sprites.find((s) => s.sx === lampFrame.x && s.sy === lampFrame.y);
     expect(lamp).toBeDefined();
+  });
+});
+
+describe('baked traffic cars', () => {
+  /** A minimal two-colour, one-angle, full-ladder body set — enough to prove
+   * traffic cars piggyback on the player's baked atlas instead of the tiny
+   * 22x14 procedural placeholder in SPRITE_MANIFEST. */
+  const mkBody = () =>
+    buildCarFrameSet((['blue', 'red'] as const).flatMap((color) =>
+      LADDER.map((w, step) => ({
+        id: `gt_${color}_a0_s${step}`, x: step * 10, y: 0, w, h: Math.round(w * 0.6),
+        car: 'gt', color, angle: 0, step, anchors: {},
+      }))));
+
+  it('draws a traffic car from the baked atlas, not the tiny procedural placeholder', () => {
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    renderer.setBakedCar({ image: {} as CanvasImageSource, body: mkBody(), under: [], brake: null, color: 0 });
+    const track = stubTrack(() => []);
+    const carFrame = atlas.frame('car0');
+
+    const backend = new RecordingBackend();
+    renderer.render(camAt(0), track, backend, undefined,
+      new Traffic([{ z: 3000, offset: 0, speed: 50, sprite: 'car0', variant: 0 }], 100000));
+    const proceduralHit = backend.sprites.find(
+      (s) => s.sx === carFrame.x && s.sy === carFrame.y && s.sw === carFrame.w,
+    );
+    expect(proceduralHit).toBeUndefined(); // never falls through to the 22x14 placeholder frame
+
+    // Exactly one extra sprite beyond the player car — proof the traffic car
+    // is actually drawn (root symptom was "tiny and not visible"), not skipped.
+    const backendNoTraffic = new RecordingBackend();
+    renderer.render(camAt(0), track, backendNoTraffic, undefined, new Traffic([], 100000));
+    expect(backend.sprites.length).toBe(backendNoTraffic.sprites.length + 1);
+  });
+
+  it('falls back to the procedural placeholder when no car is baked', () => {
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    const track = stubTrack(() => []);
+    const traffic = new Traffic([{ z: 3000, offset: 0, speed: 50, sprite: 'car0', variant: 0 }], 100000);
+    const backend = new RecordingBackend();
+    renderer.render(camAt(0), track, backend, undefined, traffic);
+
+    const carFrame = atlas.frame('car0');
+    const proceduralHit = backend.sprites.find(
+      (s) => s.sx === carFrame.x && s.sy === carFrame.y && s.sw === carFrame.w,
+    );
+    expect(proceduralHit).toBeDefined();
   });
 });
 
