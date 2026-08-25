@@ -498,7 +498,7 @@ The teaching mechanism. Without it the shift point is invisible and the gearbox 
 - Consumes: `shouldUpshift` (Task 2), `PlayerState.gear` / `.speed`
 - Produces: nothing downstream
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `src/ui/HUD.test.ts`:
 
@@ -523,12 +523,12 @@ describe('gear indicator and shift light', () => {
 
 Match `draw()` to the existing helper's shape in this file — extend it with `gear`/`speedKmh` overrides and a `shiftLit` field rather than inventing a new harness.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run src/ui/HUD.test.ts`
 Expected: FAIL — `shiftLit` undefined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/ui/HUD.ts`, compute the light from the same predicate the physics uses — never a duplicated threshold:
 
@@ -540,12 +540,12 @@ Draw the gear digit in the bottom-right cluster alongside SPEED, and the shift l
 filled band above it using `PALETTE.ui.gold` when lit and the dim UI grey when not. Reuse the
 existing text/band helpers; add no new drawing primitives.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run src/ui/HUD.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Full suite + commit**
+- [x] **Step 5: Full suite + commit**
 
 ```bash
 npm test && npm run build
@@ -556,6 +556,16 @@ The light reads the same shouldUpshift predicate the physics uses, so it can
 never drift from the real crossover. It is what makes an invisible optimum
 learnable without a tutorial."
 ```
+
+> **Done 2026-08-24** (`0cead4a`). 578 tests green, build clean, visual-check shows no new
+> console errors. Two design points resolved during implementation, both away from the
+> plan's sketch:
+> - The lamp reads a new `PlayerState.shiftReady` derived in `Vehicle`, rather than the HUD
+>   calling `shouldUpshift` itself. The HUD does not know the player's `VehicleParams`, and a
+>   Phase 9 loadout scales the torque bands — a HUD computing from stock constants would point
+>   at the wrong speed on an upgraded car. Cost: six `PlayerState` test literals updated.
+> - Unlit colour is `starOff`, not `treeNode`. Borrowing `treeNode` made the dim lamp
+>   indistinguishable from a route-pyramid node, which the existing tree-node count test caught.
 
 ---
 
