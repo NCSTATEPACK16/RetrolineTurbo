@@ -6,8 +6,9 @@
  */
 
 export interface EngineToneParams {
-  fBaseLow: number;
-  fBaseHigh: number;
+  /** Per-gear idle tone, indexed 0-based. A Low/High pair cannot express a
+   * 4-speed box, so this is an array — each gear gets its own pitch drop. */
+  fBase: readonly number[];
   fRange: number;
   filterMinHz: number;
   filterMaxHz: number;
@@ -26,13 +27,13 @@ export interface EngineTone {
 export function computeEngineTone(
   kmh: number,
   gearIdx: number,
-  gearMaxKmh: readonly [number, number],
+  gearMaxKmh: readonly number[],
   params: EngineToneParams,
 ): EngineTone {
-  const cap = gearMaxKmh[gearIdx - 1] ?? gearMaxKmh[0];
+  const cap = gearMaxKmh[gearIdx - 1] ?? gearMaxKmh[0]!;
   const raw = cap > 0 ? kmh / cap : 0;
   const ratio = raw < 0 ? 0 : raw > 1 ? 1 : raw;
-  const fBase = gearIdx <= 1 ? params.fBaseLow : params.fBaseHigh;
+  const fBase = params.fBase[gearIdx - 1] ?? params.fBase[0]!;
   return {
     frequency: fBase + ratio * params.fRange,
     cutoff: params.filterMinHz + ratio * (params.filterMaxHz - params.filterMinHz),

@@ -2,7 +2,7 @@ import type { PlayerState } from '../types/engine.js';
 import { computeEngineTone, squealGain } from './engineTone.js';
 import {
   GEAR_MAX_KMH, KMH_PER_WORLD,
-  ENGINE_F_BASE_LOW, ENGINE_F_BASE_HIGH, ENGINE_F_RANGE,
+  ENGINE_F_BASE, ENGINE_F_RANGE,
   ENGINE_FILTER_MIN_HZ, ENGINE_FILTER_MAX_HZ, ENGINE_GAIN,
   SQUEAL_FILTER_HZ, SQUEAL_GAIN_MAX,
   AUDIO_RAMP_S, MUSIC_BUS_GAIN, SFX_BUS_GAIN,
@@ -89,7 +89,7 @@ export class SoundEngine {
     // only ever ramps the existing AudioParams afterward.
     const engineOsc = ctx.createOscillator();
     engineOsc.type = 'sawtooth';
-    engineOsc.frequency.value = ENGINE_F_BASE_LOW;
+    engineOsc.frequency.value = ENGINE_F_BASE[0]!;
     const engineFilter = ctx.createBiquadFilter();
     engineFilter.type = 'lowpass';
     engineFilter.frequency.value = ENGINE_FILTER_MIN_HZ;
@@ -149,8 +149,7 @@ export class SoundEngine {
     if (!this.ctx || !this.engineOsc || !this.engineFilter || !this.squealGainNode) return;
     const kmh = state.speed * KMH_PER_WORLD;
     const tone = computeEngineTone(kmh, state.gear, GEAR_MAX_KMH, {
-      fBaseLow: ENGINE_F_BASE_LOW,
-      fBaseHigh: ENGINE_F_BASE_HIGH,
+      fBase: ENGINE_F_BASE,
       fRange: ENGINE_F_RANGE,
       filterMinHz: ENGINE_FILTER_MIN_HZ,
       filterMaxHz: ENGINE_FILTER_MAX_HZ,

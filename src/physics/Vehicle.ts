@@ -1,12 +1,13 @@
 import type { PlayerState } from '../types/engine.js';
 import {
   STEP_S, WORLD_PER_KMH,
-  GEAR_MAX_KMH, GEAR_ACCEL_KMH_S, BRAKE_KMH_S, HANDBRAKE_KMH_S, COAST_KMH_S,
-  MU_OFFROAD, OFFROAD_MAX_KMH,
+  GEAR_MAX_KMH, GEAR_MIN_KMH, GEAR_ACCEL_KMH_S, BRAKE_KMH_S, HANDBRAKE_KMH_S, COAST_KMH_S,
+  ENGINE_BRAKE_KMH_S, MU_OFFROAD, OFFROAD_MAX_KMH,
   STEER_MAX_WPS, CENTRIFUGAL,
   SKID_CURVE_THRESHOLD, SKID_SPEED_KMH, SKID_GRIP, SKID_SPEED_DECAY, SKID_RECOVERY_STEPS,
   STEER_RATE_PER_S, MAX_LATERAL_ROADWIDTHS,
 } from '../constants.js';
+import { gearAccel, type GearTable } from './gearbox.js';
 
 /** Normalized per-step driver intent. Filled by InputManager; owned by physics
  * so the dependency points input → physics, not both ways. `gearUp`/`gearDown`
@@ -27,13 +28,20 @@ export function createCommand(): Command {
 }
 
 /**
- * The four tunables a Phase 9 parts loadout can shift. Everything else about the
+ * The tunables a Phase 9 parts loadout can shift. Everything else about the
  * car (brake rates, off-road drag, skid thresholds) stays a module constant —
- * parts alter the metric surface described in the spec, nothing more.
+ * parts alter the metric surface described in the spec, nothing more. The dev
+ * tuning overlay deliberately does NOT widen this type; it layers on top via
+ * `TuningOverrides`, so a dev slider can never redefine what a *part* may do.
+ *
+ * Gear arrays are variable-length rather than fixed tuples: the box went from
+ * 2 speeds to 4, and pinning the arity in the type is what made that a
+ * six-file breaking change instead of a constants edit.
  */
 export interface VehicleParams {
-  gearMaxKmh: readonly [number, number];
-  gearAccelKmhS: readonly [number, number];
+  gearMaxKmh: readonly number[];
+  gearMinKmh: readonly number[];
+  gearAccelKmhS: readonly number[];
   steerMaxWps: number;
   centrifugal: number;
 }
@@ -41,6 +49,7 @@ export interface VehicleParams {
 /** Stock car: reproduces the pre-Phase-9 handling exactly. */
 export const DEFAULT_VEHICLE_PARAMS: VehicleParams = {
   gearMaxKmh: GEAR_MAX_KMH,
+  gearMinKmh: GEAR_MIN_KMH,
   gearAccelKmhS: GEAR_ACCEL_KMH_S,
   steerMaxWps: STEER_MAX_WPS,
   centrifugal: CENTRIFUGAL,
@@ -56,7 +65,12 @@ export class Vehicle implements PlayerState {
   private posZ = 0; // world depth along the track
   private posX = 0; // world lateral position (track-centre-relative)
   private kmh = 0;
-  private gearIdx = 1; // 1 = Low, 2 = High (HUD displays this directly)
+  private gearIdx = 1; // 1-based; the HUD displays this directly
+
+  /** Pre-built view of `params`' gear arrays, so the hot step passes a reference
+   * instead of allocating an object literal 60x/second (hard rule 4). `params`
+   * is readonly, so this is built once and never refreshed. */
+  private readonly gears: GearTable;
 
   private isSkidding = false;
   private skidDir = 0; // sign of the curvature that triggered the skid
@@ -68,7 +82,13 @@ export class Vehicle implements PlayerState {
   constructor(
     private readonly roadWidth: number,
     private readonly params: VehicleParams = DEFAULT_VEHICLE_PARAMS,
-  ) {}
+  ) {
+    this.gears = {
+      maxKmh: params.gearMaxKmh,
+      minKmh: params.gearMinKmh,
+      accelKmhS: params.gearAccelKmhS,
+    };
+  }
 
   // Read-only state: mutation happens only via step/applyCollision/reset.
   get z(): number { return this.posZ; }
@@ -138,11 +158,16 @@ export class Vehicle implements PlayerState {
       this.kmh -= HANDBRAKE_KMH_S * dt;
     } else if (cmd.brake > 0) {
       this.kmh -= BRAKE_KMH_S * cmd.brake * dt;
-    } else if (cmd.throttle > 0 && this.kmh < gearMax) {
-      // Tapering accel curve: full torque at rest, zero at the gear cap.
-      this.kmh += this.params.gearAccelKmhS[g]! * cmd.throttle * (1 - this.kmh / gearMax) * dt;
+    } else if (this.kmh > gearMax) {
+      // Downshifted below current speed: engine braking drags it into the band.
+      // Stronger than plain coast, which makes the downshift a corner-entry
+      // tactic rather than only a way out of a mis-shift.
+      this.kmh -= ENGINE_BRAKE_KMH_S * dt;
+    } else if (cmd.throttle > 0) {
+      // Shaped torque band; zero at the ceiling, bogged below the band floor.
+      this.kmh += gearAccel(this.kmh, g, this.gears) * cmd.throttle * dt;
     } else {
-      this.kmh -= COAST_KMH_S * dt; // engine drag (also drains an over-cap downshift)
+      this.kmh -= COAST_KMH_S * dt; // engine drag
     }
     if (Math.abs(this.posX - roadCenterX) > this.roadWidth && this.kmh > OFFROAD_MAX_KMH) {
       this.kmh *= MU_OFFROAD ** dt;

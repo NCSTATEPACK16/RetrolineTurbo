@@ -67,12 +67,15 @@ export const DEFAULT_TRACK_CONFIG: TrackConfig = {
 export const KMH_PER_WORLD = 0.05; // world u/s → km/h display
 export const WORLD_PER_KMH = 1 / KMH_PER_WORLD;
 
-export const GEAR_MAX_KMH = [120, 290] as const; // Low, High top speeds
+export const GEAR_MAX_KMH = [90, 150, 220, 290] as const; // 4-speed manual ceilings
 /** Top speed in world u/s — the highest gear's ceiling, converted once. Renderer
  * ramps the speed streaks against this rather than against a per-track number,
  * because the streaks are a camera effect and the car's ceiling never varies. */
 export const TOP_SPEED_WORLD = GEAR_MAX_KMH[GEAR_MAX_KMH.length - 1]! * WORLD_PER_KMH;
-export const GEAR_ACCEL_KMH_S = [60, 25] as const; // zero-speed accel per gear (Low torquey)
+/** Peak accel per gear, at the bottom of each torque band. Top gear is 26, not
+ * 22: at 22 the 3→4 shift margin is +0.07 km/h/s, which is rounding noise and
+ * would make the HUD shift light flicker. See gearbox.test.ts's margin guard. */
+export const GEAR_ACCEL_KMH_S = [95, 62, 38, 26] as const;
 /** Bottom of each gear's torque band. Overlaps the previous gear's ceiling so
  * every gear has a usable window rather than one correct instant. */
 export const GEAR_MIN_KMH = [0, 70, 120, 180] as const;
@@ -135,8 +138,9 @@ export const SKID_RECOVERY_STEPS = 12; // consecutive counter-steer steps to rec
  * starting points, shipped so the mechanism is correct and directionally
  * right, flagged for a human pass at `npm run dev`, same as CENTRIFUGAL above.
  */
-export const ENGINE_F_BASE_LOW = 90; // Hz, idle oscillator tone in Low gear
-export const ENGINE_F_BASE_HIGH = 60; // Hz, idle tone in High gear (lower, throatier)
+/** Per-gear idle oscillator tone (Hz). Descending, so every upshift reads as a
+ * pitch drop — with four gears a single Low/High pair can no longer express it. */
+export const ENGINE_F_BASE = [90, 78, 68, 60] as const;
 export const ENGINE_F_RANGE = 260; // Hz added on top of f_base at each gear's redline
 export const ENGINE_FILTER_MIN_HZ = 400; // lowpass cutoff at idle
 export const ENGINE_FILTER_MAX_HZ = 4000; // lowpass cutoff at redline

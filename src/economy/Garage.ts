@@ -1,4 +1,4 @@
-import { GEAR_ACCEL_KMH_S, GEAR_MAX_KMH, STEER_MAX_WPS, CENTRIFUGAL } from '../constants.js';
+import { GEAR_ACCEL_KMH_S, GEAR_MAX_KMH, GEAR_MIN_KMH, STEER_MAX_WPS, CENTRIFUGAL } from '../constants.js';
 import type { VehicleParams } from '../physics/Vehicle.js';
 import { PART_CATEGORIES, type CarMetrics, type EquippedLoadout, type Part } from '../types/inventory.js';
 import { PART_CATALOG } from './partCurves.js';
@@ -51,8 +51,14 @@ export function metricsToParams(metrics: CarMetrics): VehicleParams {
   const handlingF = 0.6 + 0.008 * metrics.handling;
   const gripF = 1.3 - 0.006 * metrics.grip;
   return {
-    gearMaxKmh: [GEAR_MAX_KMH[0] * speedF, GEAR_MAX_KMH[1] * speedF],
-    gearAccelKmhS: [GEAR_ACCEL_KMH_S[0] * accelF, GEAR_ACCEL_KMH_S[1] * accelF],
+    gearMaxKmh: GEAR_MAX_KMH.map((v) => v * speedF),
+    // Floors scale by the SAME factor as the ceilings. Scaling only the
+    // ceilings would leave a maxed car's top-gear floor near its stock value
+    // while the ceiling ran away — survivable — but scaling only the floors, or
+    // neither, lets a floor cross its own ceiling and the gear becomes
+    // permanently bogged. Garage.test.ts asserts floor < ceiling for every gear.
+    gearMinKmh: GEAR_MIN_KMH.map((v) => v * speedF),
+    gearAccelKmhS: GEAR_ACCEL_KMH_S.map((v) => v * accelF),
     steerMaxWps: STEER_MAX_WPS * handlingF,
     centrifugal: CENTRIFUGAL * gripF,
   };

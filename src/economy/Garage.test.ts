@@ -34,10 +34,11 @@ describe('resolveMetrics', () => {
 describe('metricsToParams', () => {
   it('the baseline reproduces the stock vehicle params', () => {
     const p = metricsToParams(BASELINE_METRICS);
-    expect(p.gearMaxKmh[0]).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.gearMaxKmh[0], 9);
-    expect(p.gearMaxKmh[1]).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.gearMaxKmh[1], 9);
-    expect(p.gearAccelKmhS[0]).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.gearAccelKmhS[0], 9);
-    expect(p.gearAccelKmhS[1]).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.gearAccelKmhS[1], 9);
+    for (let g = 0; g < DEFAULT_VEHICLE_PARAMS.gearMaxKmh.length; g++) {
+      expect(p.gearMaxKmh[g]).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.gearMaxKmh[g]!, 9);
+      expect(p.gearMinKmh[g]).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.gearMinKmh[g]!, 9);
+      expect(p.gearAccelKmhS[g]).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.gearAccelKmhS[g]!, 9);
+    }
     expect(p.steerMaxWps).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.steerMaxWps, 9);
     expect(p.centrifugal).toBeCloseTo(DEFAULT_VEHICLE_PARAMS.centrifugal, 9);
   });
@@ -45,11 +46,18 @@ describe('metricsToParams', () => {
   it('more speed raises the gear ceilings; more grip lowers centrifugal push', () => {
     const fast = metricsToParams({ ...BASELINE_METRICS, speed: 95 });
     const grippy = metricsToParams({ ...BASELINE_METRICS, grip: 95 });
-    expect(fast.gearMaxKmh[1]).toBeGreaterThan(DEFAULT_VEHICLE_PARAMS.gearMaxKmh[1]);
+    const top = DEFAULT_VEHICLE_PARAMS.gearMaxKmh.length - 1;
+    expect(fast.gearMaxKmh[top]).toBeGreaterThan(DEFAULT_VEHICLE_PARAMS.gearMaxKmh[top]!);
     expect(grippy.centrifugal).toBeLessThan(DEFAULT_VEHICLE_PARAMS.centrifugal);
   });
 
   it('keeps a maxed car inside a readable envelope', () => {
-    expect(metricsToParams({ ...BASELINE_METRICS, speed: METRIC_MAX }).gearMaxKmh[1]).toBeLessThan(400);
+    const maxed = metricsToParams({ ...BASELINE_METRICS, speed: METRIC_MAX });
+    expect(maxed.gearMaxKmh[maxed.gearMaxKmh.length - 1]!).toBeLessThan(400);
+    // Bands must scale with ceilings, or a maxed car gets a floor above its own
+    // ceiling and the top gear becomes permanently bogged.
+    for (let g = 0; g < maxed.gearMaxKmh.length; g++) {
+      expect(maxed.gearMinKmh[g]!).toBeLessThan(maxed.gearMaxKmh[g]!);
+    }
   });
 });
