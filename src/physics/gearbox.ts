@@ -16,6 +16,12 @@ export interface GearTable {
   maxKmh: readonly number[];
   minKmh: readonly number[];
   accelKmhS: readonly number[];
+  /** Curve shape, both optional and both defaulting to the shipped constants.
+   * They ride on the table rather than arriving as extra arguments so the dev
+   * tuning overlay can reshape the torque curve live without any call site
+   * allocating a second object 60x/second (hard rule 4). Absent means stock. */
+  torqueShape?: number;
+  bogFactor?: number;
 }
 
 /**
@@ -33,13 +39,13 @@ export function gearTorque(kmh: number, g: number, t: GearTable): number {
   if (span <= 0) return 0;
   const head = 1 - (kmh - lo) / span;
   if (head <= 0) return 0;
-  return (head > 1 ? 1 : head) ** TORQUE_SHAPE;
+  return (head > 1 ? 1 : head) ** (t.torqueShape ?? TORQUE_SHAPE);
 }
 
 /** Torque scaled by the gear's peak, with the mis-shift bog penalty applied. */
 export function gearAccel(kmh: number, g: number, t: GearTable): number {
   const a = t.accelKmhS[g]! * gearTorque(kmh, g, t);
-  return kmh < t.minKmh[g]! ? a * BOG_FACTOR : a;
+  return kmh < t.minKmh[g]! ? a * (t.bogFactor ?? BOG_FACTOR) : a;
 }
 
 /**

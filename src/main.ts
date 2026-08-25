@@ -9,7 +9,8 @@ import { SpriteAtlas } from './engine/SpriteAtlas.js';
 import { Traffic, defaultTraffic, type TrafficCar } from './engine/Traffic.js';
 import { HUD } from './ui/HUD.js';
 import { hitCar, responseDelta, shoveSign, ContactLatch } from './engine/Collision.js';
-import { Vehicle, createCommand } from './physics/Vehicle.js';
+import { Vehicle, createCommand, DEFAULT_VEHICLE_PARAMS } from './physics/Vehicle.js';
+import type { TuningOverlayHandle } from './ui-shell/screens/TuningOverlay.js';
 import { InputManager, mouseSteerCurve } from './input/InputManager.js';
 import { chooseSaveBackend } from './net/saveBackend.js';
 import { ScoreState } from './economy/score.js';
@@ -154,6 +155,19 @@ void loadAtlases().then((loaded) => {
 
 const input = new InputManager();
 let vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
+
+// DEV-only live tuning overlay (F8). `import.meta.env.DEV` folds to false in a
+// production build, so the dynamic import below is never reached and the whole
+// module — its styles included — is tree-shaken out of the bundle.
+let tuningOverlay: TuningOverlayHandle | null = null;
+if (import.meta.env.DEV) {
+  void import('./ui-shell/screens/TuningOverlay.js').then(({ createTuningOverlay }) => {
+    tuningOverlay = createTuningOverlay(DEFAULT_VEHICLE_PARAMS, (params, overrides) => {
+      vehicle.setTunables(params, overrides);
+    });
+    document.body.appendChild(tuningOverlay.element);
+  });
+}
 const sound = new SoundEngine(); // inert (no thrown errors) wherever Web Audio is unavailable
 
 // Soundtrack: fire-and-forget like loadAtlases above — never awaited, so a
@@ -175,6 +189,10 @@ const rebuildVehicle = (): void => {
     DEFAULT_TRACK_CONFIG.roadWidth,
     metricsToParams(resolveMetrics(garage.equipped)),
   );
+  // A rebuild drops whatever the DEV tuning overlay had applied, and
+  // restartRun() rebuilds — so without this, a feel pass would lose every
+  // slider the first time the driver spun off and pressed R.
+  if (tuningOverlay) vehicle.setTunables(tuningOverlay.params, tuningOverlay.overrides);
 };
 void loadGarage(save).then((loaded) => {
   garage.credits = loaded.credits;
@@ -312,6 +330,13 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV' && crt.supported) {
     crtEnabled = !crtEnabled;
     applyCrtVisibility();
+    return;
+  }
+  // Before the screenOpen gate below: the overlay is meant to be opened and
+  // closed mid-drive, and it is null in a production build.
+  if (e.code === 'F8' && tuningOverlay) {
+    e.preventDefault();
+    tuningOverlay.toggle();
     return;
   }
   const screenOpen = editor.open || leaderboard.open || trackBrowser.open || router.state !== 'playing';
