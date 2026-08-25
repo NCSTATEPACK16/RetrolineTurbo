@@ -67,4 +67,17 @@ describe('SoundEngine volume controls (no Web Audio support)', () => {
     expect(() => engine.setVolume('music', 0.5)).not.toThrow();
     expect(() => engine.setVolume('engine', 0.5)).not.toThrow();
   });
+
+  it('playMusic and stopMusic are safe with no AudioContext', () => {
+    const engine = new SoundEngine();
+    const track = { id: 't', ogg: 't.ogg', mp3: 't.mp3', seconds: 1 };
+    expect(() => engine.playMusic(track)).not.toThrow();
+    expect(() => engine.stopMusic()).not.toThrow();
+  });
+
+  it('resume does not throw when no music element was ever created', () => {
+    // resume() now also retries a blocked <audio>.play(); the optional chain
+    // has to survive the vitest environment, where playMusic bailed early.
+    expect(() => new SoundEngine().resume()).not.toThrow();
+  });
 });

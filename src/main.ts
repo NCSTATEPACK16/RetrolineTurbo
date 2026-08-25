@@ -32,6 +32,7 @@ import { metricsToParams, resolveMetrics } from './economy/Garage.js';
 import { computePayout, type PayoutLedger } from './economy/payout.js';
 import { parseTrackFile } from './track/schema.js';
 import { SoundEngine } from './audio/SoundEngine.js';
+import { loadMusic } from './audio/loadMusic.js';
 import { CrtEffect, crtDefaultEnabled } from './ui/CrtEffect.js';
 import { ShellRouter } from './ui-shell/ShellRouter.js';
 import { ShellBridge } from './ui-shell/ShellBridge.js';
@@ -154,6 +155,14 @@ void loadAtlases().then((loaded) => {
 const input = new InputManager();
 let vehicle = new Vehicle(DEFAULT_TRACK_CONFIG.roadWidth);
 const sound = new SoundEngine(); // inert (no thrown errors) wherever Web Audio is unavailable
+
+// Soundtrack: fire-and-forget like loadAtlases above — never awaited, so a
+// missing or unreachable manifest costs silence and nothing else. The first
+// play() is blocked by autoplay policy; sound.resume(), already wired to the
+// existing click/keydown gesture handlers, is what actually starts it.
+void loadMusic().then((tracks) => {
+  if (tracks[0]) sound.playMusic(tracks[0]);
+});
 
 // --- Phase 9: economy ------------------------------------------------------
 // The garage loads asynchronously; until it lands the car is stock, which is
