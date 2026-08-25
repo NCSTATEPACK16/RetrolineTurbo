@@ -39,17 +39,24 @@ Already written and green in the working tree; it just needs to stop living ther
 - Consumes: nothing
 - Produces: nothing new — this is a checkpoint commit
 
-- [ ] **Step 1: Confirm the working tree holds only the traffic fix**
+- [x] **Step 1: Confirm the working tree holds only the traffic fix**
 
 Run: `git status --short`
 Expected: exactly two modified files, `src/engine/Renderer.ts` and `src/engine/Renderer.test.ts`. If anything else appears, stop and ask.
 
-- [ ] **Step 2: Run the suite**
+- [x] **Step 2: Run the suite**
 
 Run: `npm test`
 Expected: PASS — 61 files, 558 tests.
 
-- [ ] **Step 3: Commit**
+> **Done 2026-08-24** (`ac6ec92`). `visual-check` also recorded a large perf win, measured
+> against a stashed baseline on the dev server: avg 24.3 → 17.0ms, p95 50.3 → 17.7ms,
+> max 83.8 → 35.0ms. The procedural-placeholder path was the expensive one, not the baked
+> atlas. Residual 17.0ms avg is a dev-server number, not comparable to §12's production
+> budget. The Supabase 406 / "Invalid schema: retroline" console errors are pre-existing
+> environment config, unrelated to this change.
+
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/engine/Renderer.ts src/engine/Renderer.test.ts
