@@ -771,7 +771,7 @@ Completes the layer `SoundEngine.ts:40-45` deferred for lack of assets. The `mus
   - `SoundEngine.playMusic(track: MusicTrack, baseUrl: string): void`
   - `SoundEngine.stopMusic(): void`
 
-- [ ] **Step 1: Write the failing manifest test**
+- [x] **Step 1: Write the failing manifest test**
 
 Create `src/audio/musicManifest.test.ts`:
 
@@ -803,12 +803,12 @@ describe('parseMusicManifest', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run src/audio/musicManifest.test.ts`
 Expected: FAIL — cannot resolve `./musicManifest.js`.
 
-- [ ] **Step 3: Implement `src/audio/musicManifest.ts`**
+- [x] **Step 3: Implement `src/audio/musicManifest.ts`**
 
 ```ts
 /**
@@ -839,12 +839,12 @@ export function parseMusicManifest(json: unknown): MusicTrack[] {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run src/audio/musicManifest.test.ts`
 Expected: PASS — 3 tests.
 
-- [ ] **Step 5: Add playback to `SoundEngine`**
+- [x] **Step 5: Add playback to `SoundEngine`**
 
 Replace the scope note at `src/audio/SoundEngine.ts:40-45` — the reason for the deferral
 (no assets) no longer holds. Add a private `<audio>` element wired through the existing
@@ -886,7 +886,7 @@ Replace the scope note at `src/audio/SoundEngine.ts:40-45` — the reason for th
   }
 ```
 
-- [ ] **Step 6: Add the regression guard**
+- [x] **Step 6: Add the regression guard**
 
 Append to `src/audio/SoundEngine.test.ts` — matching the existing null-context pattern:
 
@@ -899,12 +899,12 @@ Append to `src/audio/SoundEngine.test.ts` — matching the existing null-context
   });
 ```
 
-- [ ] **Step 7: Run the full suite**
+- [x] **Step 7: Run the full suite**
 
 Run: `npm test && npm run build`
 Expected: both green.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/audio
@@ -914,6 +914,25 @@ Completes the layer Phase 10 §6 designed and SoundEngine deferred for lack of
 assets. Offers both encodings so Safari (no OGG) still plays, and degrades to
 silence on any failure. The Settings 'Soundtrack' slider now controls something."
 ```
+
+> **Done 2026-08-24** (`6274a2f`). 588 vitest / 64 files green (was 578/62), build clean,
+> `visual-check` clean — no new console errors beyond the pre-existing Supabase ones.
+> Two additions beyond the step text, both needed for the feature to actually work:
+> - **The task as written wires nothing.** Steps 3 and 5 produce `parseMusicManifest` and
+>   `playMusic`, but nothing fetches a manifest or calls either — the commit message's claim
+>   that "the Soundtrack slider now controls something" would have been false. Added
+>   `src/audio/loadMusic.ts`, a fire-and-forget edge modelled on `loadAtlases.ts` (including
+>   its 200-with-`index.html` miss path, which Vite and Netlify both take), plus 5 tests, and
+>   a `main.ts` call site that starts track 0.
+> - **`resume()` also retries the `<audio>` element.** The autoplay policy that suspends the
+>   AudioContext equally rejects the element's first `play()`, and `playMusic` runs at load,
+>   long before any gesture exists. Without the retry the soundtrack would never start in a
+>   real browser — and no unit test could have caught it, since vitest's `environment: 'node'`
+>   has no `Audio` at all.
+>
+> Asset serving verified directly against the dev server rather than assumed:
+> `/assets/music/manifest.json` → 200 `application/json`, `eyeless.ogg` → 200 `audio/ogg`
+> (3.4 MB), `eyeless.mp3` → 200 `audio/mpeg`. Whether it is *audible* still needs a human.
 
 ---
 
