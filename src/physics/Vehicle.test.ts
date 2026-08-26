@@ -3,8 +3,8 @@ import {
   Vehicle, createCommand, DEFAULT_VEHICLE_PARAMS, type Command, type VehicleParams,
 } from './Vehicle.js';
 import {
-  STEP_S, GEAR_MAX_KMH, GEAR_ACCEL_KMH_S, STEER_MAX_WPS, CENTRIFUGAL,
-  SKID_GRIP, SKID_RECOVERY_STEPS, MAX_LATERAL_ROADWIDTHS,
+  STEP_S, GEAR_MAX_KMH, GEAR_MIN_KMH, GEAR_ACCEL_KMH_S, STEER_MAX_WPS, CENTRIFUGAL,
+  SKID_GRIP, SKID_SPEED_KMH, SKID_RECOVERY_STEPS, MAX_LATERAL_ROADWIDTHS,
 } from '../constants.js';
 import type { PlayerState } from '../types/engine.js';
 
@@ -36,21 +36,48 @@ describe('Vehicle transmission + top speed', () => {
     expect(v.x).toBe(0);
   });
 
-  it('Low gear caps near 120 km/h under full throttle', () => {
+  it('first gear caps at its own ceiling under full throttle', () => {
     const v = new Vehicle(ROAD);
     run(v, 60 * 60, (c) => { c.throttle = 1; });
     expect(v.speedKmh).toBeLessThanOrEqual(GEAR_MAX_KMH[0]);
     expect(v.speedKmh).toBeGreaterThan(GEAR_MAX_KMH[0] * 0.95);
   });
 
-  it('High gear caps at 290 km/h under full throttle', () => {
+  it('top gear caps at 290 km/h once shifted all the way up', () => {
     const v = new Vehicle(ROAD);
-    run(v, 60 * 20, (c) => { c.throttle = 1; });
-    shiftUp(v);
-    expect(v.gear).toBe(2);
-    run(v, 60 * 120, (c) => { c.throttle = 1; });
-    expect(v.speedKmh).toBeLessThanOrEqual(GEAR_MAX_KMH[1]);
-    expect(v.speedKmh).toBeGreaterThan(GEAR_MAX_KMH[1] * 0.95);
+    // Climb the box: settle in each gear, then upshift.
+    for (let g = 1; g < GEAR_MAX_KMH.length; g++) {
+      run(v, 60 * 30, (c) => { c.throttle = 1; });
+      shiftUp(v);
+      expect(v.gear).toBe(g + 1);
+    }
+    run(v, 60 * 180, (c) => { c.throttle = 1; });
+    const top = GEAR_MAX_KMH[GEAR_MAX_KMH.length - 1]!;
+    expect(top).toBe(290); // the PRD figure is contractual (plan.md §7)
+    expect(v.speedKmh).toBeLessThanOrEqual(top);
+    expect(v.speedKmh).toBeGreaterThan(top * 0.95);
+  });
+
+  it('upshifting below the next gear band bogs rather than costing position', () => {
+    // First gear is a ~2s launch gear (0 -> 89 of 90 km/h), so the window for a
+    // genuinely early upshift is short: 40 steps lands at ~51 km/h, well under
+    // gear 2's 70 km/h floor. The premise is asserted rather than assumed.
+    const LAUNCH_STEPS = 40;
+    const bogged = new Vehicle(ROAD);
+    run(bogged, LAUNCH_STEPS, (c) => { c.throttle = 1; });
+    expect(bogged.speedKmh).toBeLessThan(GEAR_MIN_KMH[1]!);
+
+    const stayed = new Vehicle(ROAD);
+    run(stayed, LAUNCH_STEPS, (c) => { c.throttle = 1; });
+
+    shiftUp(bogged); // the mistake
+    run(bogged, 60, (c) => { c.throttle = 1; });
+    run(stayed, 60, (c) => { c.throttle = 1; });
+
+    // Slower for having mis-shifted, but still gaining speed — the penalty is
+    // time, and recoverable, not a stall or a lost position (spec §3c).
+    expect(bogged.speedKmh).toBeLessThan(stayed.speedKmh);
+    expect(bogged.speedKmh).toBeGreaterThan(0);
   });
 
   it('gearDown above the Low cap decays speed toward the Low cap', () => {
@@ -76,12 +103,17 @@ describe('Vehicle transmission + top speed', () => {
 });
 
 describe('Vehicle skid + recovery (PRD: grip −60%)', () => {
-  /** Drive to High-gear speed above the skid threshold, on a straight. */
+  /** Drive above the skid threshold on a straight. With a 4-speed box this must
+   * climb the whole gearbox: SKID_SPEED_KMH is 200, and gear 2 only caps at
+   * 150, so a single upshift can no longer reach skid speed. */
   function fastVehicle(): Vehicle {
     const v = new Vehicle(ROAD);
-    run(v, 60 * 20, (c) => { c.throttle = 1; });
-    shiftUp(v);
+    for (let g = 1; g < GEAR_MAX_KMH.length; g++) {
+      run(v, 60 * 20, (c) => { c.throttle = 1; });
+      shiftUp(v);
+    }
     run(v, 60 * 60, (c) => { c.throttle = 1; });
+    expect(v.speedKmh).toBeGreaterThan(SKID_SPEED_KMH); // premise of every test below
     return v;
   }
 
@@ -294,7 +326,7 @@ describe('VehicleParams injection', () => {
   });
 
   it('a higher gear ceiling reaches a strictly higher speed over the same steps', () => {
-    const fast: VehicleParams = { ...DEFAULT_VEHICLE_PARAMS, gearMaxKmh: [240, 580] };
+    const fast: VehicleParams = { ...DEFAULT_VEHICLE_PARAMS, gearMaxKmh: [120, 200, 300, 580] };
     const base = new Vehicle(ROAD);
     const quick = new Vehicle(ROAD, fast);
     const cmd = createCommand();

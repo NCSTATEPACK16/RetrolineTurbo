@@ -1,6 +1,39 @@
-# active-plan.md — Phase 7.5: TX-1 Arcade Visuals & the Sprite/Asset Pipeline
+# active-plan.md — rolling working plan
 
-Per-feature working plan (see `plan.md` §10 Phase 7.5).
+> ## ▶ Next session starts here — 2026-08-24
+>
+> **Everything automatable is done and merged into `main`.** What remains is a human at
+> the wheel. `main` is merged **locally and not pushed** — pushing it triggers the Netlify
+> production deploy, so that is a deliberate call, not a formality.
+>
+> **The one blocking task: Task 8, the feel pass.**
+> Plan: `docs/superpowers/plans/2026-08-24-playable-pc-build.md` (Tasks 1–7 ticked).
+>
+> ```
+> npm run dev     # then press F8 for the tuning overlay
+> ```
+>
+> 1. Drive. Tune until the gearbox reads as *demanding* rather than fiddly, and 290 km/h
+>    feels dangerous rather than floaty. Watch the **2→3 shift** — its +3.6 margin is the
+>    narrowest in the box and the likeliest to feel mushy.
+> 2. Press **Copy constants**, paste the block into `src/constants.ts`.
+> 3. `npm test` — `gearbox.test.ts` encodes the curve's *shape*, but its shift-point
+>    expectations assume the default table. Update them if the bands moved.
+> 4. Commit the tuned constants.
+>
+> **Do not automate this.** Its acceptance criterion is "is it fun," which no test asserts.
+> A loop turned loose here retunes constants forever against no signal.
+>
+> Everything else outstanding is catalogued under
+> [What's left](#whats-left--read-this-first-in-a-new-session) — most of it is accumulated
+> *human-eyes* debt from earlier phases, not unwritten code.
+
+---
+
+## Historical record — Phase 7.5: TX-1 Arcade Visuals & the Sprite/Asset Pipeline
+
+Per-feature working plan (see `plan.md` §10 Phase 7.5). Kept below as the running record;
+later phases append to the "What's left" section at the bottom.
 
 **Research:** `docs/research/2026-08-10-art-direction-asset-pipeline-research.md`
 **Specs (sequenced A→B→C→D):**
@@ -236,7 +269,76 @@ no pixel crawl at any speed, and anchored overlays stay registered in both turn 
 
 ## What's left — read this first in a new session
 
-Verified against the tree on 2026-08-11 (props wiring + headless visual pass landed this session).
+Verified against the tree on 2026-08-24 (playable-PC-build Tasks 1–7 landed and merged
+into `main`). Sections below are newest-first; earlier phases are kept as the record.
+
+### Playable PC build — *Tasks 1–7 complete 2026-08-24, Task 8 is the human gate*
+
+Plan: `docs/superpowers/plans/2026-08-24-playable-pc-build.md` ·
+spec: `docs/superpowers/specs/2026-08-24-playable-pc-build-design.md`.
+**605 vitest / 66 files, 22 pytest, `npm run build` clean, `visual-check` clean.**
+
+- **4-speed manual gearbox** — `physics/gearbox.ts` (pure torque + shift-point math),
+  `GEAR_MIN_KMH` bands, bog penalty below a band, engine braking on a downshift above a
+  ceiling. The shift crossover lands exactly on the next gear's band floor.
+- **HUD shift lamp** — reads `PlayerState.shiftReady`, derived in `Vehicle` from that car's
+  own gear table, so a Phase 9 loadout can't make the lamp point at the wrong speed.
+- **Streaming soundtrack** — `scripts/bake_music.py` (ffmpeg → ogg + mp3 + manifest),
+  `audio/musicManifest.ts`, `audio/loadMusic.ts`, `SoundEngine.playMusic/stopMusic`
+  through the pre-existing music bus. The Settings "Soundtrack" slider now controls
+  something real.
+- **DEV tuning overlay** — `ui-shell/screens/TuningOverlay.ts` on **F8**, 18 live sliders,
+  **Copy constants** button. Absent from the production bundle (verified by grepping
+  `dist/`, not just asserted).
+
+**Still open — all of it needs a human, none of it needs code:**
+
+1. **Task 8, the feel pass.** See the block at the top of this file. This is the blocking item.
+2. **Nobody has heard the music.** It is *proven to serve* (`/assets/music/manifest.json` →
+   200 `application/json`; `eyeless.ogg` → 200 `audio/ogg`, 3.4 MB; `.mp3` → `audio/mpeg`)
+   and proven not to throw, but audibility, mix level against the engine tone, and whether
+   a 3:31 loop wears out are ear questions.
+3. **One track only.** The plan named two CC0 sources. Eyeless came from OpenGameArt cleanly;
+   the **itch.io Retro Synthwave pack gates free downloads behind a click-through no script
+   can drive**. Drop its files into `art/music/` and run `npm run bake:music` — the pipeline
+   already handles multiple tracks and needs no change. Recorded in `art/LICENSES.md` under
+   "Considered, not taken".
+4. **`bake_music.py` has only ever run against one ffmpeg build.** Homebrew's ffmpeg 8.1.2
+   ships **no libvorbis**, so the ogg encoder is probed (libvorbis → libopus) rather than
+   hardcoded, and the shipped `.ogg` is **Opus**. A machine with libvorbis will produce
+   Vorbis instead; both are handled at runtime, but that path is untested on real hardware.
+
+### Environment issue worth clearing before more Supabase work
+
+`visual-check` still reports, on every run, three 406s and
+`[SupabaseBackend] load failed: Invalid schema: retroline` — pre-existing, unrelated to any
+recent change, and noted as far back as Phase 9. The local `.env` keys point at a project
+where the `retroline` schema is **not** in Settings → API → Exposed schemas, despite a
+2026-08-11 note recording that it was. Until that is reconciled, every local run silently
+falls back to the localStorage save backend, and no local session exercises the real
+persistence path.
+
+### Untuned constants shipped as defaults
+
+Three sets of numbers were shipped as "reasonable defaults per the spec", never tuned by a
+human. They are all cheap to move and all invisible to the test suite, which pins *shape*
+rather than value:
+
+| Where | Constants | Gate |
+|---|---|---|
+| Gearbox | `GEAR_MAX_KMH`, `GEAR_MIN_KMH`, `GEAR_ACCEL_KMH_S`, `TORQUE_SHAPE`, `BOG_FACTOR`, `ENGINE_BRAKE_KMH_S` | Task 8, via the F8 overlay |
+| Audio | `ENGINE_F_BASE`, `ENGINE_F_RANGE`, filter min/max, `SQUEAL_GAIN_MAX` | ears at `npm run dev` |
+| CRT | `CRT_SCANLINE_INTENSITY`, barrel/bloom strength | eyes at `npm run dev` |
+
+`CENTRIFUGAL` is the precedent: it shipped at 9000, was found unplayable the moment a human
+drove it, and went to 600. Expect a similar correction in at least one of the three rows above.
+
+### Superseded — Phase 7.5 blocking items
+
+1. ~~**One real `npm run dev` session still closes Phase 7.5**~~ — still true and still
+   unclosed, but now subsumed by Task 8: the same session that tunes the gearbox can look at
+   kerb strobe at speed/crawl, props at 200 km/h, and wheel-overlay registration through a
+   hard turn. Kept here because the *specific things to look at* are catalogued below.
 
 ### Blocking, and cheap
 
@@ -394,10 +496,66 @@ filter/shader tuning constants (`ENGINE_F_BASE_LOW` etc., `CRT_SCANLINE_INTENSIT
 shipped as reasonable defaults per the spec's own instruction, not ear/eye-tuned — expect a pass
 similar to `CENTRIFUGAL`'s this session once someone actually listens/looks.
 
-### Phases 11–12 — polish, then iOS
+### Phase 11 — UI shell · *DOM shell code complete 2026-08-12, one manual gap left*
 
-Phase 11 needs a real frame-time baseline before anything else; two deferred items are explicitly
-waiting on one (see below). Phase 12 (Capacitor) stays off the critical path by design.
+Built on branch `phase-11-ui-shell` (spec: `docs/superpowers/specs/2026-08-12-phase-11-ui-shell-design.md`,
+plan: `docs/superpowers/plans/2026-08-12-phase-11-ui-shell.md`). Covers only the menu/flow-polish
+slice of `plan.md`'s Phase 11 — PWA shell, texture atlases, capped canvas resolution, WKWebView
+memory pass, and the profiling pass (see the item below, carried from Phase 7.5) remain separate,
+un-started work under the same phase number.
+
+- `src/ui-shell/ShellRouter.ts` — pure `hub/guide/garage/settings/playing/paused` state machine
+  with a `subscribe`/`notify` hook, added after headless testing caught that screens navigate by
+  calling router methods from their own click handlers with no path back to the render loop
+  (vitest, 10 tests).
+- `src/ui-shell/ShellBridge.ts` — facade over `GarageState`/`InputManager`/`SoundEngine`/
+  `CrtEffect`/`net/account.ts`; every method is a one-line pass-through, which is the seam vitest
+  targets (screens themselves aren't unit-tested — this repo's vitest runs `environment: 'node'`,
+  no jsdom, so DOM code is out of reach the same way WebGL2/AudioContext already are for
+  `CrtEffect`/`SoundEngine`) (vitest, 9 tests).
+- `SoundEngine.getVolume/setVolume` and `CrtEffect.getSettings/setSettings` — new mutable-settings
+  seams the Settings screen needed; both work identically with or without a live AudioContext/
+  WebGL2 context, same never-throws contract as the rest of those two classes.
+- `src/ui-shell/screens/` — Hub (net new), Driver's Guide (net new), Garage & Marketplace (data-
+  driven off `PART_CATEGORIES`, replaces canvas `GarageScreen`), Settings (4 tabs: controls/audio/
+  display/account, replaces `RemapScreen` + `AccountScreen`), Post-Race Summary (replaces canvas
+  `SummaryScreen`), Pause overlay (net new) — all plain DOM, zero runtime deps, `tokens.css`/
+  `shell.css` Midnight Synth tokens per the design system prompt.
+- `main.ts` — mounts `#ui-shell` additively above the untouched canvas/`RenderBackend`/`Renderer`;
+  retires `RemapScreen`/`AccountScreen`/canvas `GarageScreen`/canvas `SummaryScreen` and their
+  F5/F6 keybindings (F6 now opens the shell Garage directly; F5/Account moved under Settings);
+  `router.state !== 'playing'` replaces the retired screens' `.open` flags in the input-gating
+  checks. Post-Race Summary isn't a `ShellRouter` state (reached only by the finish event, not
+  navigation) — `showSummary()` writes directly into `#ui-shell` with a `showingSummary` flag so
+  `Esc` doesn't pave over it with the pause overlay while it's up.
+- Editor/leaderboard/track browser stay canvas-rendered on F2/F3/F4/Tab, unchanged — explicitly
+  out of scope per the spec (§2): no full-screen design exists yet for either.
+
+556 vitest / 61 files green (was 531/59 before this phase), `npm run build` clean, bundle
+**shrank** slightly (119→117 modules) once the retired canvas screens dropped out.
+
+**Caught by headless testing, not upstream** (Playwright, not committed — same "de-risk before a
+human's own eyes" pattern as every prior phase's visual gate): (1) the router-subscribe bug above,
+found because a Garage nav click silently did nothing in the driven browser; (2) composite rows
+(a part's name + price + buy button, a control's label + binding + rebind button) used bare
+`<span>` siblings, which render as unbroken inline text with no separator — "stock inline-4" +
+"400c (need more)" read as "stock inline-4400c (need more)" until `.rt-row`/`.rt-row-between`/
+`.rt-col` utility classes were added and applied across Garage/Settings/Summary/Pause.
+
+**Still open:** no human has clicked through this at `npm run dev` yet, and specifically nobody
+has driven a real race to a real finish to confirm the Summary screen's Race Again/Upgrade in
+Garage/Return to Hub buttons against a live payout — the headless pass exercised Hub→Garage→
+Settings (all 4 tabs)→Guide→Race Route→Esc→pause→Quit-to-Hub and F6, but simulating a full
+~5-stage route finish headlessly wasn't attempted this session. Responsive verification at the
+1440/834×1194/390×844 breakpoints (spec §8) is also still a human-eyes gate — the CSS uses real
+flex/grid and a `rt-garage-layout` media query, but nobody has resized a real viewport against it.
+Font deviation from spec §7 (self-hosted Space Grotesk/Outfit/Inter): no font files exist in this
+repo and sourcing/licensing binary assets was out of scope for this plan — shipped a `system-ui`
+stack instead, a one-line token swap in `tokens.css` whenever fonts land.
+
+### Phase 12 — iOS
+
+Phase 12 (Capacitor) stays off the critical path by design.
 
 ### Loose threads carried across phases
 
@@ -415,3 +573,22 @@ waiting on one (see below). Phase 12 (Capacitor) stays off the critical path by 
 - **WebGL/PixiJS backend** stays hypothetical: the threshold in plan.md §12 is sustained >16.6ms
   in profiling. The one baseline taken so far shows no sign of it. The `RenderBackend` seam is the
   hedge; do not pre-emptively cash it.
+
+---
+
+## Branch and deploy state — 2026-08-24
+
+- `phase-11-ui-shell` is **merged into local `main`** (`e62e849`, `--no-ff`). Merged result
+  verified green: 605 vitest / 66 files, 22 pytest, `npm run build` clean.
+- **`main` is not pushed.** `origin/main` is 33 commits behind local `main`. Pushing it
+  triggers the Netlify production deploy (`https://retrolineturbo.netlify.app/`), so that
+  is a deliberate call — ideally made *after* Task 8, so the deploy carries tuned constants
+  rather than untuned defaults.
+- The feature branch is **kept, not deleted**. Every earlier phase landed on `main` through
+  a PR (#8–#13); keeping the branch preserves that option, and the commits are already
+  safe in `main` either way. `env -u GITHUB_TOKEN gh pr create` if raising PR #14 — the
+  bare `gh` call 403s against the keyring token.
+- The shipped soundtrack (`public/assets/music/`, ~6.6 MB for both encodings) is committed.
+  Only one encoding is fetched per browser and it streams via `<audio>`, so it does not
+  count against plan.md §12's initial-payload budget. Sources in `art/music/` are
+  git-ignored and re-downloadable from `art/LICENSES.md`.

@@ -52,6 +52,13 @@ export interface PlayerState {
   readonly skidMagnitude: number;
   /** True while the driver is on the brakes — lights the brake-light overlay. */
   readonly braking: boolean;
+  /** True when the next gear would out-accelerate the current one — lights the
+   * HUD shift lamp. Derived by `Vehicle` rather than by the HUD because only the
+   * vehicle knows its own gear table: a Phase 9 loadout scales the torque bands,
+   * so a HUD computing this from the stock constants would point at the wrong
+   * speed on an upgraded car. Same precedent as `skidMagnitude` — surfaced
+   * because the feature needs a signal nothing else provides. */
+  readonly shiftReady: boolean;
 }
 
 /** A packed sprite region in the atlas. `anchor` is the sprite-local pixel that

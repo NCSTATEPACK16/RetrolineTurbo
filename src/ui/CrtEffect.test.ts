@@ -61,3 +61,29 @@ describe('CrtEffect without WebGL2 support', () => {
     expect(() => crt.render({} as CanvasImageSource)).not.toThrow();
   });
 });
+
+describe('CrtEffect display settings', () => {
+  it('defaults on, matching the shipped constants', () => {
+    const crt = new CrtEffect(fakeCanvas(() => null)); // unsupported path is fine here
+    const s = crt.getSettings();
+    expect(s.scanline).toBe(true);
+    expect(s.aberration).toBe(true);
+    expect(s.bloom).toBeCloseTo(0.35);
+  });
+
+  it('setSettings merges partial updates and clamps bloom to 0..1', () => {
+    const crt = new CrtEffect(fakeCanvas(() => null));
+    crt.setSettings({ scanline: false });
+    expect(crt.getSettings()).toEqual({ scanline: false, aberration: true, bloom: 0.35 });
+    crt.setSettings({ bloom: 5 });
+    expect(crt.getSettings().bloom).toBe(1);
+    crt.setSettings({ bloom: -1 });
+    expect(crt.getSettings().bloom).toBe(0);
+  });
+
+  it('never throws when settings change on an unsupported instance', () => {
+    const crt = new CrtEffect(fakeCanvas(() => null));
+    expect(() => crt.setSettings({ scanline: false, aberration: false, bloom: 0.1 })).not.toThrow();
+    expect(() => crt.render({} as CanvasImageSource)).not.toThrow();
+  });
+});

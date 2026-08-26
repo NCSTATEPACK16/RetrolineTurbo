@@ -64,14 +64,19 @@ describe('Traffic', () => {
 });
 
 describe('default traffic roster is actually passable', () => {
-  it('runs every car slower than the player, in both gears where possible', () => {
+  it('runs every car slower than the player can drive in a cruising gear', () => {
     // The reported "can't see the cars we pass" was this: the old roster ran at
-    // 3500-5000 u/s while Low gear caps the player at 2400, so traffic drove
-    // away from him and never appeared on screen.
-    const lowGearTop = GEAR_MAX_KMH[0] * WORLD_PER_KMH;
+    // 3500-5000 u/s while the lowest gear capped the player at 2400, so traffic
+    // drove away from him and never appeared on screen.
+    //
+    // The 4-speed box moved this goalpost. First gear is now a ~2s launch gear
+    // (0 -> 89 of 90 km/h), not somewhere you race, so "catchable in first" is
+    // no longer a meaningful invariant. Second gear is the first real cruising
+    // gear, and that is what traffic must stay inside.
+    const cruiseTop = GEAR_MAX_KMH[1]! * WORLD_PER_KMH;
     for (const c of defaultTraffic()) {
       expect(c.speed).toBeLessThan(TOP_SPEED_WORLD);
-      expect(c.speed).toBeLessThan(lowGearTop * 1.1); // catchable even in Low
+      expect(c.speed).toBeLessThan(cruiseTop);
     }
   });
 

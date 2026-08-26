@@ -1,12 +1,16 @@
 import type { PlayerState } from '../types/engine.js';
 import {
   STEP_S, WORLD_PER_KMH,
-  GEAR_MAX_KMH, GEAR_ACCEL_KMH_S, BRAKE_KMH_S, HANDBRAKE_KMH_S, COAST_KMH_S,
-  MU_OFFROAD, OFFROAD_MAX_KMH,
+  GEAR_MAX_KMH, GEAR_MIN_KMH, GEAR_ACCEL_KMH_S, BRAKE_KMH_S, HANDBRAKE_KMH_S, COAST_KMH_S,
+  ENGINE_BRAKE_KMH_S, OFFROAD_MAX_KMH,
   STEER_MAX_WPS, CENTRIFUGAL,
-  SKID_CURVE_THRESHOLD, SKID_SPEED_KMH, SKID_GRIP, SKID_SPEED_DECAY, SKID_RECOVERY_STEPS,
-  STEER_RATE_PER_S, MAX_LATERAL_ROADWIDTHS,
+  SKID_SPEED_KMH, SKID_GRIP, SKID_SPEED_DECAY, SKID_RECOVERY_STEPS,
+  MAX_LATERAL_ROADWIDTHS,
 } from '../constants.js';
+import { gearAccel, shouldUpshift, type GearTable } from './gearbox.js';
+// MU_OFFROAD / SKID_CURVE_THRESHOLD / STEER_RATE_PER_S are no longer read here
+// directly — they arrive through `tuning`, which defaults to exactly them.
+import { applyTuning, resolveTuning, type TuningOverrides, type ResolvedTuning } from './tuning.js';
 
 /** Normalized per-step driver intent. Filled by InputManager; owned by physics
  * so the dependency points input → physics, not both ways. `gearUp`/`gearDown`
@@ -27,13 +31,20 @@ export function createCommand(): Command {
 }
 
 /**
- * The four tunables a Phase 9 parts loadout can shift. Everything else about the
+ * The tunables a Phase 9 parts loadout can shift. Everything else about the
  * car (brake rates, off-road drag, skid thresholds) stays a module constant —
- * parts alter the metric surface described in the spec, nothing more.
+ * parts alter the metric surface described in the spec, nothing more. The dev
+ * tuning overlay deliberately does NOT widen this type; it layers on top via
+ * `TuningOverrides`, so a dev slider can never redefine what a *part* may do.
+ *
+ * Gear arrays are variable-length rather than fixed tuples: the box went from
+ * 2 speeds to 4, and pinning the arity in the type is what made that a
+ * six-file breaking change instead of a constants edit.
  */
 export interface VehicleParams {
-  gearMaxKmh: readonly [number, number];
-  gearAccelKmhS: readonly [number, number];
+  gearMaxKmh: readonly number[];
+  gearMinKmh: readonly number[];
+  gearAccelKmhS: readonly number[];
   steerMaxWps: number;
   centrifugal: number;
 }
@@ -41,6 +52,7 @@ export interface VehicleParams {
 /** Stock car: reproduces the pre-Phase-9 handling exactly. */
 export const DEFAULT_VEHICLE_PARAMS: VehicleParams = {
   gearMaxKmh: GEAR_MAX_KMH,
+  gearMinKmh: GEAR_MIN_KMH,
   gearAccelKmhS: GEAR_ACCEL_KMH_S,
   steerMaxWps: STEER_MAX_WPS,
   centrifugal: CENTRIFUGAL,
@@ -56,7 +68,20 @@ export class Vehicle implements PlayerState {
   private posZ = 0; // world depth along the track
   private posX = 0; // world lateral position (track-centre-relative)
   private kmh = 0;
-  private gearIdx = 1; // 1 = Low, 2 = High (HUD displays this directly)
+  private gearIdx = 1; // 1-based; the HUD displays this directly
+
+  /** Pre-built view of `params`' gear arrays, so the hot step passes a reference
+   * instead of allocating an object literal 60x/second (hard rule 4). Rebuilt
+   * only by `setTunables` — never per step. */
+  private gears: GearTable;
+
+  /** `params` with any dev override folded in. Every read below goes through
+   * this, not `params`, so a live tuning change needs no Vehicle rebuild. In
+   * production it is `params` field-for-field. */
+  private effective: VehicleParams;
+
+  /** The five feel constants that have no per-car representation, resolved. */
+  private tuning: ResolvedTuning;
 
   private isSkidding = false;
   private skidDir = 0; // sign of the curvature that triggered the skid
@@ -67,8 +92,45 @@ export class Vehicle implements PlayerState {
 
   constructor(
     private readonly roadWidth: number,
-    private readonly params: VehicleParams = DEFAULT_VEHICLE_PARAMS,
-  ) {}
+    params: VehicleParams = DEFAULT_VEHICLE_PARAMS,
+    overrides: TuningOverrides = {},
+  ) {
+    // Assigned through the same path setTunables uses, so there is exactly one
+    // place where the derived state is built. The production default `{}`
+    // resolves to the shipped constants, making a stock car bit-for-bit what it
+    // was before this type existed.
+    this.effective = applyTuning(params, overrides);
+    this.tuning = resolveTuning(overrides);
+    this.gears = this.buildGearTable();
+  }
+
+  private buildGearTable(): GearTable {
+    return {
+      maxKmh: this.effective.gearMaxKmh,
+      minKmh: this.effective.gearMinKmh,
+      accelKmhS: this.effective.gearAccelKmhS,
+      torqueShape: this.tuning.torqueShape,
+      bogFactor: this.tuning.bogFactor,
+    };
+  }
+
+  /**
+   * Swap the tunable surface live, preserving position, speed, gear and skid
+   * state. For the DEV tuning overlay only — the Phase 9 parts path rebuilds
+   * the Vehicle instead, because a loadout only ever changes in the garage.
+   *
+   * Preserving state is the entire point: the feel pass tunes the 2→3 shift by
+   * dragging a slider *while sitting at that speed*, and a rebuild would drop
+   * the car back to a standing start on every drag.
+   */
+  setTunables(params: VehicleParams, overrides: TuningOverrides = {}): void {
+    this.effective = applyTuning(params, overrides);
+    this.tuning = resolveTuning(overrides);
+    this.gears = this.buildGearTable();
+    if (this.gearIdx > this.effective.gearMaxKmh.length) {
+      this.gearIdx = this.effective.gearMaxKmh.length; // a shorter box lost this gear
+    }
+  }
 
   // Read-only state: mutation happens only via step/applyCollision/reset.
   get z(): number { return this.posZ; }
@@ -108,6 +170,13 @@ export class Vehicle implements PlayerState {
     return this.lastBraking;
   }
 
+  /** True when upshifting now would out-accelerate holding this gear. Reads the
+   * same predicate the transmission does, against this car's own gear table, so
+   * the HUD lamp can never drift from the physics it is teaching. */
+  get shiftReady(): boolean {
+    return shouldUpshift(this.kmh, this.gearIdx - 1, this.gears);
+  }
+
   /** Advance one fixed step. `curvature` is the current segment's K_i.
    * `roadCenterX` is the nearest road centre-line's world-x (non-zero during a
    * branch split, where the drivable roads diverge from the track centre) so
@@ -123,36 +192,41 @@ export class Vehicle implements PlayerState {
 
     // Rate-limited approach, not a lerp: the time to full lock is the same
     // whatever the step size, so the ramp stays deterministic under any dt.
-    const maxDelta = STEER_RATE_PER_S * dt;
+    const maxDelta = this.tuning.steerRatePerS * dt;
     const steerErr = this.lastSteer - this.appliedSteer;
     this.appliedSteer += steerErr > maxDelta ? maxDelta : steerErr < -maxDelta ? -maxDelta : steerErr;
 
     // -- transmission -------------------------------------------------------
-    if (cmd.gearUp && this.gearIdx < this.params.gearMaxKmh.length) this.gearIdx++;
+    if (cmd.gearUp && this.gearIdx < this.effective.gearMaxKmh.length) this.gearIdx++;
     if (cmd.gearDown && this.gearIdx > 1) this.gearIdx--;
     const g = this.gearIdx - 1;
-    const gearMax = this.params.gearMaxKmh[g]!;
+    const gearMax = this.effective.gearMaxKmh[g]!;
 
     // -- longitudinal -------------------------------------------------------
     if (cmd.handbrake) {
       this.kmh -= HANDBRAKE_KMH_S * dt;
     } else if (cmd.brake > 0) {
       this.kmh -= BRAKE_KMH_S * cmd.brake * dt;
-    } else if (cmd.throttle > 0 && this.kmh < gearMax) {
-      // Tapering accel curve: full torque at rest, zero at the gear cap.
-      this.kmh += this.params.gearAccelKmhS[g]! * cmd.throttle * (1 - this.kmh / gearMax) * dt;
+    } else if (this.kmh > gearMax) {
+      // Downshifted below current speed: engine braking drags it into the band.
+      // Stronger than plain coast, which makes the downshift a corner-entry
+      // tactic rather than only a way out of a mis-shift.
+      this.kmh -= ENGINE_BRAKE_KMH_S * dt;
+    } else if (cmd.throttle > 0) {
+      // Shaped torque band; zero at the ceiling, bogged below the band floor.
+      this.kmh += gearAccel(this.kmh, g, this.gears) * cmd.throttle * dt;
     } else {
-      this.kmh -= COAST_KMH_S * dt; // engine drag (also drains an over-cap downshift)
+      this.kmh -= COAST_KMH_S * dt; // engine drag
     }
     if (Math.abs(this.posX - roadCenterX) > this.roadWidth && this.kmh > OFFROAD_MAX_KMH) {
-      this.kmh *= MU_OFFROAD ** dt;
+      this.kmh *= this.tuning.muOffroad ** dt;
     }
     if (this.isSkidding) this.kmh *= SKID_SPEED_DECAY ** dt;
     if (this.kmh < 0) this.kmh = 0;
 
     // -- skid trigger / recovery -------------------------------------------
     if (!this.isSkidding) {
-      if (Math.abs(curvature) > SKID_CURVE_THRESHOLD && this.kmh > SKID_SPEED_KMH) {
+      if (Math.abs(curvature) > this.tuning.skidCurveThreshold && this.kmh > SKID_SPEED_KMH) {
         this.isSkidding = true;
         this.skidDir = Math.sign(curvature);
         this.recoverySteps = 0;
@@ -173,9 +247,9 @@ export class Vehicle implements PlayerState {
     // -- lateral ------------------------------------------------------------
     const grip = this.isSkidding ? SKID_GRIP : 1;
     const authority = Math.min(1, this.kmh / 60); // no curb-steering at rest
-    this.posX += this.appliedSteer * this.params.steerMaxWps * grip * authority * dt;
-    const speedRatio = this.kmh / this.params.gearMaxKmh[this.params.gearMaxKmh.length - 1]!;
-    this.posX -= curvature * this.params.centrifugal * speedRatio * speedRatio * dt;
+    this.posX += this.appliedSteer * this.effective.steerMaxWps * grip * authority * dt;
+    const speedRatio = this.kmh / this.effective.gearMaxKmh[this.effective.gearMaxKmh.length - 1]!;
+    this.posX -= curvature * this.effective.centrifugal * speedRatio * speedRatio * dt;
     // Nothing else bounds posX — off-road only bleeds speed — so without this a
     // held or stuck steer input walks the car away from the world forever.
     const limit = this.roadWidth * MAX_LATERAL_ROADWIDTHS;

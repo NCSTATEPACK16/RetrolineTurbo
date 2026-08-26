@@ -1,8 +1,9 @@
 import type { PlayerState } from '../types/engine.js';
+import type { MusicTrack } from './musicManifest.js';
 import { computeEngineTone, squealGain } from './engineTone.js';
 import {
   GEAR_MAX_KMH, KMH_PER_WORLD,
-  ENGINE_F_BASE_LOW, ENGINE_F_BASE_HIGH, ENGINE_F_RANGE,
+  ENGINE_F_BASE, ENGINE_F_RANGE,
   ENGINE_FILTER_MIN_HZ, ENGINE_FILTER_MAX_HZ, ENGINE_GAIN,
   SQUEAL_FILTER_HZ, SQUEAL_GAIN_MAX,
   AUDIO_RAMP_S, MUSIC_BUS_GAIN, SFX_BUS_GAIN,
@@ -37,22 +38,27 @@ function buildNoiseBuffer(ctx: AudioContext, seconds = 1): AudioBuffer {
  * game, the same contract `loadAtlases.ts`/`net/supabase.ts` hold for their
  * own missing-capability cases.
  *
- * Scope note: the spec's "hybrid streamed music / preloaded SFX-from-file"
- * layer is not built here. No music or SFX asset files exist anywhere in this
- * repo to drive it, and wiring a generic loader with nothing to call it would
- * be dead code. The engine tone, tire squeal, and collision cue below are all
- * procedurally synthesized and need no asset pipeline; the music/SFX bus
- * split they route through is real and ready for real files whenever a
- * future session has content to load.
+ * Music streams through `musicBus` from a `<audio>` element (`playMusic`), the
+ * layer Phase 10 deferred while no asset files existed; `scripts/bake_music.py`
+ * now produces them. The engine tone, tire squeal, and collision cue remain
+ * procedurally synthesized and need no asset pipeline. SFX-from-file is still
+ * unbuilt for the same reason as before — no SFX assets exist to load, and a
+ * generic loader with nothing to call it would be dead code.
  */
 export class SoundEngine {
   private ctx: AudioContext | null = null;
   private sfxBus: GainNode | null = null;
+  private musicBus: GainNode | null = null;
+  private musicVolume = MUSIC_BUS_GAIN;
+  private sfxVolume = SFX_BUS_GAIN;
 
   private engineOsc: OscillatorNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
 
   private squealGainNode: GainNode | null = null;
+
+  private musicEl: HTMLAudioElement | null = null;
+  private musicSrc: MediaElementAudioSourceNode | null = null;
 
   constructor() {
     const g = globalThis as {
@@ -75,6 +81,7 @@ export class SoundEngine {
     const musicBus = ctx.createGain();
     musicBus.gain.value = MUSIC_BUS_GAIN;
     musicBus.connect(ctx.destination);
+    this.musicBus = musicBus;
 
     const sfxBus = ctx.createGain();
     sfxBus.gain.value = SFX_BUS_GAIN;
@@ -85,7 +92,7 @@ export class SoundEngine {
     // only ever ramps the existing AudioParams afterward.
     const engineOsc = ctx.createOscillator();
     engineOsc.type = 'sawtooth';
-    engineOsc.frequency.value = ENGINE_F_BASE_LOW;
+    engineOsc.frequency.value = ENGINE_F_BASE[0]!;
     const engineFilter = ctx.createBiquadFilter();
     engineFilter.type = 'lowpass';
     engineFilter.frequency.value = ENGINE_FILTER_MIN_HZ;
@@ -116,6 +123,66 @@ export class SoundEngine {
    * fires; calling this outside a gesture, or with no context, is harmless. */
   resume(): void {
     if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume().catch(() => {});
+    // The same policy that suspends the context also rejects the <audio>
+    // element's first play(), and playMusic is called at load — long before any
+    // gesture exists. Retrying here is what actually starts the soundtrack.
+    if (this.musicEl?.paused) void this.musicEl.play().catch(() => {});
+  }
+
+  /** 'engine' addresses the sfxBus (engine tone + squeal + collision cue all route
+   * through it today — there is no separate engine-only bus); 'music' addresses
+   * musicBus. Works identically with or without a live AudioContext. */
+  getVolume(bus: 'engine' | 'music'): number {
+    return bus === 'music' ? this.musicVolume : this.sfxVolume;
+  }
+
+  setVolume(bus: 'engine' | 'music', value: number): void {
+    const clamped = Math.max(0, Math.min(1, value));
+    if (bus === 'music') {
+      this.musicVolume = clamped;
+      if (this.musicBus) this.musicBus.gain.value = clamped;
+    } else {
+      this.sfxVolume = clamped;
+      if (this.sfxBus) this.sfxBus.gain.value = clamped;
+    }
+  }
+
+  /** Stream a track through the existing music bus. Safari cannot play OGG, so
+   * both encodings are offered and the browser picks. Never throws: no
+   * AudioContext, a failed fetch, or a codec the browser rejects all degrade to
+   * silence, matching loadAtlases' "never rejects" discipline. */
+  playMusic(track: MusicTrack, baseUrl = '/assets/music/'): void {
+    if (!this.ctx || !this.musicBus) return;
+    this.stopMusic();
+    try {
+      const el = new Audio();
+      el.loop = true;
+      // Assets are same-origin today, but a tainted cross-origin element feeds
+      // MediaElementAudioSourceNode *silence* rather than erroring — this makes
+      // a CDN move fail loudly instead of mysteriously going quiet.
+      el.crossOrigin = 'anonymous';
+      // Both Ogg codecs are probed, not just Vorbis: bake_music.py picks
+      // whichever its ffmpeg build carries, so the shipped .ogg may hold
+      // either. Anything that rejects both gets the MP3, which is universal.
+      const canOgg = el.canPlayType('audio/ogg; codecs="opus"') !== ''
+        || el.canPlayType('audio/ogg; codecs="vorbis"') !== '';
+      el.src = baseUrl + (canOgg ? track.ogg : track.mp3);
+      const src = this.ctx.createMediaElementSource(el);
+      src.connect(this.musicBus);
+      void el.play().catch(() => { /* autoplay blocked until resume(); fine */ });
+      this.musicEl = el;
+      this.musicSrc = src;
+    } catch {
+      this.musicEl = null;
+      this.musicSrc = null;
+    }
+  }
+
+  stopMusic(): void {
+    this.musicEl?.pause();
+    this.musicSrc?.disconnect();
+    this.musicEl = null;
+    this.musicSrc = null;
   }
 
   /** Poll once per rendered frame. Reads PlayerState only — never writes back.
@@ -127,8 +194,7 @@ export class SoundEngine {
     if (!this.ctx || !this.engineOsc || !this.engineFilter || !this.squealGainNode) return;
     const kmh = state.speed * KMH_PER_WORLD;
     const tone = computeEngineTone(kmh, state.gear, GEAR_MAX_KMH, {
-      fBaseLow: ENGINE_F_BASE_LOW,
-      fBaseHigh: ENGINE_F_BASE_HIGH,
+      fBase: ENGINE_F_BASE,
       fRange: ENGINE_F_RANGE,
       filterMinHz: ENGINE_FILTER_MIN_HZ,
       filterMaxHz: ENGINE_FILTER_MAX_HZ,

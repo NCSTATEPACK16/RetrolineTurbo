@@ -6,7 +6,7 @@ import { CAR_COLLIDE_HALF_WIDTH } from '../constants.js';
 
 const cfg = { roadWidth: 2000, segmentLength: 200, carHalfWidthPx: CAR_COLLIDE_HALF_WIDTH };
 const player: PlayerState = {
-  z: 1000, x: 0, speed: 100, gear: 1, steer: 0, skidding: false, skidMagnitude: 0, braking: false,
+  z: 1000, x: 0, speed: 100, gear: 1, steer: 0, skidding: false, skidMagnitude: 0, braking: false, shiftReady: false,
 };
 
 describe('Collision', () => {

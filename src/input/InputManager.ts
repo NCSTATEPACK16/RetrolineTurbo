@@ -8,7 +8,7 @@ export type Action =
 /** Binding table: action → KeyboardEvent.code list (first entry is primary). */
 export type Bindings = Record<Action, string[]>;
 
-const ACTIONS: readonly Action[] = [
+export const ACTIONS: readonly Action[] = [
   'throttle', 'brake', 'steerLeft', 'steerRight', 'handbrake', 'gearUp', 'gearDown', 'nitro',
 ];
 
