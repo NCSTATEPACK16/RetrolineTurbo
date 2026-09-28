@@ -4,7 +4,9 @@ import { buildRacingLine } from './racingLine.js';
 import { simulateRace } from './raceSim.js';
 import { DEFAULT_FIELD, REFERENCE_PLAYER } from './field.js';
 import { bandTarget, BAND } from './rubberBand.js';
-import { parseTrackFile } from '../track/schema.js';
+import { parseTrackFile, type TrackFileV2 } from '../track/schema.js';
+import { mirrorTrackFile } from '../track/mirror.js';
+import { CLASS_SPECS, type EngineClass } from './classes.js';
 import sunset from '../track/circuits/sunset-beach.json';
 
 /**
@@ -67,5 +69,52 @@ describe('balance: Normal class, Sunset Beach', () => {
     console.info(`[balance] 3rd-5th: banded ${inBand(banded)}/50, unbanded ${inBand(free)}/50`);
     expect(inBand(banded)).toBeGreaterThanOrEqual(inBand(free));
     expect(banded.filter((p) => p === 1).length / banded.length).toBeLessThan(0.5);
+  });
+});
+
+describe('balance: every engine class meets its own target', () => {
+  // 100cc is gated above on 50 seeds; the other classes on 30 to keep CI quick.
+  for (const cls of [50, 150] as const) {
+    const { best, worst, rate } = CLASS_SPECS[cls].target;
+    it(`${cls}cc: the reference player finishes ${best}-${worst} in at least ${Math.round(rate * 100)}% of seeded races`, () => {
+      const finishes = SEEDS.slice(0, 30).map((seed) => simulateRace({ ...base, seed, engineClass: cls }, DEFAULT_FIELD, REFERENCE_PLAYER).playerPosition);
+      const hist = [1, 2, 3, 4, 5, 6, 7, 8].map((p) => finishes.filter((x) => x === p).length);
+      console.info(`[balance] ${cls}cc finishes (1st..8th): ${hist.join(' ')}`);
+      expect(finishes.filter((p) => p >= best && p <= worst).length / finishes.length).toBeGreaterThanOrEqual(rate);
+    });
+  }
+
+  it('the classes are ordered: 50cc is easier than 100cc, which is easier than 150cc', () => {
+    const mean = (cls: EngineClass) => SEEDS.slice(0, 20).reduce((a, seed) =>
+      a + simulateRace({ ...base, seed, engineClass: cls }, DEFAULT_FIELD, REFERENCE_PLAYER).playerPosition, 0) / 20;
+    const [m50, m100, m150] = [mean(50), mean(100), mean(150)];
+    console.info(`[balance] mean finish 50/100/150: ${m50.toFixed(2)} ${m100.toFixed(2)} ${m150.toFixed(2)}`);
+    expect(m50).toBeLessThan(m100);
+    expect(m100).toBeLessThan(m150);
+  });
+});
+
+describe('mirror mode', () => {
+  const mirrored = parseTrackFile(mirrorTrackFile(sunset as TrackFileV2));
+  const mTrack = buildSimTrack(mirrored.def);
+  const mBase = { track: mTrack, grid: mirrored.layout.grid, line: buildRacingLine(mTrack, mirrored.layout.racingLine), itemRows: mirrored.layout.itemBoxes };
+
+  it('flips every turn and keeps the lap length', () => {
+    expect(mTrack.length).toBeCloseTo(track.length, 6);
+    track.sections.forEach((s, i) => expect(mTrack.sections[i]!.curvature).toBeCloseTo(-s.curvature, 12));
+  });
+
+  it('the CPUs still race it properly: the winning time matches the normal layout within 3%', () => {
+    for (const seed of [1, 2, 3]) {
+      const n = simulateRace({ ...base, seed }, DEFAULT_FIELD, REFERENCE_PLAYER);
+      const m = simulateRace({ ...mBase, seed }, DEFAULT_FIELD, REFERENCE_PLAYER);
+      const winner = (r: typeof n) => r.results[0]!.timeSeconds!;
+      expect(Math.abs(winner(m) / winner(n) - 1)).toBeLessThan(0.03);
+    }
+  });
+
+  it('keeps the reference player in contention (2nd-6th)', () => {
+    const finishes = SEEDS.slice(0, 20).map((seed) => simulateRace({ ...mBase, seed }, DEFAULT_FIELD, REFERENCE_PLAYER).playerPosition);
+    expect(finishes.filter((p) => p >= 2 && p <= 6).length / finishes.length).toBeGreaterThanOrEqual(0.85);
   });
 });

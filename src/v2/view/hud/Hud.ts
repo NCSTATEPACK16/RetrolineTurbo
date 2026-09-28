@@ -44,8 +44,8 @@ export class Hud {
   private readonly g: CanvasRenderingContext2D;
   private readonly glyphs = new Map<string, HTMLCanvasElement>(); // `${color}${ch}`
   private readonly icons = new Map<string, HTMLCanvasElement>();
-  private readonly map: HTMLCanvasElement;
-  private readonly mapFit: ReturnType<typeof fitPoints>;
+  private readonly map = document.createElement('canvas');
+  private mapFit: ReturnType<typeof fitPoints> = { scale: 1, ox: 0, oy: 0, minX: 0, minZ: 0 };
   /** Pop-ups per player (each split-screen half has its own). */
   private readonly popups = new Map<number, Popups>();
   private blink = 0;
@@ -57,11 +57,13 @@ export class Hud {
       for (const [ch, rows] of Object.entries(FONT)) this.glyphs.set(key + ch, bitmap(rows, (p) => (p === '#' ? KEY_COLORS[key]! : null)));
     }
     for (const [name, rows] of Object.entries(ICONS)) this.icons.set(name, bitmap(rows, (p) => KEY_COLORS[p] ?? null));
+    this.setTrack(center);
+  }
 
-    // Mini-map outline, drawn once.
+  /** Redraw the mini-map outline for a (new) circuit. */
+  setTrack(center: Centerline): void {
     const xs: number[] = [], zs: number[] = [];
     for (let i = 0; i < center.count; i += 6) { xs.push(center.pos[i * 3]!); zs.push(center.pos[i * 3 + 2]!); }
-    this.map = document.createElement('canvas');
     this.map.width = 64;
     this.map.height = 48;
     this.mapFit = fitPoints(xs, zs, 64, 48, 3);

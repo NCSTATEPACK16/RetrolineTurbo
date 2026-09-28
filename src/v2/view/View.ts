@@ -376,7 +376,9 @@ export const SPLIT_FOV_SCALE = 0.78;
  */
 export class View {
   readonly renderer: THREE.WebGLRenderer;
-  readonly race: RaceScene;
+  race: RaceScene;
+  private readonly textures: SceneTextures;
+  private foci: readonly number[] = [0];
   readonly pixels = new PixelPipeline();
   readonly crt: CrtOverlay;
   width = 0;
@@ -389,17 +391,15 @@ export class View {
   readonly rects: ViewRect[] = [];
 
   constructor(
-    private readonly canvas: HTMLCanvasElement, crtEl: HTMLElement, track: SimTrack, layout: CircuitLayout, carCount: number,
+    private readonly canvas: HTMLCanvasElement, crtEl: HTMLElement, track: SimTrack, layout: CircuitLayout, private readonly carCount: number,
     focus: number | readonly number[] = 0,
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
     const loader = new THREE.TextureLoader();
     const theme = HORIZONS[(layout.theme in HORIZONS ? layout.theme : 'sunset') as HorizonTheme];
-    this.race = new RaceScene(track, layout, carCount, {
-      props: pixelTexture(PROPS_ATLAS.url, loader),
-      horizon: pixelTexture(theme.url, loader),
-    }, focus);
+    this.textures = { props: pixelTexture(PROPS_ATLAS.url, loader), horizon: pixelTexture(theme.url, loader) };
+    this.race = new RaceScene(track, layout, carCount, this.textures, focus);
     this.crt = new CrtOverlay(crtEl);
     for (let k = 0; k < MAX_LOCAL_PLAYERS; k++) this.rects.push({ x: 0, y: 0, w: 0, h: 0 });
     this.setPlayers(typeof focus === 'number' ? [focus] : focus);
@@ -407,9 +407,23 @@ export class View {
 
   /** Local players' cars, player 1 first: one fills the screen, two split it. */
   setPlayers(foci: readonly number[]): void {
+    this.foci = [...foci];
     this.race.setFoci(foci);
     for (const ch of this.race.chasers) ch.fovScale = this.race.active > 1 ? SPLIT_FOV_SCALE : 1;
     this.resize();
+  }
+
+  /**
+   * Swap to another circuit layout (a new track, or mirror mode). Builds a
+   * fresh scene; the old one's GPU buffers are released.
+   */
+  setTrack(track: SimTrack, layout: CircuitLayout): void {
+    const old = this.race;
+    this.race = new RaceScene(track, layout, this.carCount, this.textures, this.foci);
+    old.scene.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+    });
+    this.setPlayers(this.foci);
   }
 
   /** Fit the low-res target to the window at the largest whole-number scale. */

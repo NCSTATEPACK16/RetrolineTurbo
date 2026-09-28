@@ -1,7 +1,8 @@
 import { emptyInput, type InputFrame } from './input.js';
 import type { SimTrack } from './track.js';
 import { createWorld, copyWorld, type SimWorld } from './world.js';
-import type { CarParams } from './car.js';
+import { DEFAULT_STATS, statsToParams, type CarParams } from './car.js';
+import { CLASS_SPECS, classParams, classPersonality, type EngineClass } from './classes.js';
 import { createRace, stepRace, type GridSpec, type RaceState } from './race.js';
 import type { RacingLine } from './racingLine.js';
 import { createCpuDriver, driveCpu, type CpuDriver, type Personality } from './ai.js';
@@ -27,6 +28,8 @@ export interface SessionConfig {
   itemRows?: readonly { s: number; count: number }[];
   /** Pure mode: no items. */
   pure?: boolean;
+  /** Engine class (default 100): scales every car's engine and the CPUs' sharpness. */
+  engineClass?: EngineClass;
 }
 
 export interface Session {
@@ -51,14 +54,16 @@ export function gridSlots(field: readonly (Personality | null)[]): number[] {
 
 export function createSession(cfg: SessionConfig): Session {
   const n = cfg.field.length;
-  const world = createWorld(n, cfg.params);
+  const cls = cfg.engineClass ?? 100;
+  const params = cfg.field.map((_, i) => classParams(cfg.params?.[i] ?? statsToParams(DEFAULT_STATS), cls));
+  const world = createWorld(n, params);
   const race = createRace(world, cfg.track, cfg.grid, gridSlots(cfg.field), cfg.field.map((f) => f === null), {
     laps: cfg.laps ?? 3, items: !cfg.pure, itemRows: cfg.itemRows ?? [], seed: cfg.seed ?? 1,
   });
-  const prev = createWorld(n, cfg.params);
+  const prev = createWorld(n, params);
   copyWorld(prev, world);
   const seed = cfg.seed ?? 1;
-  const drivers = cfg.field.map((p, i) => (p ? createCpuDriver(p, (seed * 7919 + i * 104729) >>> 0) : null));
+  const drivers = cfg.field.map((p, i) => (p ? createCpuDriver(classPersonality(p, cls), (seed * 7919 + i * 104729) >>> 0) : null));
   return {
     cfg, world, prev, race, drivers,
     inputs: cfg.field.map(() => emptyInput()), scratch: cfg.field.map(() => emptyInput()),
@@ -74,5 +79,5 @@ export function stepSession(s: Session): void {
   }
   copyWorld(s.prev, world);
   stepRace(s.race, world, cfg.track, s.inputs, s.scratch);
-  if (cfg.band !== false) stepRubberBand(s.race, world, cfg.track, s.drivers, 1 / 60);
+  if (cfg.band !== false) stepRubberBand(s.race, world, cfg.track, s.drivers, 1 / 60, CLASS_SPECS[cfg.engineClass ?? 100].target);
 }

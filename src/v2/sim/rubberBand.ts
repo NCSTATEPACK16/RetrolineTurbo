@@ -20,7 +20,7 @@ export const BAND = {
   mistakeSwing: 1.2,
   /** Easing, 1/s. */
   ease: 1.5,
-  /** The player should usually have this many CPUs ahead (finishing 3rd-5th)... */
+  /** By default the player should usually have this many CPUs ahead (finishing 3rd-5th; engine classes set their own)... */
   aheadMin: 2,
   aheadMax: 4,
   /** ...and CPUs within this many metres of the player get nudged to keep it so. */
@@ -42,7 +42,13 @@ export function bandTarget(gap: number): { skill: number; mistakes: number } {
   return { skill, mistakes };
 }
 
-export function stepRubberBand(race: RaceState, world: SimWorld, track: SimTrack, drivers: readonly (CpuDriver | null)[], dt: number): void {
+/** Where the band tries to keep the leading human: finishing `best`..`worst`. */
+export interface BandAim { best: number; worst: number }
+const DEFAULT_AIM: BandAim = { best: BAND.aheadMin + 1, worst: BAND.aheadMax + 1 };
+
+export function stepRubberBand(
+  race: RaceState, world: SimWorld, track: SimTrack, drivers: readonly (CpuDriver | null)[], dt: number, aim: BandAim = DEFAULT_AIM,
+): void {
   if (race.phase !== 'racing') return;
   let best = -Infinity;
   for (let i = 0; i < race.racers.length; i++) {
@@ -63,8 +69,8 @@ export function stepRubberBand(race: RaceState, world: SimWorld, track: SimTrack
     // Keep the player in contention: too few CPUs ahead and the nearby chasers sharpen up;
     // too many and the nearby leaders ease off. Still ability only, never engine.
     if (Math.abs(gap) < BAND.packRange) {
-      if (ahead < BAND.aheadMin && gap < 0) { skill += BAND.packNudge; mistakes = 0; }
-      if (ahead > BAND.aheadMax && gap > 0) { skill -= BAND.packNudge; mistakes *= 4; }
+      if (ahead < aim.best - 1 && gap < 0) { skill += BAND.packNudge; mistakes = 0; }
+      if (ahead > aim.worst - 1 && gap > 0) { skill -= BAND.packNudge; mistakes *= 4; }
     }
     d.skillScale += (skill - d.skillScale) * k;
     d.mistakeScale += (mistakes - d.mistakeScale) * k;
