@@ -1,6 +1,7 @@
 import { Button, held, type InputFrame } from './input.js';
 import { stepWorld, DT, type SimWorld } from './world.js';
 import { wrapS, type SimTrack } from './track.js';
+import { resolveBumps } from './bump.js';
 
 /**
  * Race rules on top of the driving sim: grid, countdown + rocket start,
@@ -58,6 +59,8 @@ export interface RaceState {
   readonly racers: Racer[];
   /** Car indices in race order (leader first). */
   readonly order: number[];
+  /** Cars exempt from contact this tick (respawn ghosts); created once, reused every tick. */
+  readonly isGhost: (car: number) => boolean;
 }
 
 /** Lateral and arc position of grid slot `k` (0 = pole). */
@@ -93,7 +96,7 @@ export function createRace(
   });
   return {
     phase: 'countdown', laps, tick: 0, countdownTicks: Math.round(RACE.countdownSeconds / DT),
-    racers, order: racers.map((_, i) => i),
+    racers, order: racers.map((_, i) => i), isGhost: (car) => racers[car]!.ghost > 0,
   };
 }
 
@@ -132,6 +135,7 @@ export function stepRace(race: RaceState, world: SimWorld, track: SimTrack, inpu
     if (r.stall > 0) r.stall = Math.max(0, r.stall - DT);
   }
   stepWorld(world, track, scratch);
+  resolveBumps(world, track, race.isGhost);
   race.tick++;
 
   const n = RACE.checkpoints;

@@ -171,7 +171,10 @@ export class RaceScene {
     sun.position.set(-1, 2, 1);
     this.scene.add(sun);
 
-    const bodyColors = [palette.body.red[2]!, palette.body.blue[2]!];
+    const bodyColors = [
+      palette.body.red[2]!, palette.body.blue[2]!, palette.ui.gold, palette.ui.magenta,
+      palette.ui.cyan, palette.foliage[2]!, palette.sky.canyon[1]!, palette.chrome[3]!,
+    ];
     for (let i = 0; i < carCount; i++) {
       const car = buildCar(bodyColors[i % bodyColors.length]!);
       this.cars.push(car);

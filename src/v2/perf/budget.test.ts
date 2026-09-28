@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { Button, type InputFrame } from '../sim/input.js';
 import { buildSimTrack } from '../sim/track.js';
 import { createWorld, copyWorld, stepWorld } from '../sim/world.js';
+import { buildRacingLine } from '../sim/racingLine.js';
+import { driveCpu, DEFAULT_BRAIN } from '../sim/ai.js';
+import { resolveBumps } from '../sim/bump.js';
 import * as THREE from 'three';
 import { RaceScene } from '../view/View.js';
 import { parseTrackFile } from '../track/schema.js';
@@ -31,9 +34,15 @@ describe('v2 performance budget', () => {
   const input: InputFrame = { steer: 40, buttons: Button.Throttle };
   const inputs = Array.from({ length: CARS }, () => input);
 
-  it(`sim step with ${CARS} cars stays under ${SIM_STEP_BUDGET_MS}ms`, () => {
+  it(`sim step with ${CARS} CPU-driven cars stays under ${SIM_STEP_BUDGET_MS}ms`, () => {
     const world = createWorld(CARS);
-    const ms = timeIt(60 * 60, () => stepWorld(world, track, inputs));
+    const line = buildRacingLine(track);
+    const cpu = Array.from({ length: CARS }, () => ({ ...input }));
+    const ms = timeIt(60 * 60, () => {
+      for (let i = 0; i < CARS; i++) driveCpu(world.cars[i]!, world.params[i]!, world.tuning, DEFAULT_BRAIN, line, track, cpu[i]!);
+      stepWorld(world, track, cpu);
+      resolveBumps(world, track);
+    });
     console.info(`[budget] sim step x${CARS}: ${(ms * 1000).toFixed(1)}us`);
     expect(ms).toBeLessThan(SIM_STEP_BUDGET_MS);
   });
