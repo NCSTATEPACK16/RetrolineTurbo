@@ -47,7 +47,9 @@ export function resolveBumps(world: SimWorld, track: SimTrack, skip?: (i: number
         if (closing > 0) {
           const impulse = ((1 + BUMP.restitution) * closing) / (mr + mf);
           rear.speed -= impulse * mf;
-          front.speed += impulse * mr;
+          // A shove from behind never pushes a car past what its own engine could do boosted.
+          const cap = world.params[dir > 0 ? j : i]!.topSpeed * world.tuning.boostSpeed;
+          front.speed = Math.max(Math.min(front.speed + impulse * mr, cap), front.speed);
         }
       } else {
         // Side by side: shove apart; the lighter car gets pushed further.

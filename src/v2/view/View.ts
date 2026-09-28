@@ -145,9 +145,12 @@ export class RaceScene {
   private readonly chase = initialChaseState();
   private readonly chaseIn: ChaseInput = { curvature: 0, speed: 0, topSpeed: 1, boosting: false, drifting: false };
   private readonly crestYs = new Float32Array(3);
+  /** Which car the camera chases. */
+  focus = 0;
   private readonly horizon: Horizon;
 
-  constructor(private readonly track: SimTrack, layout: CircuitLayout, carCount: number, textures: SceneTextures) {
+  constructor(private readonly track: SimTrack, layout: CircuitLayout, carCount: number, textures: SceneTextures, focus = 0) {
+    this.focus = focus;
     const theme = HORIZONS[(layout.theme in HORIZONS ? layout.theme : 'sunset') as HorizonTheme];
     this.scene.background = new THREE.Color(theme.sky);
     this.scene.fog = new THREE.Fog(new THREE.Color(theme.haze), 220, 800);
@@ -176,7 +179,9 @@ export class RaceScene {
       palette.ui.cyan, palette.foliage[2]!, palette.sky.canyon[1]!, palette.chrome[3]!,
     ];
     for (let i = 0; i < carCount; i++) {
-      const car = buildCar(bodyColors[i % bodyColors.length]!);
+      // The chased car always wears the hero red; everyone else takes the next colour.
+      const colour = i === focus ? 0 : 1 + ((i < focus ? i : i - 1) % (bodyColors.length - 1));
+      const car = buildCar(bodyColors[colour]!);
       this.cars.push(car);
       this.scene.add(car.group);
     }
@@ -210,8 +215,8 @@ export class RaceScene {
       }
       rig.flame.visible = b.boostTime > 0;
       rig.flame.scale.z = flicker * 1.4;
-      if (i === 0) {
-        this.chaseIn.topSpeed = curr.params[0]!.topSpeed;
+      if (i === this.focus) {
+        this.chaseIn.topSpeed = curr.params[i]!.topSpeed;
         this.placeCamera(s, x, a.steer + (b.steer - a.steer) * alpha, a.speed + (b.speed - a.speed) * alpha, b, dt);
       }
     }
@@ -257,6 +262,7 @@ export class View {
 
   constructor(
     private readonly canvas: HTMLCanvasElement, crtEl: HTMLElement, track: SimTrack, layout: CircuitLayout, carCount: number,
+    focus = 0,
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
@@ -265,7 +271,7 @@ export class View {
     this.race = new RaceScene(track, layout, carCount, {
       props: pixelTexture(PROPS_ATLAS.url, loader),
       horizon: pixelTexture(theme.url, loader),
-    });
+    }, focus);
     this.crt = new CrtOverlay(crtEl);
     this.resize();
   }

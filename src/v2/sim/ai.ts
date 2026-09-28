@@ -34,6 +34,8 @@ export interface CpuDriver {
   personality: Personality;
   /** Scales skill for rubber-banding (1 = the driver's own ability). */
   skillScale: number;
+  /** Scales mistake rate for rubber-banding. */
+  mistakeScale: number;
   /** xorshift32 state. */
   rng: number;
   /** Seconds left of the current mistake, and which kind (1 run wide, 2 lift). */
@@ -50,7 +52,7 @@ export interface CpuDriver {
 
 export function createCpuDriver(personality: Personality, seed: number): CpuDriver {
   return {
-    personality: { ...personality }, skillScale: 1, rng: (seed >>> 0) || 0x9e3779b9,
+    personality: { ...personality }, skillScale: 1, mistakeScale: 1, rng: (seed >>> 0) || 0x9e3779b9,
     mistake: 0, mistakeKind: 0, tactic: 0, passTime: 0, passSide: 0, mistakes: 0,
   };
 }
@@ -125,7 +127,7 @@ function stepMistakes(d: CpuDriver): void {
     d.mistake -= AI.dt;
     return;
   }
-  const perTick = (d.personality.mistakeRate / 60) * AI.dt;
+  const perTick = ((d.personality.mistakeRate * d.mistakeScale) / 60) * AI.dt;
   if (nextRandom(d) < perTick) {
     d.mistake = AI.mistakeSeconds * (0.6 + nextRandom(d) * 0.8);
     d.mistakeKind = nextRandom(d) < 0.6 ? 1 : 2;

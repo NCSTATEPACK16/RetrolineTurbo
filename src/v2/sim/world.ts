@@ -164,7 +164,7 @@ function stepCar(car: CarState, p: CarParams, input: InputFrame, track: SimTrack
     if (held(input, Button.Throttle) || boosting) {
       const room = 1 - car.speed / top;
       a += p.accel * (room > 0 ? room : 0) * torque(car, t);
-      if (boosting && room > 0) a += t.boostAccel;
+      if (boosting && room > 0) a += Math.min(t.boostAccel, (top - car.speed) / DT); // never overshoot the boosted cap
     }
     if (held(input, Button.Brake)) a -= t.brake;
     if (!held(input, Button.Throttle) && !boosting) a -= t.coastDrag;
