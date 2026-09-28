@@ -6,6 +6,7 @@ import { buildRacingLine } from './sim/racingLine.js';
 import { createSession, stepSession, type Session } from './sim/session.js';
 import { DEFAULT_FIELD } from './sim/field.js';
 import { InputRecording } from './sim/replay.js';
+import { JUNIOR } from './sim/assist.js';
 import { parseTrackFile } from './track/schema.js';
 import sunsetBeach from './track/circuits/sunset-beach.json';
 import { Keyboard } from './input/keyboard.js';
@@ -29,10 +30,12 @@ const PLAYER = FIELD.length - 1;
 const NAMES = FIELD.map((f, i) => (f === null ? 'YOU' : `CPU ${i + 1}`));
 
 let seed = 1;
+let junior = false; // Junior assist for the player; the menus own this setting later
 let session: Session;
 let recording: InputRecording;
 function newRace(): void {
   session = createSession({ track, grid: circuit.layout.grid, line, field: FIELD, seed: seed++ });
+  session.world.assist[PLAYER] = junior ? JUNIOR : 0;
   recording = new InputRecording();
 }
 newRace();
@@ -49,6 +52,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyC') view.crt.enabled = !view.crt.enabled; // settings screen owns this later
   if (import.meta.env.DEV && e.code === 'KeyP') view.pixels.paletteEnabled = !view.pixels.paletteEnabled;
   if (e.code === 'Enter' && session.race.phase === 'finished') newRace();
+  if (e.code === 'KeyJ') {
+    junior = !junior;
+    session.world.assist[PLAYER] = junior ? JUNIOR : 0;
+  }
 });
 
 let lastFrame = performance.now();
@@ -72,7 +79,7 @@ const loop = createLoop({
   render(alpha) {
     const now = performance.now();
     view.render(session.prev, session.world, alpha, Math.min(0.1, (now - lastFrame) / 1000));
-    overlay.update(session.race, PLAYER);
+    overlay.update(session.race, PLAYER, junior);
     lastFrame = now;
   },
 });

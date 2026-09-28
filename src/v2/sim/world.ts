@@ -1,5 +1,6 @@
 import { Button, STEER_MAX, held, type InputFrame } from './input.js';
 import { curvatureAt, halfWidthAt, type SimTrack } from './track.js';
+import { applyAssist } from './assist.js';
 import { DEFAULT_STATS, DRIVE_TUNING, GEAR_TOPS, driftTier, statsToParams, tierBoost, type CarParams, type DriveTuning } from './car.js';
 
 /** Fixed simulation step: 60Hz. */
@@ -48,6 +49,10 @@ export interface SimWorld {
   tuning: DriveTuning;
   /** Per-car strongest contact this tick (closing speed, m/s); 0 when untouched. An event channel for the view. */
   readonly impact: Float64Array;
+  /** Per-car Junior assist flags (see assist.ts); 0 = none. */
+  readonly assist: Uint8Array;
+  /** Per-car scratch input after assists (preallocated). */
+  readonly assisted: InputFrame[];
 }
 
 export function createCar(): CarState {
@@ -61,7 +66,10 @@ export function createWorld(carCount = 1, params?: readonly CarParams[], tuning:
     cars.push(createCar());
     ps.push({ ...(params?.[i] ?? statsToParams(DEFAULT_STATS, false, tuning)) });
   }
-  return { tick: 0, cars, params: ps, tuning, impact: new Float64Array(carCount) };
+  return {
+    tick: 0, cars, params: ps, tuning, impact: new Float64Array(carCount), assist: new Uint8Array(carCount),
+    assisted: cars.map(() => ({ steer: 0, buttons: 0 })),
+  };
 }
 
 /** Copy `src` car state into `dst` in place — the previous snapshot for interpolation, without allocating. */
@@ -216,7 +224,11 @@ function stepCar(car: CarState, p: CarParams, input: InputFrame, track: SimTrack
 /** Advance the world one fixed step; `inputs[i]` drives car i. */
 export function stepWorld(world: SimWorld, track: SimTrack, inputs: readonly InputFrame[]): void {
   world.impact.fill(0);
-  for (let i = 0; i < world.cars.length; i++) stepCar(world.cars[i]!, world.params[i]!, inputs[i]!, track, world.tuning);
+  for (let i = 0; i < world.cars.length; i++) {
+    const car = world.cars[i]!, p = world.params[i]!;
+    const input = applyAssist(world.assist[i]!, car, p, world.tuning, track, inputs[i]!, world.assisted[i]!);
+    stepCar(car, p, input, track, world.tuning);
+  }
   world.tick++;
 }
 

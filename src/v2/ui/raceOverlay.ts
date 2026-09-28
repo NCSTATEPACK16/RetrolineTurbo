@@ -24,7 +24,7 @@ export class RaceOverlay {
     root.append(this.big, this.info, this.banner, this.table);
   }
 
-  update(race: RaceState, player: number): void {
+  update(race: RaceState, player: number, junior = false): void {
     const r = race.racers[player]!;
     let big = '';
     if (race.phase === 'countdown') {
@@ -32,7 +32,7 @@ export class RaceOverlay {
       big = String(Math.ceil(left));
     } else if (race.tick - race.countdownTicks < 45) big = 'GO!';
     const lap = Math.min(race.laps, lapOf(r) + 1);
-    const info = race.phase === 'countdown' ? '' : `LAP ${lap}/${race.laps}   ${ORDINAL[r.position - 1]}`;
+    const info = (race.phase === 'countdown' ? '' : `LAP ${lap}/${race.laps}   ${ORDINAL[r.position - 1]}`) + (junior ? '   JR' : '');
     const banner = r.wrongWay > RACE.wrongWaySeconds ? 'WRONG WAY!' : '';
     let table = '';
     if (race.phase === 'finished') {
