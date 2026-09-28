@@ -1,7 +1,7 @@
 import { scaleFor, projectX, projectY, accumulateSegment, clipToCrest } from '../math/projection.js';
 import {
   LOGICAL_WIDTH, LOGICAL_HEIGHT, COLORS, DEFAULT_CAMERA_HEIGHT,
-  PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y, TOP_SPEED_WORLD,
+  PLAYER_CAR_WIDTH, PLAYER_CAR_BASE_Y, TOP_SPEED_WORLD, CAR_COLLIDE_HALF_WIDTH,
 } from '../constants.js';
 import type { Camera, TrackConfig, PlayerState } from '../types/engine.js';
 import type { RenderBackend } from './RenderBackend.js';
@@ -26,6 +26,9 @@ const STEER_FRAME_2 = 0.5;
 
 /** Matches Traffic.ts's roster sprite names ('car0'..'car3') — never a roadside prop name. */
 const TRAFFIC_CAR_RE = /^car\d+$/;
+
+/** A traffic car's width in world units: the full collision box, so what you see is what you hit. */
+const TRAFFIC_CAR_WORLD_WIDTH = CAR_COLLIDE_HALF_WIDTH * 2;
 
 /**
  * Steering-frame selection.
@@ -384,10 +387,17 @@ export class Renderer {
     // any realistic passing distance (the ladder math is correct; the input
     // sprite was just far smaller than a real car). Reusing the body set gives
     // traffic the same detail and the same 12-step ladder as the player car.
+    //
+    // The ladder step must come from the car's world width, not `ideal`: `ideal`
+    // is still f.w-based, and f.w is that same 22px placeholder, so reusing the
+    // body frames alone left traffic drawing at the 10px floor. rec.w is the
+    // projected road half-width, so scaling it by car/road world width keeps
+    // traffic in proportion to the road and to its own collision box.
     if (this.bakedCar && TRAFFIC_CAR_RE.test(name)) {
       const body = this.bakedCar.body;
       const colorIdx = Number(name.slice(3)) % body.colors;
-      const step = body.nearestStep(colorIdx, 0, ladderStepFor(ideal));
+      const carIdeal = rec.w * (TRAFFIC_CAR_WORLD_WIDTH / roadHalfWidth);
+      const step = body.nearestStep(colorIdx, 0, ladderStepFor(carIdeal));
       const bf = body.frame(colorIdx, 0, step);
       const dx = cx - bf.w * (bf.anchorX / bf.w);
       const dy = rec.y - bf.h * (bf.anchorY / bf.h);
