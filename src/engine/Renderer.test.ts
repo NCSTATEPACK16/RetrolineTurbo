@@ -458,6 +458,27 @@ describe('baked traffic cars', () => {
     expect(backend.sprites.length).toBe(backendNoTraffic.sprites.length + 1);
   });
 
+  it('sizes a traffic car from its world width, not the placeholder frame', () => {
+    // A car 3000 units ahead is ~15 segments out — a normal passing distance.
+    // Sized off the 22px placeholder it collapsed to the 10px ladder floor
+    // (~1/18 of its true size); sized off its ~920-unit world width it lands
+    // mid-ladder, in proportion to the road and its own collision box.
+    const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
+    renderer.setBakedCar({ image: {} as CanvasImageSource, body: mkBody(), under: [], brake: null, color: 0 });
+    const track = stubTrack(() => []);
+
+    const withCar = new RecordingBackend();
+    renderer.render(camAt(0), track, withCar, undefined,
+      new Traffic([{ z: 3000, offset: 0, speed: 50, sprite: 'car0', variant: 0 }], 100000));
+    const without = new RecordingBackend();
+    renderer.render(camAt(0), track, without, undefined, new Traffic([], 100000));
+    const car = withCar.sprites.find((s) => !without.sprites.some((t) => t.dx === s.dx && t.dy === s.dy && t.dw === s.dw));
+
+    expect(car).toBeDefined();
+    expect(car!.dw).toBeGreaterThanOrEqual(48);
+    expect(car!.dw).toBeLessThan(PLAYER_CAR_WIDTH);
+  });
+
   it('falls back to the procedural placeholder when no car is baked', () => {
     const renderer = new Renderer(DEFAULT_TRACK_CONFIG, atlas);
     const track = stubTrack(() => []);
