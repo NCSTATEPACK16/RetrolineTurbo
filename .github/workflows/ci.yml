@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main, v2]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Typecheck + production build of both entries (1.x and v2).
+      - run: npm run build
+      # Unit tests, the headless race sims and the v2 CPU budget scene.
+      - run: npm test
+      # v2 JS must stay under 3 MB gzipped (PRD section 15).
+      - run: npm run check:bundle

@@ -14,7 +14,8 @@
     "bake:props": "bash scripts/bake_props.sh",
     "bake:effects": "bash scripts/bake_effects.sh",
     "bake:music": "python3 scripts/bake_music.py",
-    "visual-check": "node scripts/drive_game.mjs"
+    "visual-check": "node scripts/drive_game.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

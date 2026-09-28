@@ -89,27 +89,23 @@ function buildCar(color: string): THREE.Group {
 }
 
 /**
- * Thin three.js view over the sim. Reads two snapshots and blends them; never
- * writes sim state. `render` is the only per-frame entry and allocates nothing.
+ * The race's three.js scene graph and camera, with no renderer and no DOM, so
+ * the per-frame sync can be benchmarked headlessly (see perf/budget.test.ts).
+ * It reads two sim snapshots and blends them; it never writes sim state, and
+ * `sync` allocates nothing.
  */
-export class View {
-  readonly renderer: THREE.WebGLRenderer;
-  private readonly scene = new THREE.Scene();
-  private readonly camera: THREE.PerspectiveCamera;
+export class RaceScene {
+  readonly scene = new THREE.Scene();
+  readonly camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 900);
   private readonly center: Centerline;
   private readonly cars: THREE.Group[] = [];
   private readonly pose: Pose = { x: 0, y: 0, z: 0, heading: 0 };
   private readonly look = new THREE.Vector3();
-  width = 0;
-  height = 0;
 
-  constructor(private readonly canvas: HTMLCanvasElement, private readonly track: SimTrack, carCount: number) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(1);
+  constructor(private readonly track: SimTrack, carCount: number) {
     const sky = new THREE.Color(palette.sky.sunset[4]!);
     this.scene.background = sky;
     this.scene.fog = new THREE.Fog(sky, 180, 700);
-    this.camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 900);
 
     this.center = buildCenterline(track, 1);
     this.scene.add(buildRoad(track, this.center));
@@ -132,26 +128,10 @@ export class View {
       this.cars.push(car);
       this.scene.add(car);
     }
-    this.resize();
   }
 
-  /** Fit the low-res target to the window at the largest whole-number scale. */
-  resize(): void {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const { width, height } = internalResolution(vw / vh);
-    this.width = width;
-    this.height = height;
-    this.renderer.setSize(width, height, false);
-    const k = integerScale(vw, vh, width, height);
-    this.canvas.style.width = `${width * k}px`;
-    this.canvas.style.height = `${height * k}px`;
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-  }
-
-  /** Draw the world blended `alpha` of the way from `prev` to `curr`. */
-  render(prev: SimWorld, curr: SimWorld, alpha: number): void {
+  /** Pose everything `alpha` of the way from `prev` to `curr`. */
+  sync(prev: SimWorld, curr: SimWorld, alpha: number): void {
     const L = this.track.length;
     for (let i = 0; i < this.cars.length; i++) {
       const a = prev.cars[i]!;
@@ -175,6 +155,41 @@ export class View {
         this.camera.lookAt(this.look);
       }
     }
-    this.renderer.render(this.scene, this.camera);
+    this.scene.updateMatrixWorld();
+  }
+}
+
+/** The browser edge: owns the canvas and WebGL renderer, and draws a {@link RaceScene}. */
+export class View {
+  readonly renderer: THREE.WebGLRenderer;
+  readonly race: RaceScene;
+  width = 0;
+  height = 0;
+
+  constructor(private readonly canvas: HTMLCanvasElement, track: SimTrack, carCount: number) {
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(1);
+    this.race = new RaceScene(track, carCount);
+    this.resize();
+  }
+
+  /** Fit the low-res target to the window at the largest whole-number scale. */
+  resize(): void {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const { width, height } = internalResolution(vw / vh);
+    this.width = width;
+    this.height = height;
+    this.renderer.setSize(width, height, false);
+    const k = integerScale(vw, vh, width, height);
+    this.canvas.style.width = `${width * k}px`;
+    this.canvas.style.height = `${height * k}px`;
+    this.race.camera.aspect = width / height;
+    this.race.camera.updateProjectionMatrix();
+  }
+
+  render(prev: SimWorld, curr: SimWorld, alpha: number): void {
+    this.race.sync(prev, curr, alpha);
+    this.renderer.render(this.race.scene, this.race.camera);
   }
 }
