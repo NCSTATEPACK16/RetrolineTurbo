@@ -13,6 +13,8 @@ import { JUICE, PARTICLE_COLORS, Particles, Shake, SpeedLines, prefersReducedMot
 import { Scenery, Horizon, pixelTexture, type HorizonTheme } from './Scenery.js';
 import { HORIZONS, PROPS_ATLAS, SCENERY_KINDS } from './sprites.js';
 import { placeScenery } from '../track/scenery.js';
+import type { CarKit, CarLook } from './carKit.js';
+import { DEFAULT_LOOKS } from './carKit.js';
 import type { CircuitLayout } from '../track/schema.js';
 
 /** Textures a race scene needs; the browser loads them, headless tests pass blanks. */
@@ -91,7 +93,7 @@ function buildRoad(track: SimTrack, c: Centerline): THREE.Mesh {
 
 interface CarRig {
   /** Body paint (recoloured when the local players change). */
-  paint: THREE.MeshLambertMaterial;
+  paint: THREE.MeshLambertMaterial | THREE.MeshToonMaterial;
   group: THREE.Group;
   /** Everything that tilts and hops (the body), under the ground-level group. */
   body: THREE.Group;
@@ -114,11 +116,15 @@ function buildCar(color: string): CarRig {
   body.add(shell, cabin);
   const wheelGeo = new THREE.BoxGeometry(0.35, 0.6, 0.8);
   const wheelMat = new THREE.MeshLambertMaterial({ color: palette.outline });
+  const placeholder: THREE.Object3D[] = [shell, cabin];
   for (const [x, z] of [[-1, -1.3], [1, -1.3], [-1, 1.3], [1, 1.3]] as const) {
     const w = new THREE.Mesh(wheelGeo, wheelMat);
     w.position.set(x, 0.3, z);
     body.add(w);
+    placeholder.push(w);
   }
+  // Stand-in boxes until the kit loads; CarKit.assemble clears anything tagged `kit`.
+  for (const o of placeholder) o.userData.kit = true;
   const sparkGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
   const sparks = [-1, 1].map((side) => {
     const m = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ color: TIER_COLORS[0]!, fog: false }));
@@ -230,6 +236,16 @@ export class RaceScene {
       this.scene.add(car.group);
     }
     this.setFoci(typeof focus === 'number' ? [focus] : focus);
+  }
+
+  /** Rebuild every car from the kit (the stand-in boxes go). `looks` cycles if shorter than the field. */
+  applyKit(kit: CarKit, looks: readonly CarLook[]): void {
+    for (let i = 0; i < this.cars.length; i++) {
+      const rig = this.cars[i]!;
+      rig.paint = kit.paint(this.carColors[i]!);
+      const { flame } = kit.assemble(looks[i % looks.length]!, rig.body, rig.paint);
+      rig.flame.position.set(flame.x, flame.y, flame.z + 0.35);
+    }
   }
 
   /** Which car each local player's camera chases. Player cars wear the hero colours (red, then blue). */
@@ -379,6 +395,9 @@ export class View {
   race: RaceScene;
   private readonly textures: SceneTextures;
   private foci: readonly number[] = [0];
+  private kit: CarKit | null = null;
+  /** Each car's parts (cycled over the field). */
+  looks: readonly CarLook[] = DEFAULT_LOOKS;
   readonly pixels = new PixelPipeline();
   readonly crt: CrtOverlay;
   width = 0;
@@ -405,6 +424,13 @@ export class View {
     this.setPlayers(typeof focus === 'number' ? [focus] : focus);
   }
 
+  /** Build the cars from the kit (and again whenever `looks` change). */
+  setKit(kit: CarKit, looks: readonly CarLook[] = this.looks): void {
+    this.kit = kit;
+    this.looks = looks;
+    this.race.applyKit(kit, looks);
+  }
+
   /** Local players' cars, player 1 first: one fills the screen, two split it. */
   setPlayers(foci: readonly number[]): void {
     this.foci = [...foci];
@@ -421,9 +447,10 @@ export class View {
     const old = this.race;
     this.race = new RaceScene(track, layout, this.carCount, this.textures, this.foci);
     old.scene.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose();
+      if (o instanceof THREE.Mesh && !o.userData.kitMesh) o.geometry.dispose();
     });
     this.setPlayers(this.foci);
+    if (this.kit) this.race.applyKit(this.kit, this.looks);
   }
 
   /** Fit the low-res target to the window at the largest whole-number scale. */

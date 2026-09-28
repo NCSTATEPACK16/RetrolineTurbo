@@ -21,6 +21,7 @@ import { JUICE } from './view/Juice.js';
 import { RaceOverlay } from './ui/raceOverlay.js';
 import { Menu, PadNav, keyNav, type MenuNav } from './ui/menu.js';
 import { Hud } from './view/hud/Hud.js';
+import { loadCarKit } from './view/carKit.js';
 
 /**
  * v2 entry: the one place the sim and the view meet, plus the flow between
@@ -114,6 +115,7 @@ view.onResize();
 const overlay = new RaceOverlay(stage, names);
 const menu = new Menu(stage);
 newRace();
+loadCarKit().then((kit) => view.setKit(kit), (e: unknown) => console.warn('car kit failed to load; using stand-in cars', e));
 
 const onOff = ['OFF', 'ON'] as const;
 function openMenu(): void {
