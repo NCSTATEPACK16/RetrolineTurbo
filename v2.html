@@ -8,11 +8,21 @@
       :root { color-scheme: dark; }
       html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
       #stage { display: grid; place-items: center; width: 100vw; height: 100vh; }
+      #v2, #crt { grid-area: 1 / 1; }
       #v2 { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+      /* One dark scanline per internal row (--row = upscale factor in px), plus a soft vignette. */
+      #crt {
+        pointer-events: none;
+        background:
+          radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.38) 100%),
+          repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--row, 3px) * 0.6),
+            rgba(0, 0, 0, 0.28) calc(var(--row, 3px) * 0.6), rgba(0, 0, 0, 0.28) var(--row, 3px));
+      }
+      #crt[hidden] { display: none; }
     </style>
   </head>
   <body>
-    <div id="stage"><canvas id="v2"></canvas></div>
+    <div id="stage"><canvas id="v2"></canvas><div id="crt" hidden></div></div>
     <script type="module" src="/src/v2/main.ts"></script>
   </body>
 </html>

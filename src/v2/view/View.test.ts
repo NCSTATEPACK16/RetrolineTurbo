@@ -18,3 +18,12 @@ describe('v2 low-res target sizing', () => {
     expect(integerScale(300, 200, 427, 240)).toBe(1);
   });
 });
+
+describe('v2 CRT default', () => {
+  it('is off on phone-width viewports and on for wider ones', async () => {
+    const { crtDefault } = await import('./crt.js');
+    expect(crtDefault(390)).toBe(false);
+    expect(crtDefault(768)).toBe(false);
+    expect(crtDefault(1280)).toBe(true);
+  });
+});

@@ -24,8 +24,12 @@ const recording = new InputRecording();
 const keyboard = new Keyboard();
 
 const canvas = document.getElementById('v2') as HTMLCanvasElement;
-const view = new View(canvas, track, CARS);
+const view = new View(canvas, document.getElementById('crt')!, track, CARS);
 window.addEventListener('resize', () => view.resize());
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyC') view.crt.enabled = !view.crt.enabled; // settings screen owns this later
+  if (import.meta.env.DEV && e.code === 'KeyP') view.pixels.paletteEnabled = !view.pixels.paletteEnabled;
+});
 
 const loop = createLoop({
   update() {

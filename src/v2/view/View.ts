@@ -3,6 +3,8 @@ import palette from '../../assets/palette.json';
 import { halfWidthAt, type SimTrack } from '../sim/track.js';
 import type { SimWorld } from '../sim/world.js';
 import { buildCenterline, poseAt, type Centerline, type Pose } from './centerline.js';
+import { PixelPipeline } from './PixelPipeline.js';
+import { CrtOverlay } from './crt.js';
 
 /** Internal render height: 240 lines, the "widescreen SNES" target (PRD section 10). */
 export const INTERNAL_HEIGHT = 240;
@@ -163,17 +165,20 @@ export class RaceScene {
   }
 }
 
-/** The browser edge: owns the canvas and WebGL renderer, and draws a {@link RaceScene}. */
+/** The browser edge: owns the canvas, WebGL renderer, pixel pipeline and CRT overlay. */
 export class View {
   readonly renderer: THREE.WebGLRenderer;
   readonly race: RaceScene;
+  readonly pixels = new PixelPipeline();
+  readonly crt: CrtOverlay;
   width = 0;
   height = 0;
 
-  constructor(private readonly canvas: HTMLCanvasElement, track: SimTrack, carCount: number) {
+  constructor(private readonly canvas: HTMLCanvasElement, crtEl: HTMLElement, track: SimTrack, carCount: number) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
     this.race = new RaceScene(track, carCount);
+    this.crt = new CrtOverlay(crtEl);
     this.resize();
   }
 
@@ -185,15 +190,17 @@ export class View {
     this.width = width;
     this.height = height;
     this.renderer.setSize(width, height, false);
+    this.pixels.setSize(width, height);
     const k = integerScale(vw, vh, width, height);
     this.canvas.style.width = `${width * k}px`;
     this.canvas.style.height = `${height * k}px`;
+    this.crt.fit(width * k, height * k, k);
     this.race.camera.aspect = width / height;
     this.race.camera.updateProjectionMatrix();
   }
 
   render(prev: SimWorld, curr: SimWorld, alpha: number): void {
     this.race.sync(prev, curr, alpha);
-    this.renderer.render(this.race.scene, this.race.camera);
+    this.pixels.render(this.renderer, this.race.scene, this.race.camera);
   }
 }
