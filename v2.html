@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Retroline Turbo 2.0</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #stage { position: relative; display: grid; place-items: center; width: 100vw; height: 100vh; }
+      #v2, #hud, #crt { grid-area: 1 / 1; }
+      #hud { pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; }
+      #v2 { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+      /* One dark scanline per internal row (--row = upscale factor in px), plus a soft vignette. */
+      #crt {
+        pointer-events: none;
+        background:
+          radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.38) 100%),
+          repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--row, 3px) * 0.6),
+            rgba(0, 0, 0, 0.28) calc(var(--row, 3px) * 0.6), rgba(0, 0, 0, 0.28) var(--row, 3px));
+      }
+      #crt[hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><canvas id="v2"></canvas><canvas id="hud"></canvas><div id="crt" hidden></div></div>
+    <script type="module" src="/src/v2/main.ts"></script>
+  </body>
+</html>

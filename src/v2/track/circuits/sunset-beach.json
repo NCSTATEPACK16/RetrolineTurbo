@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "name": "Sunset Beach",
+  "theme": "sunset",
+  "halfWidth": 9,
+  "sections": [
+    { "length": 300, "turn": 0 },
+    { "length": 110, "turn": 90 },
+    { "length": 120, "turn": 0 },
+    { "length": 70, "turn": -40 },
+    { "length": 70, "turn": 40 },
+    { "length": 100, "turn": 0, "rise": 4 },
+    { "length": 130, "turn": 90 },
+    { "length": 200, "turn": 0, "rise": 8 },
+    { "length": 90, "turn": 180, "halfWidth": 10.5 },
+    { "length": 120, "turn": 0, "rise": -4, "halfWidth": 9 },
+    { "length": 100, "turn": -90 },
+    { "length": 77.01, "turn": 0 },
+    { "length": 100, "turn": -90 },
+    { "length": 334.184, "turn": 0, "rise": -8 },
+    { "length": 110, "turn": 90 },
+    { "length": 100, "turn": 0 },
+    { "length": 110, "turn": 90 },
+    { "length": 80, "turn": 0 }
+  ],
+  "grid": { "rows": 4, "columns": 2, "rowGap": 9, "columnGap": 6, "stagger": 4 },
+  "itemBoxes": [
+    { "s": 450, "count": 4 },
+    { "s": 1000, "count": 4 },
+    { "s": 1750, "count": 4 }
+  ],
+  "coins": [
+    { "s": 120, "x": -4, "count": 6, "spacing": 6 },
+    { "s": 1220, "x": 3, "count": 5, "spacing": 5 },
+    { "s": 1650, "x": 0, "count": 8, "spacing": 6 }
+  ],
+  "scenery": [
+    { "sprite": "palm", "side": "both", "from": 0, "to": 300, "every": 18, "offset": 3 },
+    { "sprite": "marker", "side": "left", "from": 1100, "to": 1190, "every": 15, "offset": 1 },
+    { "sprite": "billboard", "side": "left", "from": 1590, "to": 1920, "every": 40, "offset": 6 },
+    { "sprite": "palm", "side": "right", "from": 1590, "to": 1920, "every": 22, "offset": 4 },
+    { "sprite": "grandstand", "side": "right", "from": 2245, "to": 2320, "every": 12, "offset": 2 }
+  ]
+}

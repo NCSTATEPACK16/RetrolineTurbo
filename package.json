@@ -14,13 +14,17 @@
     "bake:props": "bash scripts/bake_props.sh",
     "bake:effects": "bash scripts/bake_effects.sh",
     "bake:music": "python3 scripts/bake_music.py",
-    "visual-check": "node scripts/drive_game.mjs"
+    "visual-check": "node scripts/drive_game.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "bake:kit": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/build_car_kit.py -- --out public/assets/cars/kit.glb"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.4"
+    "@supabase/supabase-js": "^2.45.4",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "^22.7.4",
+    "@types/three": "^0.186.0",
     "playwright": "1.62.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
