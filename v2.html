@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Retroline Turbo 2.0</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #stage { display: grid; place-items: center; width: 100vw; height: 100vh; }
+      #v2 { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><canvas id="v2"></canvas></div>
+    <script type="module" src="/src/v2/main.ts"></script>
+  </body>
+</html>

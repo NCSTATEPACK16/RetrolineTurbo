@@ -17,10 +17,12 @@
     "visual-check": "node scripts/drive_game.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.4"
+    "@supabase/supabase-js": "^2.45.4",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "^22.7.4",
+    "@types/three": "^0.186.0",
     "playwright": "1.62.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
