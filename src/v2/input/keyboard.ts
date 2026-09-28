@@ -11,6 +11,8 @@ const KEYS = {
   brake: ['ArrowDown', 'KeyS'],
   drift: ['Space', 'ShiftLeft', 'ShiftRight'],
   item: ['KeyE', 'KeyX'],
+  shiftUp: ['KeyR'],
+  shiftDown: ['KeyF'],
 } as const;
 
 export class Keyboard {
@@ -37,7 +39,9 @@ export class Keyboard {
       (this.any(KEYS.throttle) ? Button.Throttle : 0) |
       (this.any(KEYS.brake) ? Button.Brake : 0) |
       (this.any(KEYS.drift) ? Button.Drift : 0) |
-      (this.any(KEYS.item) ? Button.Item : 0);
+      (this.any(KEYS.item) ? Button.Item : 0) |
+      (this.any(KEYS.shiftUp) ? Button.ShiftUp : 0) |
+      (this.any(KEYS.shiftDown) ? Button.ShiftDown : 0);
     return out;
   }
 }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import palette from '../../assets/palette.json';
 import { curvatureAt, halfWidthAt, type SimTrack } from '../sim/track.js';
-import { CAR, type SimWorld } from '../sim/world.js';
+import type { SimWorld } from '../sim/world.js';
 import { CHASE_TUNING, crestSafeHeight, initialChaseState, updateChase, type ChaseInput } from './chaseRig.js';
 import { buildCenterline, poseAt, type Centerline, type Pose } from './centerline.js';
 import { PixelPipeline } from './PixelPipeline.js';
@@ -117,7 +117,7 @@ export class RaceScene {
   private readonly look = new THREE.Vector3();
   private readonly scenery: Scenery;
   private readonly chase = initialChaseState();
-  private readonly chaseIn: ChaseInput = { curvature: 0, speed: 0, topSpeed: CAR.topSpeed, boosting: false, drifting: false };
+  private readonly chaseIn: ChaseInput = { curvature: 0, speed: 0, topSpeed: 1, boosting: false, drifting: false };
   private readonly crestYs = new Float32Array(3);
   private readonly horizon: Horizon;
 
@@ -167,7 +167,10 @@ export class RaceScene {
       const g = this.cars[i]!;
       g.position.set(this.pose.x, this.pose.y, this.pose.z);
       g.rotation.y = -this.pose.heading;
-      if (i === 0) this.placeCamera(s, x, a.steer + (b.steer - a.steer) * alpha, a.speed + (b.speed - a.speed) * alpha, b, dt);
+      if (i === 0) {
+        this.chaseIn.topSpeed = curr.params[0]!.topSpeed;
+        this.placeCamera(s, x, a.steer + (b.steer - a.steer) * alpha, a.speed + (b.speed - a.speed) * alpha, b, dt);
+      }
     }
     this.camera.updateMatrixWorld();
     this.scenery.update(this.camera);

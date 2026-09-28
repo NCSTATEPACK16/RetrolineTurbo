@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Button, emptyInput, quantiseSteer, type InputFrame } from './input.js';
 import { buildSimTrack } from './track.js';
-import { createWorld, copyWorld, stepWorld, hashWorld, CAR } from './world.js';
+import { createWorld, copyWorld, stepWorld, hashWorld } from './world.js';
 import { InputRecording } from './replay.js';
 import { TRACER_OVAL } from '../track/tracer.js';
 import { parseTrackFile } from '../track/schema.js';
@@ -9,6 +9,8 @@ import sunset from '../track/circuits/sunset-beach.json';
 
 const track = buildSimTrack(TRACER_OVAL);
 const idle = emptyInput();
+/** Car 0 gets `first`; the rest idle. */
+const inputs = (n: number, first: InputFrame): InputFrame[] => [first, ...Array.from({ length: n - 1 }, () => idle)];
 
 /** Seeded xorshift so the "random driver" is reproducible. */
 function scriptedInput(seed: number): (tick: number, out: InputFrame) => void {
@@ -26,7 +28,7 @@ function run(seed: number, steps: number): number {
   const input = emptyInput();
   for (let t = 0; t < steps; t++) {
     drive(t, input);
-    stepWorld(w, track, input, idle);
+    stepWorld(w, track, inputs(4, input));
   }
   return hashWorld(w);
 }
@@ -48,12 +50,12 @@ describe('v2 sim determinism', () => {
     for (let t = 0; t < 5_000; t++) {
       drive(t, input);
       rec.push(input);
-      stepWorld(live, track, input, idle);
+      stepWorld(live, track, [input]);
     }
 
     const replay = createWorld(1);
     const frame = emptyInput();
-    for (let t = 0; t < rec.length; t++) stepWorld(replay, track, rec.read(t, frame), idle);
+    for (let t = 0; t < rec.length; t++) stepWorld(replay, track, [rec.read(t, frame)]);
     expect(hashWorld(replay)).toBe(hashWorld(live));
   });
 });
@@ -66,10 +68,10 @@ describe('v2 tracer car', () => {
     for (let t = 0; t < 60 * 90; t++) {
       const car = w.cars[0]!;
       input.steer = quantiseSteer(Math.max(-1, Math.min(1, -car.x / 3)));
-      stepWorld(w, track, input, idle);
+      stepWorld(w, track, [input]);
     }
     const car = w.cars[0]!;
-    expect(car.speed).toBeGreaterThan(CAR.topSpeed * 0.8);
+    expect(car.speed).toBeGreaterThan(w.params[0]!.topSpeed * 0.8);
     expect(car.lap).toBeGreaterThanOrEqual(1);
     expect(car.s).toBeGreaterThanOrEqual(0);
     expect(car.s).toBeLessThan(track.length);
@@ -78,10 +80,10 @@ describe('v2 tracer car', () => {
   it('copyWorld snapshots state without sharing references', () => {
     const a = createWorld(2);
     const b = createWorld(2);
-    stepWorld(a, track, { steer: 50, buttons: Button.Throttle }, idle);
+    stepWorld(a, track, inputs(2, { steer: 50, buttons: Button.Throttle }));
     copyWorld(b, a);
     expect(hashWorld(b)).toBe(hashWorld(a));
-    stepWorld(a, track, { steer: 50, buttons: Button.Throttle }, idle);
+    stepWorld(a, track, inputs(2, { steer: 50, buttons: Button.Throttle }));
     expect(hashWorld(b)).not.toBe(hashWorld(a));
   });
 });
@@ -93,7 +95,7 @@ describe('v2 sim on Sunset Beach', () => {
     const input: InputFrame = { steer: 0, buttons: Button.Throttle };
     for (let t = 0; t < 60 * 60 * 4; t++) {
       input.steer = quantiseSteer(Math.max(-1, Math.min(1, -w.cars[0]!.x / 2)));
-      stepWorld(w, beach, input, idle);
+      stepWorld(w, beach, [input]);
     }
     expect(w.cars[0]!.lap).toBeGreaterThanOrEqual(3);
   });

@@ -15,6 +15,8 @@ export const Button = {
   Brake: 1 << 1,
   Drift: 1 << 2,
   Item: 1 << 3,
+  ShiftUp: 1 << 4,
+  ShiftDown: 1 << 5,
 } as const;
 
 export const STEER_MAX = 127;

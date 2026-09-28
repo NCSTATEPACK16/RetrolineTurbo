@@ -19,7 +19,7 @@ const CARS = 1;
 const curr = createWorld(CARS);
 const prev = createWorld(CARS);
 const input = emptyInput();
-const idle = emptyInput();
+const inputs = [input];
 const recording = new InputRecording();
 const keyboard = new Keyboard();
 
@@ -37,7 +37,7 @@ const loop = createLoop({
     keyboard.sample(input);
     recording.push(input);
     copyWorld(prev, curr);
-    stepWorld(curr, track, input, idle);
+    stepWorld(curr, track, inputs);
   },
   render(alpha) {
     const now = performance.now();
@@ -48,6 +48,21 @@ const loop = createLoop({
 loop.start();
 
 if (import.meta.env.DEV) {
+  // F8 tuning overlay: edits the live tuning objects; car params are rebuilt from stats on every change.
+  void Promise.all([import('./dev/TuningOverlay.js'), import('./sim/car.js'), import('./view/chaseRig.js')]).then(
+    ([{ TuningOverlay }, car, chase]) => {
+      const gearbox = { manual: false };
+      const rebuild = (): void => {
+        const p = car.statsToParams(car.DEFAULT_STATS, gearbox.manual, curr.tuning);
+        Object.assign(curr.params[0]!, p);
+      };
+      new TuningOverlay([
+        { title: 'gearbox', target: gearbox },
+        { title: 'drive', target: curr.tuning as unknown as Record<string, number> },
+        { title: 'camera', target: chase.CHASE_TUNING as unknown as Record<string, number> },
+      ], rebuild);
+    },
+  );
   // Debug handle for manual checks and browser-driven verification.
   (window as unknown as { __v2: unknown }).__v2 = { world: curr, track, recording, hash: () => hashWorld(curr), view };
 }

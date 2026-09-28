@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Button, emptyInput, type InputFrame } from '../sim/input.js';
+import { Button, type InputFrame } from '../sim/input.js';
 import { buildSimTrack } from '../sim/track.js';
 import { createWorld, copyWorld, stepWorld } from '../sim/world.js';
 import * as THREE from 'three';
@@ -28,12 +28,12 @@ function timeIt(iterations: number, fn: (i: number) => void): number {
 describe('v2 performance budget', () => {
   const circuit = parseTrackFile(sunset);
   const track = buildSimTrack(circuit.def);
-  const idle = emptyInput();
   const input: InputFrame = { steer: 40, buttons: Button.Throttle };
+  const inputs = Array.from({ length: CARS }, () => input);
 
   it(`sim step with ${CARS} cars stays under ${SIM_STEP_BUDGET_MS}ms`, () => {
     const world = createWorld(CARS);
-    const ms = timeIt(60 * 60, () => stepWorld(world, track, input, idle));
+    const ms = timeIt(60 * 60, () => stepWorld(world, track, inputs));
     console.info(`[budget] sim step x${CARS}: ${(ms * 1000).toFixed(1)}us`);
     expect(ms).toBeLessThan(SIM_STEP_BUDGET_MS);
   });
@@ -44,7 +44,7 @@ describe('v2 performance budget', () => {
     const race = new RaceScene(track, circuit.layout, CARS, { props: new THREE.Texture(), horizon: new THREE.Texture() });
     const ms = timeIt(60 * 20, (i) => {
       copyWorld(prev, curr);
-      stepWorld(curr, track, input, idle);
+      stepWorld(curr, track, inputs);
       race.sync(prev, curr, (i % 10) / 10, 1 / 60);
     });
     console.info(`[budget] scene sync x${CARS}: ${(ms * 1000).toFixed(1)}us`);
