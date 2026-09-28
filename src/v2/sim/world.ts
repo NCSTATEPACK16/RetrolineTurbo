@@ -1,6 +1,6 @@
 import { Button, STEER_MAX, held, type InputFrame } from './input.js';
 import { curvatureAt, halfWidthAt, type SimTrack } from './track.js';
-import { DEFAULT_STATS, DRIVE_TUNING, GEAR_TOPS, statsToParams, type CarParams, type DriveTuning } from './car.js';
+import { DEFAULT_STATS, DRIVE_TUNING, GEAR_TOPS, driftTier, statsToParams, tierBoost, type CarParams, type DriveTuning } from './car.js';
 
 /** Fixed simulation step: 60Hz. */
 export const DT = 1 / 60;
@@ -30,6 +30,10 @@ export interface CarState {
   shiftCut: number;
   /** Seconds left of a perfect-shift torque kick (manual only). */
   kick: number;
+  /** Seconds of mini-turbo charge built this drift. */
+  driftCharge: number;
+  /** Seconds left of the hop (visual; drifts start with one). */
+  hop: number;
   /** Last tick's buttons, for edge detection. */
   prevButtons: number;
 }
@@ -44,7 +48,7 @@ export interface SimWorld {
 }
 
 export function createCar(): CarState {
-  return { s: 0, x: 0, speed: 0, steer: 0, lap: 0, boostTime: 0, drift: 0, gear: 0, rpm: 0, shiftCut: 0, kick: 0, prevButtons: 0 };
+  return { s: 0, x: 0, speed: 0, steer: 0, lap: 0, boostTime: 0, drift: 0, gear: 0, rpm: 0, shiftCut: 0, kick: 0, driftCharge: 0, hop: 0, prevButtons: 0 };
 }
 
 export function createWorld(carCount = 1, params?: readonly CarParams[], tuning: DriveTuning = DRIVE_TUNING): SimWorld {
@@ -106,12 +110,45 @@ function torque(car: CarState, t: DriveTuning): number {
   return k;
 }
 
+/**
+ * Hop-drift: tap drift while steering to hop into a slide toward that side.
+ * Holding it tightens your line and charges the mini-turbo (faster when you
+ * steer into the drift); releasing fires a boost sized by the tier reached.
+ */
+function stepDrift(car: CarState, p: CarParams, input: InputFrame, offroad: boolean, t: DriveTuning): void {
+  if (car.hop > 0) car.hop = Math.max(0, car.hop - DT);
+  const steer = input.steer / STEER_MAX;
+  if (car.drift === 0) {
+    if (pressed(car, input, Button.Drift)) {
+      car.hop = t.hopTime;
+      if (car.speed >= t.driftMinSpeed && Math.abs(steer) >= t.driftSteerMin) {
+        car.drift = steer > 0 ? 1 : -1;
+        car.driftCharge = 0;
+      }
+    }
+    return;
+  }
+  const ended = !held(input, Button.Drift) || held(input, Button.Brake) || car.speed < t.driftMinSpeed * 0.66;
+  if (ended) {
+    // Only a clean release (not a brake or a stall) cashes in the charge.
+    if (!held(input, Button.Drift) && car.speed >= t.driftMinSpeed * 0.66) {
+      const boost = tierBoost(driftTier(car.driftCharge, t), t) * p.miniTurbo;
+      if (boost > car.boostTime) car.boostTime = boost;
+    }
+    car.drift = 0;
+    car.driftCharge = 0;
+    return;
+  }
+  if (!offroad) car.driftCharge += (steer * car.drift > 0.2 ? t.driftChargeHard : t.driftChargeSoft) * DT;
+}
+
 function stepCar(car: CarState, p: CarParams, input: InputFrame, track: SimTrack, t: DriveTuning): void {
   stepGearbox(car, p, input, t);
 
   // Longitudinal.
   const hw = halfWidthAt(track, car.s);
   const offroad = car.x > hw || car.x < -hw;
+  stepDrift(car, p, input, offroad, t);
   const boosting = car.boostTime > 0;
   const top = boosting ? p.topSpeed * t.boostSpeed : p.topSpeed;
   let a = 0;
@@ -127,6 +164,7 @@ function stepCar(car: CarState, p: CarParams, input: InputFrame, track: SimTrack
     if (a > 0) a *= t.offroadDrive; // wheels spin in the sand
     if (car.speed > cap) a -= (car.speed - cap) * t.offroadBleed;
   }
+  if (car.drift !== 0) a -= t.driftDrag;
   if (car.speed > top) a -= (car.speed - top) * 2; // settle back after a boost ends
   car.speed += a * DT;
   if (car.speed < 0) car.speed = 0;
@@ -136,7 +174,14 @@ function stepCar(car: CarState, p: CarParams, input: InputFrame, track: SimTrack
   car.steer = approach(car.steer, input.steer / STEER_MAX, p.steerRate * DT);
   const grip = car.speed < 8 ? car.speed / 8 : 1;
   const k = curvatureAt(track, car.s);
-  car.x += (car.steer * p.lateralSpeed * grip - k * car.speed * car.speed * p.centrifugal) * DT;
+  let lateral = car.steer * p.lateralSpeed * grip;
+  let centrifugal = k * car.speed * car.speed * p.centrifugal;
+  if (car.drift !== 0) {
+    // Sliding: the car carves inward on its own and the curve pushes less; steering trims the arc.
+    lateral = car.drift * t.driftInward + car.steer * p.lateralSpeed * 0.6;
+    centrifugal *= t.driftCentrifugal;
+  }
+  car.x += (lateral - centrifugal) * DT;
   const edge = hw + OFFROAD_MARGIN;
   if (car.x > edge || car.x < -edge) {
     car.x = car.x > 0 ? edge : -edge;
@@ -176,7 +221,7 @@ export function hashWorld(world: SimWorld): number {
   for (const c of world.cars) {
     h = mix(h, c.s); h = mix(h, c.x); h = mix(h, c.speed); h = mix(h, c.steer); h = mix(h, c.lap);
     h = mix(h, c.boostTime); h = mix(h, c.drift); h = mix(h, c.gear); h = mix(h, c.rpm);
-    h = mix(h, c.shiftCut); h = mix(h, c.kick); h = mix(h, c.prevButtons);
+    h = mix(h, c.shiftCut); h = mix(h, c.kick); h = mix(h, c.driftCharge); h = mix(h, c.hop); h = mix(h, c.prevButtons);
   }
   return h;
 }

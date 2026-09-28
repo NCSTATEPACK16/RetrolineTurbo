@@ -6,6 +6,7 @@ import { InputRecording } from './sim/replay.js';
 import { parseTrackFile } from './track/schema.js';
 import sunsetBeach from './track/circuits/sunset-beach.json';
 import { Keyboard } from './input/keyboard.js';
+import { mapGamepad, mergeInputs, readPad } from './input/gamepad.js';
 import { View } from './view/View.js';
 
 /**
@@ -20,6 +21,8 @@ const curr = createWorld(CARS);
 const prev = createWorld(CARS);
 const input = emptyInput();
 const inputs = [input];
+const kbFrame = emptyInput();
+const padFrame = emptyInput();
 const recording = new InputRecording();
 const keyboard = new Keyboard();
 
@@ -34,7 +37,10 @@ window.addEventListener('keydown', (e) => {
 let lastFrame = performance.now();
 const loop = createLoop({
   update() {
-    keyboard.sample(input);
+    keyboard.sample(kbFrame);
+    const pad = readPad(0);
+    if (pad) mergeInputs(kbFrame, mapGamepad(pad, padFrame), input);
+    else Object.assign(input, kbFrame);
     recording.push(input);
     copyWorld(prev, curr);
     stepWorld(curr, track, inputs);

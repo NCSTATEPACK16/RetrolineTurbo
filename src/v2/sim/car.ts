@@ -34,6 +34,12 @@ export interface DriveTuning {
   shiftCut: number; autoUpshift: number; autoDownshift: number;
   perfectShiftLo: number; perfectShiftHi: number; perfectKick: number; perfectKickTime: number;
   lowRevTorque: number;
+  /** Drift. */
+  driftMinSpeed: number; driftSteerMin: number; hopTime: number;
+  driftCentrifugal: number; driftInward: number; driftDrag: number;
+  driftChargeHard: number; driftChargeSoft: number;
+  tierBlue: number; tierOrange: number; tierPurple: number;
+  boostBlue: number; boostOrange: number; boostPurple: number;
 }
 
 export const DRIVE_TUNING: DriveTuning = {
@@ -50,7 +56,22 @@ export const DRIVE_TUNING: DriveTuning = {
   shiftCut: 0.12, autoUpshift: 0.93, autoDownshift: 0.75,
   perfectShiftLo: 0.88, perfectShiftHi: 0.97, perfectKick: 1.25, perfectKickTime: 1.2,
   lowRevTorque: 0.8,
+  driftMinSpeed: 12, driftSteerMin: 0.3, hopTime: 0.22,
+  driftCentrifugal: 0.55, driftInward: 3.5, driftDrag: 1.5,
+  driftChargeHard: 1, driftChargeSoft: 0.45,
+  tierBlue: 0.8, tierOrange: 1.6, tierPurple: 2.6,
+  boostBlue: 0.6, boostOrange: 1.1, boostPurple: 1.7,
 };
+
+/** Mini-turbo tier for a drift charge: 0 none, 1 blue, 2 orange, 3 purple. */
+export function driftTier(charge: number, t: DriveTuning = DRIVE_TUNING): number {
+  return charge >= t.tierPurple ? 3 : charge >= t.tierOrange ? 2 : charge >= t.tierBlue ? 1 : 0;
+}
+
+/** Boost seconds a released drift of this tier grants, before the car's mini-turbo multiplier. */
+export function tierBoost(tier: number, t: DriveTuning = DRIVE_TUNING): number {
+  return tier === 3 ? t.boostPurple : tier === 2 ? t.boostOrange : tier === 1 ? t.boostBlue : 0;
+}
 
 /** Fraction of top speed at which each of the five gears tops out. */
 export const GEAR_TOPS = [0.28, 0.46, 0.64, 0.82, 1] as const;

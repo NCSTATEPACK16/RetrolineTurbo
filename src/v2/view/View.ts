@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import palette from '../../assets/palette.json';
 import { curvatureAt, halfWidthAt, type SimTrack } from '../sim/track.js';
+import { driftTier } from '../sim/car.js';
 import type { SimWorld } from '../sim/world.js';
 import { CHASE_TUNING, crestSafeHeight, initialChaseState, updateChase, type ChaseInput } from './chaseRig.js';
 import { buildCenterline, poseAt, type Centerline, type Pose } from './centerline.js';
@@ -85,21 +86,46 @@ function buildRoad(track: SimTrack, c: Centerline): THREE.Mesh {
   return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
 }
 
-function buildCar(color: string): THREE.Group {
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.6, 4.2), new THREE.MeshLambertMaterial({ color }));
-  body.position.y = 0.55;
+interface CarRig {
+  group: THREE.Group;
+  /** Everything that tilts and hops (the body), under the ground-level group. */
+  body: THREE.Group;
+  sparks: THREE.Mesh[];
+  flame: THREE.Mesh;
+}
+
+/** Mini-turbo spark colours per tier (blue, orange, purple), from the master palette. */
+const TIER_COLORS = [palette.body.blue[3]!, palette.sky.sunset[4]!, palette.sky.canyon[2]!].map((c) => new THREE.Color(c));
+
+function buildCar(color: string): CarRig {
+  const group = new THREE.Group();
+  const body = new THREE.Group();
+  group.add(body);
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.6, 4.2), new THREE.MeshLambertMaterial({ color }));
+  shell.position.y = 0.55;
   const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.9), new THREE.MeshLambertMaterial({ color: palette.chrome[0]! }));
   cabin.position.set(0, 1.05, 0.3);
-  g.add(body, cabin);
+  body.add(shell, cabin);
   const wheelGeo = new THREE.BoxGeometry(0.35, 0.6, 0.8);
   const wheelMat = new THREE.MeshLambertMaterial({ color: palette.outline });
   for (const [x, z] of [[-1, -1.3], [1, -1.3], [-1, 1.3], [1, 1.3]] as const) {
     const w = new THREE.Mesh(wheelGeo, wheelMat);
     w.position.set(x, 0.3, z);
-    g.add(w);
+    body.add(w);
   }
-  return g;
+  const sparkGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+  const sparks = [-1, 1].map((side) => {
+    const m = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ color: TIER_COLORS[0]!, fog: false }));
+    m.position.set(side * 1.05, 0.2, 2.1);
+    m.visible = false;
+    body.add(m);
+    return m;
+  });
+  const flame = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.9), new THREE.MeshBasicMaterial({ color: palette.ui.gold, fog: false }));
+  flame.position.set(0, 0.5, 2.55);
+  flame.visible = false;
+  body.add(flame);
+  return { group, body, sparks, flame };
 }
 
 /**
@@ -112,7 +138,7 @@ export class RaceScene {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 900);
   private readonly center: Centerline;
-  private readonly cars: THREE.Group[] = [];
+  private readonly cars: CarRig[] = [];
   private readonly pose: Pose = { x: 0, y: 0, z: 0, heading: 0 };
   private readonly look = new THREE.Vector3();
   private readonly scenery: Scenery;
@@ -149,7 +175,7 @@ export class RaceScene {
     for (let i = 0; i < carCount; i++) {
       const car = buildCar(bodyColors[i % bodyColors.length]!);
       this.cars.push(car);
-      this.scene.add(car);
+      this.scene.add(car.group);
     }
   }
 
@@ -164,9 +190,23 @@ export class RaceScene {
       const s = a.s + ds * alpha;
       const x = a.x + (b.x - a.x) * alpha;
       poseAt(this.center, s, x, this.pose);
-      const g = this.cars[i]!;
-      g.position.set(this.pose.x, this.pose.y, this.pose.z);
-      g.rotation.y = -this.pose.heading;
+      const rig = this.cars[i]!;
+      rig.group.position.set(this.pose.x, this.pose.y, this.pose.z);
+      rig.group.rotation.y = -this.pose.heading;
+      // Drift reads as a slide: nose tucked into the turn, a hop on entry, sparks by tier, flame on boost.
+      rig.body.rotation.y = -b.drift * 0.38;
+      rig.body.position.y = b.hop > 0 ? Math.sin((b.hop / 0.22) * Math.PI) * 0.45 : 0;
+      const tier = b.drift !== 0 ? driftTier(b.driftCharge, curr.tuning) : 0;
+      const flicker = (curr.tick & 2) === 0 ? 1 : 0.6;
+      for (const sp of rig.sparks) {
+        sp.visible = tier > 0;
+        if (tier > 0) {
+          (sp.material as THREE.MeshBasicMaterial).color.copy(TIER_COLORS[tier - 1]!);
+          sp.scale.setScalar(flicker * (0.7 + tier * 0.3));
+        }
+      }
+      rig.flame.visible = b.boostTime > 0;
+      rig.flame.scale.z = flicker * 1.4;
       if (i === 0) {
         this.chaseIn.topSpeed = curr.params[0]!.topSpeed;
         this.placeCamera(s, x, a.steer + (b.steer - a.steer) * alpha, a.speed + (b.speed - a.speed) * alpha, b, dt);
