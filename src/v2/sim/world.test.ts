@@ -4,6 +4,8 @@ import { buildSimTrack } from './track.js';
 import { createWorld, copyWorld, stepWorld, hashWorld, CAR } from './world.js';
 import { InputRecording } from './replay.js';
 import { TRACER_OVAL } from '../track/tracer.js';
+import { parseTrackFile } from '../track/schema.js';
+import sunset from '../track/circuits/sunset-beach.json';
 
 const track = buildSimTrack(TRACER_OVAL);
 const idle = emptyInput();
@@ -81,5 +83,18 @@ describe('v2 tracer car', () => {
     expect(hashWorld(b)).toBe(hashWorld(a));
     stepWorld(a, track, { steer: 50, buttons: Button.Throttle }, idle);
     expect(hashWorld(b)).not.toBe(hashWorld(a));
+  });
+});
+
+describe('v2 sim on Sunset Beach', () => {
+  it('a simple centre-seeking driver completes continuous laps', () => {
+    const beach = buildSimTrack(parseTrackFile(sunset).def);
+    const w = createWorld(1);
+    const input: InputFrame = { steer: 0, buttons: Button.Throttle };
+    for (let t = 0; t < 60 * 60 * 4; t++) {
+      input.steer = quantiseSteer(Math.max(-1, Math.min(1, -w.cars[0]!.x / 2)));
+      stepWorld(w, beach, input, idle);
+    }
+    expect(w.cars[0]!.lap).toBeGreaterThanOrEqual(3);
   });
 });

@@ -1,5 +1,5 @@
 import { Button, STEER_MAX, held, type InputFrame } from './input.js';
-import { curvatureAt, type SimTrack } from './track.js';
+import { curvatureAt, halfWidthAt, type SimTrack } from './track.js';
 
 /** Fixed simulation step: 60Hz. */
 export const DT = 1 / 60;
@@ -60,7 +60,8 @@ function approach(v: number, target: number, maxDelta: number): number {
 
 function stepCar(car: CarState, input: InputFrame, track: SimTrack): void {
   // Longitudinal.
-  const offroad = car.x > track.halfWidth || car.x < -track.halfWidth;
+  const hw = halfWidthAt(track, car.s);
+  const offroad = car.x > hw || car.x < -hw;
   let a = 0;
   if (held(input, Button.Throttle)) a += CAR.accel * (1 - car.speed / CAR.topSpeed);
   if (held(input, Button.Brake)) a -= CAR.brake;
@@ -74,7 +75,7 @@ function stepCar(car: CarState, input: InputFrame, track: SimTrack): void {
   const grip = car.speed < 8 ? car.speed / 8 : 1;
   const k = curvatureAt(track, car.s);
   car.x += (car.steer * CAR.lateralSpeed * grip - k * car.speed * car.speed * CAR.centrifugal) * DT;
-  const edge = track.halfWidth + CAR.offroadMargin;
+  const edge = hw + CAR.offroadMargin;
   if (car.x > edge) car.x = edge;
   else if (car.x < -edge) car.x = -edge;
 

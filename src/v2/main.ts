@@ -3,7 +3,8 @@ import { emptyInput } from './sim/input.js';
 import { buildSimTrack } from './sim/track.js';
 import { createWorld, copyWorld, stepWorld, hashWorld } from './sim/world.js';
 import { InputRecording } from './sim/replay.js';
-import { TRACER_OVAL } from './track/tracer.js';
+import { parseTrackFile } from './track/schema.js';
+import sunsetBeach from './track/circuits/sunset-beach.json';
 import { Keyboard } from './input/keyboard.js';
 import { View } from './view/View.js';
 
@@ -12,7 +13,8 @@ import { View } from './view/View.js';
  * input, records it, snapshots the previous state, and advances the sim; each
  * frame the view blends the two snapshots.
  */
-const track = buildSimTrack(TRACER_OVAL);
+const circuit = parseTrackFile(sunsetBeach);
+const track = buildSimTrack(circuit.def);
 const CARS = 1;
 const curr = createWorld(CARS);
 const prev = createWorld(CARS);

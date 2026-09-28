@@ -16,23 +16,43 @@ export interface Centerline {
   readonly heading: Float32Array;
 }
 
-export function buildCenterline(track: SimTrack, step = 1): Centerline {
-  const count = Math.ceil(track.length / step);
+export function buildCenterline(track: SimTrack, maxStep = 1): Centerline {
+  // Divide the lap into whole equal steps so the last sample hands off to the first exactly.
+  const count = Math.ceil(track.length / maxStep);
+  const step = track.length / count;
   const pos = new Float32Array(count * 3);
   const heading = new Float32Array(count);
   let x = 0, z = 0, h = 0;
   for (let i = 0; i < count; i++) {
     const s = i * step;
-    pos[i * 3] = x; pos[i * 3 + 1] = 0; pos[i * 3 + 2] = z;
+    const sec = sectionIndexAt(track, s);
+    pos[i * 3] = x; pos[i * 3 + 1] = elevationAt(track, sec, s); pos[i * 3 + 2] = z;
     heading[i] = h;
-    // Midpoint integration keeps closed loops closing to within a few cm.
-    const k = track.sections[sectionIndexAt(track, s)]!.curvature;
+    // Midpoint integration keeps closed loops closing to within centimetres.
+    const k = track.sections[sec]!.curvature;
     const hm = h + k * step * 0.5;
     x += Math.sin(hm) * step;
     z -= Math.cos(hm) * step;
     h += k * step;
   }
+  // Whatever tiny gap integration leaves at the finish is spread along the lap,
+  // so the loop closes exactly (invisible: validated tracks close within 1 m).
+  const gx = x, gz = z;
+  for (let i = 0; i < count; i++) {
+    const u = (i * step) / track.length;
+    pos[i * 3] = pos[i * 3]! - gx * u;
+    pos[i * 3 + 2] = pos[i * 3 + 2]! - gz * u;
+  }
   return { step, count, length: track.length, pos, heading };
+}
+
+/** Height at `s` inside section `sec`: each section's rise is smoothstep-eased so crests and dips never kink. */
+function elevationAt(track: SimTrack, sec: number, s: number): number {
+  let y = 0;
+  for (let i = 0; i < sec; i++) y += track.sections[i]!.rise ?? 0;
+  const section = track.sections[sec]!;
+  const u = (s - track.starts[sec]!) / section.length;
+  return y + (section.rise ?? 0) * u * u * (3 - 2 * u);
 }
 
 /** A sampled pose along the centreline. Callers own and reuse it. */

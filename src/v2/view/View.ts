@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import palette from '../../assets/palette.json';
-import type { SimTrack } from '../sim/track.js';
+import { halfWidthAt, type SimTrack } from '../sim/track.js';
 import type { SimWorld } from '../sim/world.js';
 import { buildCenterline, poseAt, type Centerline, type Pose } from './centerline.js';
 
@@ -23,21 +23,23 @@ const VERGE_WIDTH = 6;
 const BAND_M = 4;
 
 function buildRoad(track: SimTrack, c: Centerline): THREE.Mesh {
-  const hw = track.halfWidth;
-  // Lateral strips (left to right) and the colour pair each alternates between.
+  // Lateral strips, measured from the road edge (so they follow width changes),
+  // and the colour pair each alternates between band to band.
   const cA = new THREE.Color(palette.road.surfaceA);
   const cB = new THREE.Color(palette.road.surfaceB);
   const kR = new THREE.Color(palette.kerb.red);
   const kW = new THREE.Color(palette.kerb.white);
   const vA = new THREE.Color(palette.road.shoulder);
   const vB = new THREE.Color(palette.foliage[0]!);
-  const strips: [number, number, THREE.Color, THREE.Color][] = [
-    [-hw - KERB_WIDTH - VERGE_WIDTH, -hw - KERB_WIDTH, vB, vA],
-    [-hw - KERB_WIDTH, -hw, kR, kW],
-    [-hw, hw, cA, cB],
-    [hw, hw + KERB_WIDTH, kR, kW],
-    [hw + KERB_WIDTH, hw + KERB_WIDTH + VERGE_WIDTH, vB, vA],
+  // [inner, outer] as (edgeMultiplier, extraMetres): lateral = side * (hw * m + extra).
+  const strips: [number, number, number, number, THREE.Color, THREE.Color][] = [
+    [-1, KERB_WIDTH + VERGE_WIDTH, -1, KERB_WIDTH, vB, vA],
+    [-1, KERB_WIDTH, -1, 0, kR, kW],
+    [-1, 0, 1, 0, cA, cB],
+    [1, 0, 1, KERB_WIDTH, kR, kW],
+    [1, KERB_WIDTH, 1, KERB_WIDTH + VERGE_WIDTH, vB, vA],
   ];
+  const lat = (hw: number, m: number, extra: number): number => m * hw + Math.sign(m) * extra;
 
   const quads = c.count * strips.length;
   const positions = new Float32Array(quads * 6 * 3);
@@ -54,12 +56,14 @@ function buildRoad(track: SimTrack, c: Centerline): THREE.Mesh {
   };
   for (let i = 0; i < c.count; i++) {
     const s0 = i * c.step;
-    const s1 = s0 + c.step;
+    const s1 = Math.min(s0 + c.step, track.length);
+    const hw0 = halfWidthAt(track, s0);
+    const hw1 = halfWidthAt(track, s1 % track.length);
     const band = Math.floor(s0 / BAND_M) & 1;
-    for (const [l, r, a, b] of strips) {
+    for (const [lm, le, rm, re, a, b] of strips) {
       const col = band ? a : b;
-      poseAt(c, s0, l, p0); poseAt(c, s0, r, p1);
-      poseAt(c, s1, l, p2); poseAt(c, s1, r, p3);
+      poseAt(c, s0, lat(hw0, lm, le), p0); poseAt(c, s0, lat(hw0, rm, re), p1);
+      poseAt(c, s1, lat(hw1, lm, le), p2); poseAt(c, s1, lat(hw1, rm, re), p3);
       // Two CCW triangles seen from above (+Y).
       put(p0, col); put(p1, col); put(p2, col);
       put(p1, col); put(p3, col); put(p2, col);
