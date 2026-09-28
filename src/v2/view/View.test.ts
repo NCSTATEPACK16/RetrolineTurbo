@@ -27,3 +27,24 @@ describe('v2 CRT default', () => {
     expect(crtDefault(1280)).toBe(true);
   });
 });
+
+describe('split-screen scene', () => {
+  it('chases each local player and paints them the hero colours', async () => {
+    const THREE = await import('three');
+    const { RaceScene } = await import('./View.js');
+    const { buildSimTrack } = await import('../sim/track.js');
+    const { parseTrackFile } = await import('../track/schema.js');
+    const sunset = (await import('../track/circuits/sunset-beach.json')).default;
+    const circuit = parseTrackFile(sunset);
+    const tex = { props: new THREE.Texture(), horizon: new THREE.Texture() };
+    const race = new RaceScene(buildSimTrack(circuit.def), circuit.layout, 8, tex, [6, 7]);
+    expect(race.active).toBe(2);
+    expect(race.chasers.map((c) => c.focus)).toEqual([6, 7]);
+    const [red, blue] = [race.carColors[6], race.carColors[7]];
+    expect(red).not.toBe(blue);
+    for (let i = 0; i < 6; i++) expect([red, blue]).not.toContain(race.carColors[i]);
+    race.setFoci([7]);
+    expect(race.active).toBe(1);
+    expect(race.carColors[7]).toBe(red);
+  });
+});

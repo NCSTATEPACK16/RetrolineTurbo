@@ -160,3 +160,22 @@ describe('positions', () => {
     expect([...race.order].sort()).toEqual([0, 1, 2, 3]);
   });
 });
+
+describe('two local players', () => {
+  it('start at the back and keep their own assist settings', async () => {
+    const { createSession, stepSession, gridSlots } = await import('./session.js');
+    const { buildRacingLine } = await import('./racingLine.js');
+    const { DEFAULT_FIELD } = await import('./field.js');
+    const { JUNIOR } = await import('./assist.js');
+    const field = [...DEFAULT_FIELD.slice(0, 6), null, null];
+    expect(gridSlots(field).slice(6)).toEqual([6, 7]);
+    const track = buildSimTrack({ name: 'straight', halfWidth: 9, sections: [{ length: 3000, curvature: 0 }] });
+    const s = createSession({ track, grid: { rows: 4, columns: 2, rowGap: 8, columnGap: 6 }, line: buildRacingLine(track), field });
+    s.world.assist[6] = JUNIOR; // player 1 on Junior (auto-accelerate), player 2 not
+    const start = [s.world.cars[6]!.s, s.world.cars[7]!.s];
+    for (let t = 0; t < 60 * 6; t++) stepSession(s); // no input from either human
+    const moved = (car: number, from: number): number => (s.world.cars[car]!.s - from + track.length) % track.length;
+    expect(moved(6, start[0]!)).toBeGreaterThan(20);
+    expect(moved(7, start[1]!)).toBeLessThan(1);
+  });
+});

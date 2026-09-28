@@ -1,5 +1,5 @@
 import { createLoop } from '../physics/loop.js';
-import { emptyInput } from './sim/input.js';
+import { emptyInput, type InputFrame } from './sim/input.js';
 import { buildSimTrack } from './sim/track.js';
 import { hashWorld } from './sim/world.js';
 import { buildRacingLine } from './sim/racingLine.js';
@@ -9,7 +9,7 @@ import { InputRecording } from './sim/replay.js';
 import { JUNIOR } from './sim/assist.js';
 import { parseTrackFile } from './track/schema.js';
 import sunsetBeach from './track/circuits/sunset-beach.json';
-import { Keyboard } from './input/keyboard.js';
+import { Keyboard, LEFT_KEYS, RIGHT_KEYS } from './input/keyboard.js';
 import { mapGamepad, mergeInputs, readPad } from './input/gamepad.js';
 import { View } from './view/View.js';
 import { JUICE } from './view/Juice.js';
@@ -25,21 +25,34 @@ import { Hud } from './view/hud/Hud.js';
 const circuit = parseTrackFile(sunsetBeach);
 const track = buildSimTrack(circuit.def);
 const line = buildRacingLine(track, circuit.layout.racingLine);
-/** Seven CPUs then you (null = human). You start at the back, Mario Kart-style. */
-const FIELD = [...DEFAULT_FIELD, null];
-const PLAYER = FIELD.length - 1;
-const NAMES = FIELD.map((f, i) => (f === null ? 'YOU' : `CPU ${i + 1}`));
+/** Local players (1, or 2 for split-screen); the menus own this setting later. */
+let players = 1;
+/** CPUs then the humans (null), who start at the back, Mario Kart-style. */
+let field: (typeof DEFAULT_FIELD[number] | null)[] = [];
+/** Car index of each local player, player 1 first. */
+let humans: number[] = [];
+let names: string[] = [];
+function setPlayers(n: number): void {
+  players = n;
+  field = [...DEFAULT_FIELD.slice(0, 8 - n), ...Array<null>(n).fill(null)];
+  humans = field.flatMap((f, i) => (f === null ? [i] : []));
+  names = field.map((f, i) => (f !== null ? `CPU ${i + 1}` : n === 1 ? 'YOU' : `P${humans.indexOf(i) + 1}`));
+}
+setPlayers(1);
 
 let seed = 1;
-let junior = false; // Junior assist for the player; the menus own this setting later
+const junior = [false, false]; // Junior assist per player; the menus own this setting later
 let pure = false; // Pure mode (no items); the menus own this setting later
 let session: Session;
 let recording: InputRecording;
 function newRace(): void {
-  session = createSession({ track, grid: circuit.layout.grid, line, field: FIELD, seed: seed++, itemRows: circuit.layout.itemBoxes, pure });
-  session.world.assist[PLAYER] = junior ? JUNIOR : 0;
+  session = createSession({ track, grid: circuit.layout.grid, line, field, seed: seed++, itemRows: circuit.layout.itemBoxes, pure });
+  humans.forEach((car, k) => { session.world.assist[car] = junior[k] ? JUNIOR : 0; });
   recording = new InputRecording();
+  view.setPlayers(humans);
   view.race.bindItems(session.race.items);
+  hud.reset();
+  overlay.names = names;
 }
 
 const kbFrame = emptyInput();
@@ -47,29 +60,44 @@ const padFrame = emptyInput();
 const keyboard = new Keyboard();
 
 const canvas = document.getElementById('v2') as HTMLCanvasElement;
-const view: View = new View(canvas, document.getElementById('crt')!, track, circuit.layout, FIELD.length, PLAYER);
+const view: View = new View(canvas, document.getElementById('crt')!, track, circuit.layout, field.length, humans);
 const hud = new Hud(document.getElementById('hud') as HTMLCanvasElement, view.race.center, view.race.carColors);
 view.onResize = () => hud.resize(view.width, view.height, view.scale);
 view.onResize();
+const overlay = new RaceOverlay(document.getElementById('stage')!, names);
 newRace();
-const overlay = new RaceOverlay(document.getElementById('stage')!, NAMES);
 window.addEventListener('resize', () => view.resize());
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyC') view.crt.enabled = !view.crt.enabled; // settings screen owns this later
   if (import.meta.env.DEV && e.code === 'KeyP') view.pixels.paletteEnabled = !view.pixels.paletteEnabled;
   if (e.code === 'Enter' && session.race.phase === 'finished') newRace();
-  if (e.code === 'KeyI' && session.race.phase !== 'racing') {
-    pure = !pure;
-    newRace();
+  if (session.race.phase !== 'racing') {
+    if (e.code === 'KeyI') {
+      pure = !pure;
+      newRace();
+    }
+    if (e.code === 'Digit1' || e.code === 'Digit2') {
+      setPlayers(e.code === 'Digit1' ? 1 : 2);
+      newRace();
+    }
   }
-  if (e.code === 'KeyJ') {
-    junior = !junior;
-    session.world.assist[PLAYER] = junior ? JUNIOR : 0;
+  const k = e.code === 'KeyJ' ? 0 : e.code === 'KeyK' ? 1 : -1;
+  if (k >= 0 && k < players) {
+    junior[k] = !junior[k];
+    session.world.assist[humans[k]!] = junior[k] ? JUNIOR : 0;
   }
 });
 
+/** One player's input: their keyboard half (the whole board when solo) merged with their gamepad. */
+function sampleInput(k: number, out: InputFrame): void {
+  keyboard.sample(kbFrame, players === 1 ? undefined : k === 0 ? LEFT_KEYS : RIGHT_KEYS);
+  const pad = readPad(k);
+  if (pad) mergeInputs(kbFrame, mapGamepad(pad, padFrame), out);
+  else Object.assign(out, kbFrame);
+}
+
 let lastFrame = performance.now();
-/** Hit-stop: a big knock to the player freezes the whole game for a few ticks. */
+/** Hit-stop: a big knock to a player freezes the whole game for a few ticks. */
 let hitStop = 0;
 const loop = createLoop({
   update() {
@@ -77,21 +105,21 @@ const loop = createLoop({
       hitStop--;
       return;
     }
-    const input = session.inputs[PLAYER]!;
-    keyboard.sample(kbFrame);
-    const pad = readPad(0);
-    if (pad) mergeInputs(kbFrame, mapGamepad(pad, padFrame), input);
-    else Object.assign(input, kbFrame);
-    recording.push(input);
+    for (let k = 0; k < humans.length; k++) sampleInput(k, session.inputs[humans[k]!]!);
+    recording.push(session.inputs[humans[0]!]!);
     stepSession(session);
-    if (JUICE.hitStop && session.world.impact[PLAYER]! >= JUICE.hitStopImpact) hitStop = JUICE.hitStopTicks;
+    for (const car of humans) {
+      if (JUICE.hitStop && session.world.impact[car]! >= JUICE.hitStopImpact) hitStop = JUICE.hitStopTicks;
+    }
   },
   render(alpha) {
     const now = performance.now();
     const dt = Math.min(0.1, (now - lastFrame) / 1000);
     view.render(session.prev, session.world, alpha, dt);
     hud.clear();
-    hud.draw(session.race, session.world, view.race.center, PLAYER, { x: 0, y: 0, w: view.width, h: view.height }, junior, dt);
+    for (let k = 0; k < humans.length; k++) {
+      hud.draw(session.race, session.world, view.race.center, humans[k]!, view.rects[k]!, junior[k]!, dt);
+    }
     overlay.update(session.race);
     lastFrame = now;
   },
@@ -104,7 +132,7 @@ if (import.meta.env.DEV) {
     ([{ TuningOverlay }, car, chase]) => {
       const gearbox = { manual: false };
       const rebuild = (): void => {
-        Object.assign(session.world.params[PLAYER]!, car.statsToParams(car.DEFAULT_STATS, gearbox.manual, session.world.tuning));
+        Object.assign(session.world.params[humans[0]!]!, car.statsToParams(car.DEFAULT_STATS, gearbox.manual, session.world.tuning));
       };
       new TuningOverlay([
         { title: 'gearbox', target: gearbox },
@@ -119,6 +147,6 @@ if (import.meta.env.DEV) {
     get session() { return session; },
     get world() { return session.world; },
     get race() { return session.race; },
-    player: PLAYER, track, view, hash: () => hashWorld(session.world),
+    get humans() { return humans; }, get player() { return humans[0]!; }, track, view, hash: () => hashWorld(session.world),
   };
 }

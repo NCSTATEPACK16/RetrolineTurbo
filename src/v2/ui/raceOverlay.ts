@@ -11,7 +11,7 @@ export class RaceOverlay {
   private readonly table = document.createElement('div');
   private last = '';
 
-  constructor(root: HTMLElement, private readonly names: readonly string[]) {
+  constructor(root: HTMLElement, public names: readonly string[]) {
     Object.assign(this.table.style, {
       position: 'absolute', inset: '0', display: 'grid', placeItems: 'center', whiteSpace: 'pre', pointerEvents: 'none',
       color: '#fee971', font: '700 18px/1.1 ui-monospace, monospace', textShadow: '2px 2px 0 #101018',

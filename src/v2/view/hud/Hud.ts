@@ -46,7 +46,8 @@ export class Hud {
   private readonly icons = new Map<string, HTMLCanvasElement>();
   private readonly map: HTMLCanvasElement;
   private readonly mapFit: ReturnType<typeof fitPoints>;
-  readonly popups = new Popups();
+  /** Pop-ups per player (each split-screen half has its own). */
+  private readonly popups = new Map<number, Popups>();
   private blink = 0;
 
   constructor(canvas: HTMLCanvasElement, center: Centerline, private readonly carColors: readonly string[]) {
@@ -89,6 +90,11 @@ export class Hud {
     this.g.imageSmoothingEnabled = false;
   }
 
+  /** Forget per-player pop-up state (call at the start of each race). */
+  reset(): void {
+    this.popups.clear();
+  }
+
   clear(): void {
     this.g.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
@@ -110,10 +116,12 @@ export class Hud {
   /** Draw one player's HUD inside `r` (the whole screen, or their half in split-screen). */
   draw(race: RaceState, world: SimWorld, center: Centerline, player: number, r: HudRect, junior: boolean, dt: number): void {
     const g = this.g;
-    this.blink += dt;
+    if (r.y === 0) this.blink += dt; // once per frame, not once per player
     const me = race.racers[player]!;
     const items = race.items;
-    this.popups.update(race, world, player, items.hits[player]!);
+    let popups = this.popups.get(player);
+    if (!popups) this.popups.set(player, (popups = new Popups()));
+    popups.update(race, world, player, items.hits[player]!);
     const compact = r.h < 180;
 
     if (race.phase !== 'countdown') {
@@ -161,7 +169,7 @@ export class Hud {
     }
 
     // Portrait pop-up, bottom-left.
-    const pop = this.popups.current;
+    const pop = popups.current;
     if (pop) this.face(r.x + 4, r.y + r.h - 30, this.carColors[pop.car] ?? palette.ui.white, pop.mood);
 
     // Countdown and GO.
@@ -178,7 +186,13 @@ export class Hud {
     }
 
     // Wrong way: a blinking turn-around arrow.
-    if (me.wrongWay > RACE.wrongWaySeconds && (this.blink % 0.5) < 0.3) this.icon('wrongWay', Math.round(cx - 11), r.y + 30, 2);
+    if (me.wrongWay > RACE.wrongWaySeconds && (this.blink % 0.5) < 0.3) this.icon('wrongWay', Math.round(cx - 11), r.y + (compact ? 26 : 30), 2);
+
+    // Split-screen divider along the top of the lower half.
+    if (r.y > 0) {
+      g.fillStyle = palette.outline;
+      g.fillRect(r.x, r.y - 1, r.w, 2);
+    }
   }
 
   /** Placeholder portrait until the roster's art lands: a face in the driver's colour. */

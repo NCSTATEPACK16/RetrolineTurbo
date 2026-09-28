@@ -97,8 +97,21 @@ export class PixelPipeline {
   }
 
   render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
-    renderer.setRenderTarget(this.target);
+    this.draw(renderer, scene, camera, 0, 0, this.target.width, this.target.height);
+    this.finish(renderer);
+  }
+
+  /** Draw one view into a rectangle of the low-res target (origin bottom-left); call `finish` after the last. */
+  draw(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, x: number, y: number, w: number, h: number): void {
+    this.target.viewport.set(x, y, w, h);
+    this.target.scissor.set(x, y, w, h);
+    this.target.scissorTest = w < this.target.width || h < this.target.height;
+    renderer.setRenderTarget(this.target); // re-applies the target's viewport and scissor
     renderer.render(scene, camera);
+  }
+
+  /** Palette-quantise the whole target to the screen. */
+  finish(renderer: THREE.WebGLRenderer): void {
     renderer.setRenderTarget(null);
     renderer.render(this.postScene, this.postCamera);
   }

@@ -90,6 +90,8 @@ function buildRoad(track: SimTrack, c: Centerline): THREE.Mesh {
 }
 
 interface CarRig {
+  /** Body paint (recoloured when the local players change). */
+  paint: THREE.MeshLambertMaterial;
   group: THREE.Group;
   /** Everything that tilts and hops (the body), under the ground-level group. */
   body: THREE.Group;
@@ -104,7 +106,8 @@ function buildCar(color: string): CarRig {
   const group = new THREE.Group();
   const body = new THREE.Group();
   group.add(body);
-  const shell = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.6, 4.2), new THREE.MeshLambertMaterial({ color }));
+  const paint = new THREE.MeshLambertMaterial({ color });
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.6, 4.2), paint);
   shell.position.y = 0.55;
   const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.9), new THREE.MeshLambertMaterial({ color: palette.chrome[0]! }));
   cabin.position.set(0, 1.05, 0.3);
@@ -128,18 +131,49 @@ function buildCar(color: string): CarRig {
   flame.position.set(0, 0.5, 2.55);
   flame.visible = false;
   body.add(flame);
-  return { group, body, sparks, flame };
+  return { paint, group, body, sparks, flame };
+}
+
+export const MAX_LOCAL_PLAYERS = 2;
+
+const BODY_COLORS = [
+  palette.body.red[2]!, palette.body.blue[2]!, palette.ui.gold, palette.ui.magenta,
+  palette.ui.cyan, palette.foliage[2]!, palette.sky.canyon[1]!, palette.chrome[3]!,
+] as const;
+
+/**
+ * One player's camera: its chase state, shake and boost speed lines. The
+ * speed lines live on their own render layer so they only show in this
+ * player's half of a split screen.
+ */
+export class Chaser {
+  readonly camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 900);
+  readonly chase = initialChaseState();
+  readonly chaseIn: ChaseInput = { curvature: 0, speed: 0, topSpeed: 1, boosting: false, drifting: false };
+  readonly crestYs = new Float32Array(3);
+  readonly shake = new Shake();
+  readonly speedLines = new SpeedLines();
+  /** Narrower field of view for a letterbox-shaped split-screen half. */
+  fovScale = 1;
+
+  constructor(public focus: number, layer: number) {
+    this.speedLines.group.traverse((o) => o.layers.set(layer));
+    this.camera.layers.enable(layer);
+    this.camera.add(this.speedLines.group);
+  }
 }
 
 /**
- * The race's three.js scene graph and camera, with no renderer and no DOM, so
+ * The race's three.js scene graph and cameras, with no renderer and no DOM, so
  * the per-frame sync can be benchmarked headlessly (see perf/budget.test.ts).
  * It reads two sim snapshots and blends them; it never writes sim state, and
  * `sync` allocates nothing.
  */
 export class RaceScene {
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 900);
+  /** Chase cameras, one per possible local player; the first `active` are in use. */
+  readonly chasers: Chaser[] = [];
+  active = 1;
   readonly center: Centerline;
   /** Each car's body colour (CSS hex), for the HUD's mini-map and portraits. */
   readonly carColors: string[] = [];
@@ -147,22 +181,16 @@ export class RaceScene {
   private readonly pose: Pose = { x: 0, y: 0, z: 0, heading: 0 };
   private readonly look = new THREE.Vector3();
   private readonly scenery: Scenery;
-  private readonly chase = initialChaseState();
-  private readonly chaseIn: ChaseInput = { curvature: 0, speed: 0, topSpeed: 1, boosting: false, drifting: false };
-  private readonly crestYs = new Float32Array(3);
-  /** Which car the camera chases. */
-  focus = 0;
   private readonly particles = new Particles();
-  private readonly speedLines = new SpeedLines();
-  private readonly shake = new Shake();
   private readonly v = new THREE.Vector3();
   private lastEventTick = -1;
   private itemsView: ItemsView | null = null;
   private readonly carGroups: THREE.Object3D[] = [];
   private readonly horizon: Horizon;
 
-  constructor(private readonly track: SimTrack, layout: CircuitLayout, carCount: number, textures: SceneTextures, focus = 0) {
-    this.focus = focus;
+  /** `focus` is the car each local player's camera chases (one entry per player). */
+  constructor(private readonly track: SimTrack, layout: CircuitLayout, carCount: number, textures: SceneTextures, focus: number | readonly number[] = 0) {
+    for (let k = 0; k < MAX_LOCAL_PLAYERS; k++) this.chasers.push(new Chaser(0, 1 + k));
     const theme = HORIZONS[(layout.theme in HORIZONS ? layout.theme : 'sunset') as HorizonTheme];
     this.scene.background = new THREE.Color(theme.sky);
     this.scene.fog = new THREE.Fog(new THREE.Color(theme.haze), 220, 800);
@@ -174,8 +202,8 @@ export class RaceScene {
     this.horizon = new Horizon(textures.horizon, theme.aspect);
     this.scene.add(this.horizon.mesh);
     this.scene.add(this.particles.mesh);
-    this.camera.add(this.speedLines.group); // children of the camera need it in the scene graph
-    this.scene.add(this.camera);
+    // Children of a camera need it in the scene graph.
+    for (const c of this.chasers) this.scene.add(c.camera);
     if (prefersReducedMotion()) {
       JUICE.shake = false;
       JUICE.hitStop = false;
@@ -194,19 +222,31 @@ export class RaceScene {
     sun.position.set(-1, 2, 1);
     this.scene.add(sun);
 
-    const bodyColors = [
-      palette.body.red[2]!, palette.body.blue[2]!, palette.ui.gold, palette.ui.magenta,
-      palette.ui.cyan, palette.foliage[2]!, palette.sky.canyon[1]!, palette.chrome[3]!,
-    ];
     for (let i = 0; i < carCount; i++) {
-      // The chased car always wears the hero red; everyone else takes the next colour.
-      const colour = i === focus ? 0 : 1 + ((i < focus ? i : i - 1) % (bodyColors.length - 1));
-      this.carColors.push(bodyColors[colour]!);
-      const car = buildCar(bodyColors[colour]!);
+      const car = buildCar(BODY_COLORS[0]);
+      this.carColors.push(BODY_COLORS[0]);
       this.cars.push(car);
       this.carGroups.push(car.group);
       this.scene.add(car.group);
     }
+    this.setFoci(typeof focus === 'number' ? [focus] : focus);
+  }
+
+  /** Which car each local player's camera chases. Player cars wear the hero colours (red, then blue). */
+  setFoci(foci: readonly number[]): void {
+    this.active = Math.max(1, Math.min(MAX_LOCAL_PLAYERS, foci.length));
+    foci.forEach((f, k) => { if (k < MAX_LOCAL_PLAYERS) this.chasers[k]!.focus = f; });
+    for (let i = 0, rest = foci.length; i < this.cars.length; i++) {
+      const mine = foci.indexOf(i);
+      const colour = BODY_COLORS[mine >= 0 ? mine : rest++ % BODY_COLORS.length]!;
+      this.carColors[i] = colour;
+      this.cars[i]!.paint.color.set(colour);
+    }
+  }
+
+  /** Player 1's camera (the only one outside split-screen). */
+  get camera(): THREE.PerspectiveCamera {
+    return this.chasers[0]!.camera;
   }
 
   /** Show a race's items (boxes, slicks, seekers, shields). Call again for each new race. */
@@ -245,18 +285,26 @@ export class RaceScene {
       rig.flame.visible = b.boostTime > 0;
       rig.flame.scale.z = flicker * 1.4;
       this.emitFor(rig, b, curr, i, dt);
-      if (i === this.focus) {
-        this.chaseIn.topSpeed = curr.params[i]!.topSpeed;
-        this.placeCamera(s, x, a.steer + (b.steer - a.steer) * alpha, a.speed + (b.speed - a.speed) * alpha, b, dt);
+      for (let k = 0; k < this.active; k++) {
+        const ch = this.chasers[k]!;
+        if (ch.focus !== i) continue;
+        ch.chaseIn.topSpeed = curr.params[i]!.topSpeed;
+        this.placeCamera(ch, s, x, a.steer + (b.steer - a.steer) * alpha, a.speed + (b.speed - a.speed) * alpha, b, dt);
       }
     }
     this.lastEventTick = curr.tick;
     this.particles.update(dt);
     this.itemsView?.update(dt, this.carGroups, curr);
-    this.camera.updateMatrixWorld();
-    this.scenery.update(this.camera);
-    this.horizon.update(this.camera);
     this.scene.updateMatrixWorld();
+    this.aim(0);
+  }
+
+  /** Face the billboards and centre the horizon on player `k`'s camera, just before drawing their view. */
+  aim(k: number): void {
+    const cam = this.chasers[k]!.camera;
+    this.scenery.update(cam);
+    this.horizon.update(cam);
+    this.horizon.mesh.updateMatrixWorld();
   }
 
   /** Smoke from drifting tyres, dust off the tarmac, sparks and shake on contact. */
@@ -281,39 +329,51 @@ export class RaceScene {
       for (let k = 0; k < 10; k++) {
         p.emit(this.v.x, this.v.y, this.v.z, (p.rand() - 0.5) * 9, 2 + p.rand() * 4, (p.rand() - 0.5) * 9, 0.35, 0.18, -0.8, PARTICLE_COLORS.spark);
       }
-      if (i === this.focus) this.shake.kick(hit);
+      for (let k = 0; k < this.active; k++) if (this.chasers[k]!.focus === i) this.chasers[k]!.shake.kick(hit);
     }
-    if (i === this.focus && offroad && speed > 10) this.shake.kick(0.08);
+    if (offroad && speed > 10) for (let k = 0; k < this.active; k++) if (this.chasers[k]!.focus === i) this.chasers[k]!.shake.kick(0.08);
   }
 
   /** Low Top Gear-style chase camera: rolls into turns, widens on speed/boost, pulls in on drifts, clears crests. */
-  private placeCamera(s: number, x: number, steer: number, speed: number, car: { boostTime: number; drift: number }, dt: number): void {
+  private placeCamera(ch: Chaser, s: number, x: number, steer: number, speed: number, car: { boostTime: number; drift: number }, dt: number): void {
     const t = CHASE_TUNING;
-    const inp = this.chaseIn;
+    const inp = ch.chaseIn;
+    const cam = ch.camera;
     inp.curvature = curvatureAt(this.track, ((s % this.track.length) + this.track.length) % this.track.length);
     inp.speed = speed;
     inp.boosting = car.boostTime > 0;
     inp.drifting = car.drift !== 0;
-    const st = updateChase(this.chase, inp, dt);
+    const st = updateChase(ch.chase, inp, dt);
     const back = t.distance - st.zoom;
-    for (let k = 0; k < 3; k++) this.crestYs[k] = poseAt(this.center, s - back * (k / 3), x, this.pose).y;
+    for (let k = 0; k < 3; k++) ch.crestYs[k] = poseAt(this.center, s - back * (k / 3), x, this.pose).y;
     poseAt(this.center, s - back, x * 0.85, this.pose);
-    const camY = crestSafeHeight(this.pose.y, this.crestYs);
-    this.camera.position.set(this.pose.x, camY, this.pose.z);
+    const camY = crestSafeHeight(this.pose.y, ch.crestYs);
+    cam.position.set(this.pose.x, camY, this.pose.z);
     poseAt(this.center, s + t.lookAhead, x * 0.7 + steer * 0.6, this.pose);
     this.look.set(this.pose.x, this.pose.y + t.lookHeight, this.pose.z);
-    this.camera.lookAt(this.look);
-    this.camera.rotateZ(-st.roll);
-    this.camera.position.add(this.shake.update(dt, this.particles));
-    this.speedLines.update(car.boostTime > 0, dt);
-    if (Math.abs(this.camera.fov - st.fov) > 0.01) {
-      this.camera.fov = st.fov;
-      this.camera.updateProjectionMatrix();
+    cam.lookAt(this.look);
+    cam.rotateZ(-st.roll);
+    cam.position.add(ch.shake.update(dt, this.particles));
+    ch.speedLines.update(car.boostTime > 0, dt);
+    const fov = st.fov * ch.fovScale;
+    if (Math.abs(cam.fov - fov) > 0.01) {
+      cam.fov = fov;
+      cam.updateProjectionMatrix();
     }
   }
 }
 
-/** The browser edge: owns the canvas, WebGL renderer, pixel pipeline and CRT overlay. */
+/** A player's slice of the low-res screen, top-left origin (what the HUD draws into). */
+export interface ViewRect { x: number; y: number; w: number; h: number }
+
+/** Split-screen halves are letterbox-shaped; a narrower lens keeps cars from looking stretched. */
+export const SPLIT_FOV_SCALE = 0.78;
+
+/**
+ * The browser edge: owns the canvas, WebGL renderer, pixel pipeline and CRT
+ * overlay. One local player fills the screen; two split it top and bottom,
+ * 120 lines each (PRD section 10).
+ */
 export class View {
   readonly renderer: THREE.WebGLRenderer;
   readonly race: RaceScene;
@@ -325,10 +385,12 @@ export class View {
   scale = 1;
   /** Called after every resize (the HUD matches the new size and scale). */
   onResize: (() => void) | null = null;
+  /** Each player's screen rectangle, player 1 first. */
+  readonly rects: ViewRect[] = [];
 
   constructor(
     private readonly canvas: HTMLCanvasElement, crtEl: HTMLElement, track: SimTrack, layout: CircuitLayout, carCount: number,
-    focus = 0,
+    focus: number | readonly number[] = 0,
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
@@ -339,6 +401,14 @@ export class View {
       horizon: pixelTexture(theme.url, loader),
     }, focus);
     this.crt = new CrtOverlay(crtEl);
+    for (let k = 0; k < MAX_LOCAL_PLAYERS; k++) this.rects.push({ x: 0, y: 0, w: 0, h: 0 });
+    this.setPlayers(typeof focus === 'number' ? [focus] : focus);
+  }
+
+  /** Local players' cars, player 1 first: one fills the screen, two split it. */
+  setPlayers(foci: readonly number[]): void {
+    this.race.setFoci(foci);
+    for (const ch of this.race.chasers) ch.fovScale = this.race.active > 1 ? SPLIT_FOV_SCALE : 1;
     this.resize();
   }
 
@@ -355,14 +425,29 @@ export class View {
     this.canvas.style.width = `${width * k}px`;
     this.canvas.style.height = `${height * k}px`;
     this.crt.fit(width * k, height * k, k);
-    this.race.camera.aspect = width / height;
-    this.race.camera.updateProjectionMatrix();
+    const h = Math.floor(height / this.race.active);
+    this.race.chasers.forEach((ch, i) => {
+      Object.assign(this.rects[i]!, { x: 0, y: i * h, w: width, h });
+      ch.camera.aspect = width / h;
+      ch.camera.updateProjectionMatrix();
+    });
     this.scale = k;
     this.onResize?.();
   }
 
   render(prev: SimWorld, curr: SimWorld, alpha: number, dt: number): void {
     this.race.sync(prev, curr, alpha, dt);
-    this.pixels.render(this.renderer, this.race.scene, this.race.camera);
+    const n = this.race.active;
+    if (n === 1) {
+      this.pixels.render(this.renderer, this.race.scene, this.race.camera);
+      return;
+    }
+    for (let k = 0; k < n; k++) {
+      const r = this.rects[k]!;
+      this.race.aim(k);
+      // WebGL viewports start bottom-left; rects start top-left.
+      this.pixels.draw(this.renderer, this.race.scene, this.race.chasers[k]!.camera, r.x, this.height - r.y - r.h, r.w, r.h);
+    }
+    this.pixels.finish(this.renderer);
   }
 }
