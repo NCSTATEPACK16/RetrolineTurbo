@@ -5,6 +5,13 @@ import type { SimWorld } from '../sim/world.js';
 import { buildCenterline, poseAt, type Centerline, type Pose } from './centerline.js';
 import { PixelPipeline } from './PixelPipeline.js';
 import { CrtOverlay } from './crt.js';
+import { Scenery, Horizon, pixelTexture, type HorizonTheme } from './Scenery.js';
+import { HORIZONS, PROPS_ATLAS, SCENERY_KINDS } from './sprites.js';
+import { placeScenery } from '../track/scenery.js';
+import type { CircuitLayout } from '../track/schema.js';
+
+/** Textures a race scene needs; the browser loads them, headless tests pass blanks. */
+export interface SceneTextures { props: THREE.Texture; horizon: THREE.Texture }
 
 /** Internal render height: 240 lines, the "widescreen SNES" target (PRD section 10). */
 export const INTERNAL_HEIGHT = 240;
@@ -107,14 +114,20 @@ export class RaceScene {
   private readonly cars: THREE.Group[] = [];
   private readonly pose: Pose = { x: 0, y: 0, z: 0, heading: 0 };
   private readonly look = new THREE.Vector3();
+  private readonly scenery: Scenery;
+  private readonly horizon: Horizon;
 
-  constructor(private readonly track: SimTrack, carCount: number) {
-    const sky = new THREE.Color(palette.sky.sunset[4]!);
-    this.scene.background = sky;
-    this.scene.fog = new THREE.Fog(sky, 180, 700);
+  constructor(private readonly track: SimTrack, layout: CircuitLayout, carCount: number, textures: SceneTextures) {
+    const theme = HORIZONS[(layout.theme in HORIZONS ? layout.theme : 'sunset') as HorizonTheme];
+    this.scene.background = new THREE.Color(theme.sky);
+    this.scene.fog = new THREE.Fog(new THREE.Color(theme.haze), 220, 800);
 
     this.center = buildCenterline(track, 1);
     this.scene.add(buildRoad(track, this.center));
+    this.scenery = new Scenery(placeScenery(track, layout, SCENERY_KINDS), this.center, textures.props);
+    this.scene.add(this.scenery.group);
+    this.horizon = new Horizon(textures.horizon, theme.aspect);
+    this.scene.add(this.horizon.mesh);
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(4000, 4000),
       new THREE.MeshBasicMaterial({ color: palette.foliage[1]! }),
@@ -161,6 +174,9 @@ export class RaceScene {
         this.camera.lookAt(this.look);
       }
     }
+    this.camera.updateMatrixWorld();
+    this.scenery.update(this.camera);
+    this.horizon.update(this.camera);
     this.scene.updateMatrixWorld();
   }
 }
@@ -174,10 +190,17 @@ export class View {
   width = 0;
   height = 0;
 
-  constructor(private readonly canvas: HTMLCanvasElement, crtEl: HTMLElement, track: SimTrack, carCount: number) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement, crtEl: HTMLElement, track: SimTrack, layout: CircuitLayout, carCount: number,
+  ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
-    this.race = new RaceScene(track, carCount);
+    const loader = new THREE.TextureLoader();
+    const theme = HORIZONS[(layout.theme in HORIZONS ? layout.theme : 'sunset') as HorizonTheme];
+    this.race = new RaceScene(track, layout, carCount, {
+      props: pixelTexture(PROPS_ATLAS.url, loader),
+      horizon: pixelTexture(theme.url, loader),
+    });
     this.crt = new CrtOverlay(crtEl);
     this.resize();
   }

@@ -24,7 +24,7 @@ const recording = new InputRecording();
 const keyboard = new Keyboard();
 
 const canvas = document.getElementById('v2') as HTMLCanvasElement;
-const view = new View(canvas, document.getElementById('crt')!, track, CARS);
+const view = new View(canvas, document.getElementById('crt')!, track, circuit.layout, CARS);
 window.addEventListener('resize', () => view.resize());
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyC') view.crt.enabled = !view.crt.enabled; // settings screen owns this later

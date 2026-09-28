@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { Button, emptyInput, type InputFrame } from '../sim/input.js';
 import { buildSimTrack } from '../sim/track.js';
 import { createWorld, copyWorld, stepWorld } from '../sim/world.js';
+import * as THREE from 'three';
 import { RaceScene } from '../view/View.js';
-import { TRACER_OVAL } from '../track/tracer.js';
+import { parseTrackFile } from '../track/schema.js';
+import sunset from '../track/circuits/sunset-beach.json';
 
 /**
  * Headless benchmark scene (issue v2-02). A frame's CPU work is one or more
@@ -24,7 +26,8 @@ function timeIt(iterations: number, fn: (i: number) => void): number {
 }
 
 describe('v2 performance budget', () => {
-  const track = buildSimTrack(TRACER_OVAL);
+  const circuit = parseTrackFile(sunset);
+  const track = buildSimTrack(circuit.def);
   const idle = emptyInput();
   const input: InputFrame = { steer: 40, buttons: Button.Throttle };
 
@@ -38,7 +41,7 @@ describe('v2 performance budget', () => {
   it(`scene sync with ${CARS} cars stays under ${SYNC_BUDGET_MS}ms`, () => {
     const prev = createWorld(CARS);
     const curr = createWorld(CARS);
-    const race = new RaceScene(track, CARS);
+    const race = new RaceScene(track, circuit.layout, CARS, { props: new THREE.Texture(), horizon: new THREE.Texture() });
     const ms = timeIt(60 * 20, (i) => {
       copyWorld(prev, curr);
       stepWorld(curr, track, input, idle);

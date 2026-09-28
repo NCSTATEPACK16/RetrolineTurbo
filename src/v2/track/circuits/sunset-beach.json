@@ -36,8 +36,8 @@
   ],
   "scenery": [
     { "sprite": "palm", "side": "both", "from": 0, "to": 300, "every": 18, "offset": 3 },
-    { "sprite": "chevron", "side": "left", "from": 1100, "to": 1190, "every": 15, "offset": 1 },
-    { "sprite": "beach-hut", "side": "left", "from": 1590, "to": 1920, "every": 40, "offset": 6 },
+    { "sprite": "marker", "side": "left", "from": 1100, "to": 1190, "every": 15, "offset": 1 },
+    { "sprite": "billboard", "side": "left", "from": 1590, "to": 1920, "every": 40, "offset": 6 },
     { "sprite": "palm", "side": "right", "from": 1590, "to": 1920, "every": 22, "offset": 4 },
     { "sprite": "grandstand", "side": "right", "from": 2245, "to": 2320, "every": 12, "offset": 2 }
   ]
