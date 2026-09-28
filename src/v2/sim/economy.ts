@@ -1,4 +1,5 @@
 import type { EngineClass } from './classes.js';
+import { isGeneratedName } from './names.js';
 import { PARTS, PART_BY_ID, PAINTS, HORNS, STARTER_BUILD, PART_SLOTS, type CarBuild, type Part } from './parts.js';
 
 /**
@@ -18,6 +19,8 @@ export function raceCredits(position: number, coins: number, cls: EngineClass): 
 export interface Trophy { cup: string; cls: EngineClass; place: 1 | 2 | 3 }
 
 export interface Profile {
+  /** A generated name (sim/names.ts); never typed. */
+  name: string;
   credits: number;
   owned: string[];
   build: CarBuild;
@@ -25,7 +28,7 @@ export interface Profile {
 }
 
 export function newProfile(): Profile {
-  return { credits: 0, owned: PARTS.filter((p) => p.price === 0 && !p.unlock).map((p) => p.id), build: { ...STARTER_BUILD }, trophies: [] };
+  return { name: 'Speedy Comet', credits: 0, owned: PARTS.filter((p) => p.price === 0 && !p.unlock).map((p) => p.id), build: { ...STARTER_BUILD }, trophies: [] };
 }
 
 export function isUnlocked(profile: Profile, part: Part): boolean {
@@ -78,6 +81,7 @@ export function parseProfile(raw: unknown): Profile {
   const p = newProfile();
   if (typeof raw !== 'object' || raw === null) return p;
   const r = raw as Record<string, unknown>;
+  if (typeof r.name === 'string' && isGeneratedName(r.name)) p.name = r.name;
   if (typeof r.credits === 'number' && Number.isFinite(r.credits) && r.credits >= 0) p.credits = Math.floor(r.credits);
   if (Array.isArray(r.owned)) for (const id of r.owned) if (typeof id === 'string' && PART_BY_ID.has(id) && !p.owned.includes(id)) p.owned.push(id);
   if (Array.isArray(r.trophies)) {

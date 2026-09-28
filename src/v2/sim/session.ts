@@ -32,6 +32,8 @@ export interface SessionConfig {
   coins?: readonly { s: number; x: number; count: number; spacing: number }[];
   /** Engine class (default 100): scales every car's engine and the CPUs' sharpness. */
   engineClass?: EngineClass;
+  /** A CPU rival (by car index) that shadows and blocks one player's car. */
+  rival?: { car: number; of: number };
 }
 
 export interface Session {
@@ -66,6 +68,7 @@ export function createSession(cfg: SessionConfig): Session {
   copyWorld(prev, world);
   const seed = cfg.seed ?? 1;
   const drivers = cfg.field.map((p, i) => (p ? createCpuDriver(classPersonality(p, cls), (seed * 7919 + i * 104729) >>> 0) : null));
+  if (cfg.rival && drivers[cfg.rival.car]) drivers[cfg.rival.car]!.rivalOf = cfg.rival.of;
   return {
     cfg, world, prev, race, drivers,
     inputs: cfg.field.map(() => emptyInput()), scratch: cfg.field.map(() => emptyInput()),

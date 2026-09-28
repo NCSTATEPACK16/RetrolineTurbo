@@ -7,7 +7,12 @@ import type { ResultRow } from './race.js';
 export const POINTS = [15, 12, 10, 8, 6, 4, 2, 1] as const;
 
 export interface CupRound { track: string }
-export interface CupDef { name: string; rounds: readonly CupRound[] }
+export interface CupDef {
+  name: string;
+  rounds: readonly CupRound[];
+  /** Roster id of the cup's rival, who targets the player all cup long. */
+  rival: string;
+}
 
 /**
  * The slice cup. Until more circuits land, it runs Sunset Beach four times;
@@ -15,6 +20,7 @@ export interface CupDef { name: string; rounds: readonly CupRound[] }
  */
 export const SUNSET_CUP: CupDef = {
   name: 'Sunset Cup',
+  rival: 'rosa',
   rounds: [{ track: 'sunset-beach' }, { track: 'sunset-beach' }, { track: 'sunset-beach' }, { track: 'sunset-beach' }],
 };
 

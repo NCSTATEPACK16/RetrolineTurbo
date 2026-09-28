@@ -4,7 +4,9 @@ import { buildSimTrack, type SimTrack } from './sim/track.js';
 import { hashWorld } from './sim/world.js';
 import { buildRacingLine, type RacingLine } from './sim/racingLine.js';
 import { createSession, stepSession, type Session } from './sim/session.js';
-import { DEFAULT_FIELD, REFERENCE_PLAYER } from './sim/field.js';
+import { REFERENCE_PLAYER } from './sim/field.js';
+import { ROSTER, lineUp, type Driver } from './sim/roster.js';
+import { generateName } from './sim/names.js';
 import { InputRecording } from './sim/replay.js';
 import { JUNIOR } from './sim/assist.js';
 import { classParams, ENGINE_CLASSES, type EngineClass } from './sim/classes.js';
@@ -82,12 +84,14 @@ let current: Loaded = load('sunset-beach', false);
 let humans: number[] = [];
 let field: (Personality | null)[] = [];
 let names: string[] = [];
-function setField(players: number): void {
-  field = players === 0
-    ? [...DEFAULT_FIELD, REFERENCE_PLAYER]
-    : [...DEFAULT_FIELD.slice(0, 8 - players), ...Array<null>(players).fill(null)];
+/** The roster driver in each CPU car (null for players). */
+let drivers: (Driver | null)[] = [];
+/** CPUs from the roster (all eight behind the menu), then the players at the back. */
+function setField(players: number, cpus: readonly Driver[] = ROSTER): void {
+  drivers = [...cpus.slice(0, 8 - players), ...Array<null>(players).fill(null)];
+  field = drivers.map((d) => d?.personality ?? null);
   humans = field.flatMap((f, i) => (f === null ? [i] : []));
-  names = field.map((f, i) => (f !== null ? `CPU ${i + 1}` : players === 1 ? 'YOU' : `P${humans.indexOf(i) + 1}`));
+  names = drivers.map((d, i) => d?.name ?? (humans.indexOf(i) === 0 ? profile.name : 'Player 2'));
 }
 
 let seed = 1;
@@ -96,17 +100,24 @@ let recording: InputRecording;
 /** Start a race on `current` with the current field. */
 function newRace(): void {
   // Player 1 drives their garage build; everyone else a stock car (player 2 borrows the stock car too).
+  // CPUs' parts are their look; their stats stay stock so the gated balance holds (feel pass may revisit).
   const mine = humans[0];
   const params = field.map((_, i) => statsToParams(i === mine ? buildStats(profile.build) : DEFAULT_STATS));
+  const rivalCar = cup && mine !== undefined ? drivers.findIndex((d) => d?.id === cup!.def.rival) : -1;
   session = createSession({
     track: current.track, grid: current.circuit.layout.grid, line: current.line, field, seed: seed++, params,
     itemRows: current.circuit.layout.itemBoxes, coins: current.circuit.layout.coins,
     pure: !settings.items, engineClass: screen === 'menu' ? 100 : settings.cls,
+    ...(rivalCar >= 0 && mine !== undefined ? { rival: { car: rivalCar, of: mine } } : {}),
   });
   humans.forEach((car, k) => { session.world.assist[car] = settings.junior[k] ? JUNIOR : 0; });
   recording = new InputRecording();
-  view.setPlayers(humans.length ? humans : [0], mine === undefined ? [] : [paintHex()]);
-  view.setLooks(field.map((_, i): CarLook => (i === mine ? profile.build : DEFAULT_LOOKS[i % DEFAULT_LOOKS.length]!)));
+  // Paint per car: player 1's garage paint; drivers their own (second choice if player 1 wears it).
+  const p1 = paintHex();
+  const paints = drivers.map((d, i) => (d ? (mine !== undefined && d.paint === p1 ? d.altPaint : d.paint) : i === mine ? p1 : undefined));
+  view.setPlayers(humans.length ? humans : [0], paints);
+  view.setLooks(drivers.map((d, i): CarLook => d?.car ?? (i === mine ? profile.build : DEFAULT_LOOKS[0]!)));
+  hud.setDrivers(drivers.map((d) => d?.id ?? 'player'));
   view.race.bindItems(session.race.items, session.race.coins);
   hud.reset();
   overlay.names = names;
@@ -164,6 +175,7 @@ function showMenu(): void {
     { icon: '🎁', label: 'Items', values: onOff, get: () => +settings.items, set: (i) => { settings.items = i === 1; } },
     { icon: '🧒', label: 'Junior P1', values: onOff, get: () => +settings.junior[0]!, set: (i) => { settings.junior[0] = i === 1; } },
     { icon: '🧒', label: 'Junior P2', values: onOff, get: () => +settings.junior[1]!, set: (i) => { settings.junior[1] = i === 1; }, visible: () => settings.mode === 'versus' },
+    { icon: '🙂', label: 'Name', get values() { return [profile.name]; }, get: () => 0, set: () => { profile.name = generateName(Date.now() >>> 0); saveProfile(); } },
     { icon: '🔧', label: 'Garage', values: [`💰 ${profile.credits}  ▶`], get: () => 0, set: () => {}, action: openGarage },
   ], 'GO!', 'Arrows / WASD / pad to choose · Enter or A to race · Esc for this menu');
 }
@@ -176,7 +188,9 @@ function openGarage(): void {
 menu.onGo = () => {
   saveSettings();
   menu.hide();
-  setField(settings.mode === 'versus' ? 2 : 1);
+  const players = settings.mode === 'versus' ? 2 : 1;
+  // The line-up is picked once per cup (the points table follows the same drivers); the cup's rival always races.
+  setField(players, lineUp(8 - players, seed * 7 + 3, settings.mode === 'gp' ? SUNSET_CUP.rival : undefined));
   cup = settings.mode === 'gp' ? createCup(SUNSET_CUP, field.length) : null;
   startRound();
 };
@@ -315,7 +329,7 @@ if (import.meta.env.DEV) {
     get world() { return session.world; },
     get race() { return session.race; },
     get humans() { return humans; }, get player() { return humans[0]!; }, get cup() { return cup; }, get screen() { return screen; },
-    settings, view, menu, hash: () => hashWorld(session.world),
+    settings, view, menu, hud, hash: () => hashWorld(session.world),
     /** Run `ticks` fixed steps now (drives the game while the tab is hidden). */
     advance(ticks: number) { for (let i = 0; i < ticks; i++) update(); },
   };

@@ -26,6 +26,14 @@ export const BAND = {
   /** ...and CPUs within this many metres of the player get nudged to keep it so. */
   packRange: 1500,
   packNudge: 0.3,
+  /** A rival aims to run this many metres ahead of its player, with full effect over `rivalRange`. */
+  rivalLead: 10,
+  rivalRange: 80,
+  rivalEase: 4,
+  /** A rival's band is wider than the field's: it exists to stay in the player's face. */
+  rivalMinSkill: 0.7,
+  rivalMaxSkill: 1.1,
+  rivalMistakeSwing: 3,
 } as const;
 
 function distanceM(race: RaceState, world: SimWorld, track: SimTrack, i: number): number {
@@ -64,6 +72,17 @@ export function stepRubberBand(
   for (let i = 0; i < drivers.length; i++) {
     const d = drivers[i];
     if (!d || race.racers[i]!.human) continue;
+    if (d.rivalOf >= 0) {
+      // A rival shadows its player: just ahead, close enough to fight. Still ability only.
+      const g = distanceM(race, world, track, i) - distanceM(race, world, track, d.rivalOf) - BAND.rivalLead;
+      const u = Math.max(-1, Math.min(1, g / BAND.rivalRange));
+      const skill = u > 0 ? 1 - (1 - BAND.rivalMinSkill) * u : 1 + (BAND.rivalMaxSkill - 1) * -u;
+      const mistakes = u > 0 ? 1 + (BAND.rivalMistakeSwing - 1) * u : 1 / (1 + (BAND.rivalMistakeSwing - 1) * -u);
+      const kr = Math.min(1, BAND.rivalEase * dt);
+      d.skillScale += (skill - d.skillScale) * kr;
+      d.mistakeScale += (mistakes - d.mistakeScale) * kr;
+      continue;
+    }
     const gap = distanceM(race, world, track, i) - best;
     let { skill, mistakes } = bandTarget(gap);
     // Keep the player in contention: too few CPUs ahead and the nearby chasers sharpen up;

@@ -256,12 +256,12 @@ export class RaceScene {
   setFoci(foci: readonly number[], paints: readonly (string | undefined)[] = []): void {
     this.active = Math.max(1, Math.min(MAX_LOCAL_PLAYERS, foci.length));
     foci.forEach((f, k) => { if (k < MAX_LOCAL_PLAYERS) this.chasers[k]!.focus = f; });
-    const mineColors = foci.map((_, k) => paints[k] ?? BODY_COLORS[k]!);
-    // CPUs take the remaining colours, skipping any a player is wearing.
+    // `paints` is per car. Unpainted players wear the hero colours; unpainted CPUs take the rest.
+    const mineColors = foci.map((f, k) => paints[f] ?? BODY_COLORS[k]!);
     const others = BODY_COLORS.filter((c) => !mineColors.includes(c));
     for (let i = 0, rest = 0; i < this.cars.length; i++) {
       const mine = foci.indexOf(i);
-      const colour = mine >= 0 ? mineColors[mine]! : others[rest++ % others.length]!;
+      const colour = paints[i] ?? (mine >= 0 ? mineColors[mine]! : others[rest++ % others.length]!);
       this.carColors[i] = colour;
       this.cars[i]!.paint.color.set(colour);
     }

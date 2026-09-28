@@ -48,12 +48,14 @@ export interface CpuDriver {
   passSide: number;
   /** Mistakes made so far (for tests and tuning). */
   mistakes: number;
+  /** The car this driver is the rival of (-1 = nobody): it shadows and blocks that car. */
+  rivalOf: number;
 }
 
 export function createCpuDriver(personality: Personality, seed: number): CpuDriver {
   return {
     personality: { ...personality }, skillScale: 1, mistakeScale: 1, rng: (seed >>> 0) || 0x9e3779b9,
-    mistake: 0, mistakeKind: 0, tactic: 0, passTime: 0, passSide: 0, mistakes: 0,
+    mistake: 0, mistakeKind: 0, tactic: 0, passTime: 0, passSide: 0, mistakes: 0, rivalOf: -1,
   };
 }
 
@@ -159,11 +161,13 @@ function tacticFor(world: SimWorld, i: number, d: CpuDriver, track: SimTrack, ba
       d.passSide = roomRight >= roomLeft ? 1 : -1;
       d.passTime = AI.passCommit;
       target = d.passSide * AI.passOffset;
-    } else if (ds < 0 && -ds < nearestBehind && o.speed > me.speed - 0.5 && d.personality.aggression > 0.45 && d.passTime <= 0) {
-      // Someone closing behind: an aggressive driver slides across to cover their line.
+    } else if (ds < 0 && -ds < nearestBehind && o.speed > me.speed - 0.5 && d.passTime <= 0 &&
+      (d.personality.aggression > 0.45 || j === d.rivalOf)) {
+      // Someone closing behind: an aggressive driver slides across to cover their line
+      // (and a rival always covers the player it's rivals with, hard).
       nearestBehind = -ds;
       const want = o.x - baseX;
-      target = Math.max(-AI.defendMax, Math.min(AI.defendMax, want)) * d.personality.aggression;
+      target = Math.max(-AI.defendMax, Math.min(AI.defendMax, want)) * (j === d.rivalOf ? 1 : d.personality.aggression);
     }
   }
   return target;

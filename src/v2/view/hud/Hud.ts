@@ -7,6 +7,7 @@ import { COINS } from '../../sim/coins.js';
 import type { Centerline } from '../centerline.js';
 import { FONT, FONT_H, FONT_W, ICONS, ITEM_ICON, fitPoints, ordinal, positionColor, textWidthPx } from './pixels.js';
 import { Popups, type Mood } from './popups.js';
+import { PORTRAITS, PORTRAIT_SIZE, composePortrait } from './portraits.js';
 
 /**
  * Icon-first race HUD drawn on its own canvas at the internal resolution and
@@ -19,6 +20,9 @@ import { Popups, type Mood } from './popups.js';
 const KEY_COLORS: Record<string, string> = {
   w: palette.ui.white, k: palette.outline, y: palette.ui.gold, o: palette.sky.sunset[4]!, r: palette.ui.red,
   c: palette.ui.cyan, m: palette.ui.magenta, g: palette.chrome[2]!, b: palette.ui.blue,
+  // Portrait-only keys.
+  s: palette.body.red[4]!, t: palette.sky.sunset[4]!, n: palette.trunk, e: palette.foliage[1]!, E: palette.foliage[0]!,
+  l: palette.chrome[1]!, O: palette.sky.canyon[4]!,
 };
 
 function bitmap(rows: readonly string[], color: (ch: string) => string | null): HTMLCanvasElement {
@@ -50,6 +54,9 @@ export class Hud {
   /** Pop-ups per player (each split-screen half has its own). */
   private readonly popups = new Map<number, Popups>();
   private blink = 0;
+  /** Portrait id per car (roster id, or 'player'); cached compositions by id+mood+paint. */
+  private portraitIds: readonly string[] = [];
+  private readonly faces = new Map<string, HTMLCanvasElement>();
 
   constructor(canvas: HTMLCanvasElement, center: Centerline, private readonly carColors: readonly string[]) {
     this.canvas = canvas;
@@ -91,6 +98,11 @@ export class Hud {
     this.canvas.style.width = `${width * cssScale}px`;
     this.canvas.style.height = `${height * cssScale}px`;
     this.g.imageSmoothingEnabled = false;
+  }
+
+  /** Who is driving each car, for the pop-up portraits. */
+  setDrivers(portraitIds: readonly string[]): void {
+    this.portraitIds = portraitIds;
   }
 
   /** Forget per-player pop-up state (call at the start of each race). */
@@ -177,7 +189,7 @@ export class Hud {
 
     // Portrait pop-up, bottom-left.
     const pop = popups.current;
-    if (pop) this.face(r.x + 4, r.y + r.h - 30, this.carColors[pop.car] ?? palette.ui.white, pop.mood);
+    if (pop) this.face(r.x + 6, r.y + r.h - 38, pop.car, pop.mood);
 
     // Countdown and GO.
     const cx = r.x + r.w / 2, cy = r.y + r.h * 0.38;
@@ -202,19 +214,27 @@ export class Hud {
     }
   }
 
-  /** Placeholder portrait until the roster's art lands: a face in the driver's colour. */
-  private face(x: number, y: number, color: string, mood: Mood): void {
-    const g = this.g;
-    g.fillStyle = palette.outline;
-    g.fillRect(x, y, 26, 26);
-    g.fillStyle = color;
-    g.fillRect(x + 2, y + 2, 22, 22);
-    g.fillStyle = palette.outline;
-    const browY = mood === 'angry' ? 7 : 8;
-    g.fillRect(x + 7, y + 10, 3, 3); g.fillRect(x + 16, y + 10, 3, 3);
-    if (mood === 'angry') { g.fillRect(x + 6, y + browY, 5, 1); g.fillRect(x + 15, y + browY, 5, 1); }
-    if (mood === 'happy') { g.fillRect(x + 8, y + 17, 10, 2); g.fillRect(x + 7, y + 16, 1, 1); g.fillRect(x + 18, y + 16, 1, 1); }
-    else if (mood === 'angry') { g.fillRect(x + 8, y + 17, 10, 2); g.fillRect(x + 7, y + 19, 1, 1); g.fillRect(x + 18, y + 19, 1, 1); }
-    else g.fillRect(x + 8, y + 18, 10, 1);
+  /** A driver's 16x16 portrait for a mood, composed once and cached. */
+  portrait(car: number, mood: Mood): HTMLCanvasElement {
+    const id = this.portraitIds[car] ?? 'player';
+    const paint = this.carColors[car] ?? palette.ui.white;
+    const key = `${id}|${mood}|${paint}`;
+    let c = this.faces.get(key);
+    if (!c) {
+      const art = PORTRAITS[id] ?? PORTRAITS.player!;
+      c = bitmap(composePortrait(art, mood), (p) => (p === '.' ? palette.sky.sunset[0]! : p === 'P' ? paint : KEY_COLORS[p] ?? null));
+      this.faces.set(key, c);
+    }
+    return c;
+  }
+
+  /** Portrait pop-up: the face at 2x in a white frame. */
+  private face(x: number, y: number, car: number, mood: Mood): void {
+    const size = PORTRAIT_SIZE * 2;
+    this.g.fillStyle = palette.outline;
+    this.g.fillRect(x - 2, y - 2, size + 4, size + 4);
+    this.g.fillStyle = palette.ui.white;
+    this.g.fillRect(x - 1, y - 1, size + 2, size + 2);
+    this.g.drawImage(this.portrait(car, mood), x, y, size, size);
   }
 }

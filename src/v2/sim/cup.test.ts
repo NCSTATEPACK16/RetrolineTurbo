@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createCup, recordRace, standings, cupOver, pointsFor, POINTS, type CupDef } from './cup.js';
 import type { ResultRow } from './race.js';
 
-const CUP: CupDef = { name: 'Test Cup', rounds: [{ track: 'a' }, { track: 'a' }, { track: 'a' }] };
+const CUP: CupDef = { name: 'Test Cup', rival: 'rosa', rounds: [{ track: 'a' }, { track: 'a' }, { track: 'a' }] };
 const race = (order: number[]): ResultRow[] => order.map((car, i) => ({ car, position: i + 1, timeSeconds: 60 + i }));
 
 describe('cup points table', () => {
