@@ -4,7 +4,7 @@ import { buildSimTrack, halfWidthAt, sectionIndexAt } from './track.js';
 import { createWorld, type SimWorld } from './world.js';
 import { createRace, stepRace, lapOf, type RaceState } from './race.js';
 import { buildRacingLine, lineX, LINE } from './racingLine.js';
-import { driveCpu, DEFAULT_BRAIN, type DriverBrain } from './ai.js';
+import { createCpuDriver, driveCpu, DEFAULT_PERSONALITY, type Personality } from './ai.js';
 import { resolveBumps, CAR_LENGTH, CAR_WIDTH } from './bump.js';
 import { parseTrackFile } from '../track/schema.js';
 import sunset from '../track/circuits/sunset-beach.json';
@@ -38,14 +38,15 @@ describe('racing line', () => {
   });
 });
 
-function race(cpuBrains: DriverBrain[], seconds: number): { world: SimWorld; race: RaceState } {
+function race(cpuBrains: Personality[], seconds: number): { world: SimWorld; race: RaceState } {
   const n = cpuBrains.length;
+  const drivers = cpuBrains.map((p, i) => createCpuDriver(p, i + 1));
   const world = createWorld(n);
   const r = createRace(world, track, circuit.layout.grid, cpuBrains.map((_, i) => i), cpuBrains.map(() => false), 3);
   const inputs: InputFrame[] = cpuBrains.map(() => emptyInput());
   const scratch: InputFrame[] = cpuBrains.map(() => emptyInput());
   for (let t = 0; t < seconds * 60 && r.racers.some((x) => x.finishTick < 0); t++) {
-    for (let i = 0; i < n; i++) driveCpu(world.cars[i]!, world.params[i]!, world.tuning, cpuBrains[i]!, line, track, inputs[i]!);
+    for (let i = 0; i < n; i++) driveCpu(world, i, drivers[i]!, line, track, [], inputs[i]!);
     stepRace(r, world, track, inputs, scratch);
   }
   return { world, race: r };
@@ -59,8 +60,9 @@ describe('CPU racers', () => {
     const inputs = [emptyInput()];
     const scratch = [emptyInput()];
     let offroadTicks = 0;
+    const driver = createCpuDriver({ ...DEFAULT_PERSONALITY, mistakeRate: 0 }, 1);
     for (let t = 0; t < 60 * 300 && r.racers[0]!.finishTick < 0; t++) {
-      driveCpu(world.cars[0]!, world.params[0]!, world.tuning, DEFAULT_BRAIN, line, track, inputs[0]!);
+      driveCpu(world, 0, driver, line, track, [], inputs[0]!);
       stepRace(r, world, track, inputs, scratch);
       if (Math.abs(world.cars[0]!.x) > halfWidthAt(track, world.cars[0]!.s)) offroadTicks++;
     }
@@ -71,7 +73,7 @@ describe('CPU racers', () => {
   });
 
   it('seven CPUs all finish three laps without getting stuck', () => {
-    const brains = Array.from({ length: 7 }, (_, i) => ({ ...DEFAULT_BRAIN, laneOffset: ((i % 3) - 1) * 1.6 }));
+    const brains = Array.from({ length: 7 }, (_, i) => ({ ...DEFAULT_PERSONALITY, laneOffset: ((i % 3) - 1) * 1.6 }));
     const { race: r } = race(brains, 60 * 6);
     for (const x of r.racers) {
       expect(x.finishTick).toBeGreaterThan(0);

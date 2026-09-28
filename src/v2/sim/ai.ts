@@ -1,29 +1,91 @@
 import { Button, quantiseSteer, type InputFrame } from './input.js';
 import type { CarParams, DriveTuning } from './car.js';
+import { driftTier } from './car.js';
 import type { SimTrack } from './track.js';
-import { curvatureAt } from './track.js';
-import type { CarState } from './world.js';
+import { arcDelta, curvatureAt, halfWidthAt } from './track.js';
+import type { CarState, SimWorld } from './world.js';
 import { lineK, lineX, type RacingLine } from './racingLine.js';
 
 /**
- * CPU driver: follows the racing line (plus its own lane offset), plans corner
- * speeds from the line's curvature, and brakes early enough to make them.
- * Pure and allocation-free: it reads the sim state and writes an InputFrame,
- * exactly like a human's controller would — CPUs get no physics privileges.
+ * CPU drivers. They race through the same InputFrame as a human — no physics
+ * privileges — layered as: racing line + corner-speed planning, a personality,
+ * awareness of other cars and hazards, drift use, and seeded mistakes.
+ * Everything a CPU remembers lives in its CpuDriver, so races stay
+ * deterministic and replayable. Allocation-free per tick.
  */
-export interface DriverBrain {
-  /** Metres added to the racing line (lets the field spread across the road). */
+export interface Personality {
+  /** 0..1: corner commitment, braking precision. */
+  skill: number;
+  /** 0..1: defends, blocks, leans on people. */
+  aggression: number;
+  /** 0..1: fires items early and often (used by the item layer). */
+  itemUse: number;
+  /** Mistakes per minute of racing. */
+  mistakeRate: number;
+  /** 0..1: drifts corners and holds them for bigger tiers. */
+  driftSkill: number;
+  /** Preferred offset from the racing line, metres. */
   laneOffset: number;
-  /** 0..1: how close to the physical corner-speed limit this driver dares to go. */
-  cornerCommit: number;
-  /** Metres per (m/s) of steering look-ahead. */
-  lookAhead: number;
 }
 
-export const DEFAULT_BRAIN: DriverBrain = { laneOffset: 0, cornerCommit: 0.82, lookAhead: 0.45 };
+export const DEFAULT_PERSONALITY: Personality = { skill: 0.6, aggression: 0.4, itemUse: 0.5, mistakeRate: 1, driftSkill: 0.5, laneOffset: 0 };
 
-const PLAN_STEP = 10;
-const PLAN_DISTANCE = 140;
+export interface CpuDriver {
+  personality: Personality;
+  /** Scales skill for rubber-banding (1 = the driver's own ability). */
+  skillScale: number;
+  /** xorshift32 state. */
+  rng: number;
+  /** Seconds left of the current mistake, and which kind (1 run wide, 2 lift). */
+  mistake: number;
+  mistakeKind: number;
+  /** Current extra lateral offset for passing/defending, eased. */
+  tactic: number;
+  /** Seconds left committed to the current pass. */
+  passTime: number;
+  passSide: number;
+  /** Mistakes made so far (for tests and tuning). */
+  mistakes: number;
+}
+
+export function createCpuDriver(personality: Personality, seed: number): CpuDriver {
+  return {
+    personality: { ...personality }, skillScale: 1, rng: (seed >>> 0) || 0x9e3779b9,
+    mistake: 0, mistakeKind: 0, tactic: 0, passTime: 0, passSide: 0, mistakes: 0,
+  };
+}
+
+/** Deterministic uniform [0, 1). */
+export function nextRandom(d: CpuDriver): number {
+  let x = d.rng;
+  x ^= x << 13; x >>>= 0;
+  x ^= x >>> 17;
+  x ^= x << 5; x >>>= 0;
+  d.rng = x;
+  return x / 4294967296;
+}
+
+/** A thing on the track to steer around (oil slicks and the like, from the item layer). */
+export interface Hazard { active: boolean; s: number; x: number; radius: number }
+
+export const AI = {
+  dt: 1 / 60,
+  commitBase: 0.7,
+  commitPerSkill: 0.22,
+  planStep: 10,
+  planDistance: 140,
+  steerGain: 1.6,
+  /** Look this far ahead for a car to pass, metres. */
+  passLook: 22,
+  passOffset: 2.6,
+  passCommit: 2.5,
+  defendLook: 14,
+  defendMax: 2.2,
+  hazardLook: 45,
+  tacticEase: 2.5,
+  mistakeSeconds: 0.8,
+  driftMinCurvature: 0.012,
+} as const;
 
 /** Fastest a car can hold through curvature `k` using its steering authority. */
 export function cornerSpeed(k: number, p: CarParams, commit: number): number {
@@ -32,38 +94,143 @@ export function cornerSpeed(k: number, p: CarParams, commit: number): number {
   return Math.sqrt((p.lateralSpeed * commit) / (a * p.centrifugal));
 }
 
+function wrap(track: SimTrack, s: number): number {
+  const L = track.length;
+  return s >= L ? s - L : s < 0 ? s + L : s;
+}
+
 /** Highest speed from which the car can still slow to every upcoming corner in time. */
-export function plannedSpeed(car: CarState, p: CarParams, t: DriveTuning, brain: DriverBrain, line: RacingLine, track: SimTrack): number {
+export function plannedSpeed(car: CarState, p: CarParams, t: DriveTuning, commit: number, line: RacingLine, track: SimTrack): number {
   const decel = t.brake * 0.6;
   let allowed = p.topSpeed * 1.2;
-  for (let d = 0; d <= PLAN_DISTANCE; d += PLAN_STEP) {
+  for (let d = 0; d <= AI.planDistance; d += AI.planStep) {
     const k = Math.max(Math.abs(lineK(line, track, car.s + d)), Math.abs(curvatureAt(track, wrap(track, car.s + d))) * 0.85);
-    const v = cornerSpeed(k, p, brain.cornerCommit);
+    const v = cornerSpeed(k, p, commit);
     const reach = Math.sqrt(v * v + 2 * decel * d);
     if (reach < allowed) allowed = reach;
   }
   return allowed;
 }
 
-function wrap(track: SimTrack, s: number): number {
-  const L = track.length;
-  return s >= L ? s - L : s < 0 ? s + L : s;
+/** Commitment for this driver right now, with rubber-banding and any mistake applied. */
+function commitOf(d: CpuDriver): number {
+  const skill = Math.min(1.2, d.personality.skill * d.skillScale);
+  let c = AI.commitBase + AI.commitPerSkill * skill;
+  if (d.mistake > 0 && d.mistakeKind === 1) c += 0.35; // overcooks the corner and runs wide
+  return c;
+}
+
+function stepMistakes(d: CpuDriver): void {
+  if (d.mistake > 0) {
+    d.mistake -= AI.dt;
+    return;
+  }
+  const perTick = (d.personality.mistakeRate / 60) * AI.dt;
+  if (nextRandom(d) < perTick) {
+    d.mistake = AI.mistakeSeconds * (0.6 + nextRandom(d) * 0.8);
+    d.mistakeKind = nextRandom(d) < 0.6 ? 1 : 2;
+    d.mistakes++;
+  }
+}
+
+/** Passing and defending: pick a lateral tactic offset from nearby cars. */
+function tacticFor(world: SimWorld, i: number, d: CpuDriver, track: SimTrack, baseX: number): number {
+  const me = world.cars[i]!;
+  // Committed to a pass: hold the side until it's done.
+  if (d.passTime > 0) {
+    d.passTime -= AI.dt;
+    return d.passSide * AI.passOffset;
+  }
+  let target = 0;
+  let nearestAhead: number = AI.passLook;
+  let nearestBehind: number = AI.defendLook;
+  for (let j = 0; j < world.cars.length; j++) {
+    if (j === i) continue;
+    const o = world.cars[j]!;
+    const ds = arcDelta(track, me.s, o.s);
+    const dx = o.x - me.x;
+    if (ds > 0 && ds < nearestAhead && Math.abs(dx) < 2.4 && o.speed < me.speed + 1) {
+      // Slower car in my lane ahead: go round on the side with more road.
+      nearestAhead = ds;
+      const hw = halfWidthAt(track, me.s);
+      const roomRight = hw - o.x, roomLeft = o.x + hw;
+      d.passSide = roomRight >= roomLeft ? 1 : -1;
+      d.passTime = AI.passCommit;
+      target = d.passSide * AI.passOffset;
+    } else if (ds < 0 && -ds < nearestBehind && o.speed > me.speed - 0.5 && d.personality.aggression > 0.45 && d.passTime <= 0) {
+      // Someone closing behind: an aggressive driver slides across to cover their line.
+      nearestBehind = -ds;
+      const want = o.x - baseX;
+      target = Math.max(-AI.defendMax, Math.min(AI.defendMax, want)) * d.personality.aggression;
+    }
+  }
+  return target;
+}
+
+/** Nudge the target line away from any active hazard ahead. */
+function avoidHazards(me: CarState, targetX: number, hazards: readonly Hazard[], track: SimTrack): number {
+  let x = targetX;
+  for (let h = 0; h < hazards.length; h++) {
+    const hz = hazards[h]!;
+    if (!hz.active) continue;
+    const ds = arcDelta(track, me.s, hz.s);
+    if (ds <= 0 || ds > AI.hazardLook) continue;
+    const clear = hz.radius + 1.6;
+    if (Math.abs(x - hz.x) < clear) x = x >= hz.x ? hz.x + clear : hz.x - clear;
+  }
+  const hw = halfWidthAt(track, me.s) - 1;
+  return x > hw ? hw : x < -hw ? -hw : x;
 }
 
 export function driveCpu(
-  car: CarState, p: CarParams, t: DriveTuning, brain: DriverBrain, line: RacingLine, track: SimTrack, out: InputFrame,
+  world: SimWorld, i: number, d: CpuDriver, line: RacingLine, track: SimTrack, hazards: readonly Hazard[], out: InputFrame,
 ): InputFrame {
-  // Steering: aim at the line a little ahead, and pre-load against the curve's push.
-  const ahead = 4 + Math.max(0, car.speed) * brain.lookAhead;
-  const target = lineX(line, track, car.s + ahead) + brain.laneOffset;
-  const k = curvatureAt(track, car.s);
-  const wantLateral = (target - car.x) * 1.6 + k * car.speed * car.speed * p.centrifugal;
-  out.steer = quantiseSteer(wantLateral / p.lateralSpeed);
+  const car = world.cars[i]!;
+  const p = world.params[i]!;
+  const t = world.tuning;
+  stepMistakes(d);
 
-  // Speed: throttle, lift, or brake against the plan.
-  const allowed = plannedSpeed(car, p, t, brain, line, track);
-  if (car.speed > allowed + 1.5) out.buttons = Button.Brake;
-  else if (car.speed > allowed) out.buttons = 0;
-  else out.buttons = Button.Throttle;
+  // Where to be: racing line + personal lane + tactics (eased), clear of hazards.
+  const ahead = 4 + Math.max(0, car.speed) * 0.45;
+  const base = lineX(line, track, car.s + ahead) + d.personality.laneOffset;
+  const want = tacticFor(world, i, d, track, base);
+  d.tactic += (want - d.tactic) * Math.min(1, AI.tacticEase * AI.dt);
+  let target = avoidHazards(car, base + d.tactic, hazards, track);
+  if (d.mistake > 0 && d.mistakeKind === 1) {
+    // Overcooked it: carried too much speed and is running out toward the edge of the corner.
+    const k = lineK(line, track, car.s + ahead);
+    target = (k > 0 ? -1 : 1) * (halfWidthAt(track, car.s) + 2);
+  }
+
+  // Steering, pre-loaded against the curve's push.
+  const k = curvatureAt(track, car.s);
+  const correction = (target - car.x) * AI.steerGain;
+  if (car.drift === 0) {
+    out.steer = quantiseSteer((correction + k * car.speed * car.speed * p.centrifugal) / p.lateralSpeed);
+  } else {
+    // Mid-drift the car carves inward on its own and the curve pushes less (see world.ts): steer to trim that arc.
+    const push = k * car.speed * car.speed * p.centrifugal * t.driftCentrifugal;
+    out.steer = quantiseSteer((correction + push - car.drift * t.driftInward) / (p.lateralSpeed * 0.6));
+  }
+
+  // Speed plan.
+  const allowed = plannedSpeed(car, p, t, commitOf(d), line, track);
+  let buttons: number;
+  if (d.mistake > 0 && d.mistakeKind === 2) buttons = 0; // lifted: lost concentration
+  else if (car.speed > allowed + 1.5) buttons = Button.Brake;
+  else if (car.speed > allowed) buttons = 0;
+  else buttons = Button.Throttle;
+
+  // Drifting: skilled drivers hop into real corners and hold for bigger tiers.
+  const corner = Math.abs(lineK(line, track, car.s + 15));
+  if (car.drift === 0) {
+    if (corner > AI.driftMinCurvature && car.speed > t.driftMinSpeed + 4 && d.personality.driftSkill > 0.25 && Math.abs(out.steer) > 40 &&
+      (car.prevButtons & Button.Drift) === 0) buttons |= Button.Drift;
+  } else {
+    const goal = d.personality.driftSkill > 0.75 ? 3 : d.personality.driftSkill > 0.45 ? 2 : 1;
+    const keep = corner > AI.driftMinCurvature * 0.6 && driftTier(car.driftCharge, t) < goal;
+    if (keep) buttons |= Button.Drift;
+  }
+  out.buttons = buttons;
   return out;
 }

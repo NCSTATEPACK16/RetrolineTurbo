@@ -3,7 +3,7 @@ import { Button, type InputFrame } from '../sim/input.js';
 import { buildSimTrack } from '../sim/track.js';
 import { createWorld, copyWorld, stepWorld } from '../sim/world.js';
 import { buildRacingLine } from '../sim/racingLine.js';
-import { driveCpu, DEFAULT_BRAIN } from '../sim/ai.js';
+import { createCpuDriver, driveCpu, DEFAULT_PERSONALITY } from '../sim/ai.js';
 import { resolveBumps } from '../sim/bump.js';
 import * as THREE from 'three';
 import { RaceScene } from '../view/View.js';
@@ -38,8 +38,9 @@ describe('v2 performance budget', () => {
     const world = createWorld(CARS);
     const line = buildRacingLine(track);
     const cpu = Array.from({ length: CARS }, () => ({ ...input }));
+    const drivers = cpu.map((_, i) => createCpuDriver(DEFAULT_PERSONALITY, i + 1));
     const ms = timeIt(60 * 60, () => {
-      for (let i = 0; i < CARS; i++) driveCpu(world.cars[i]!, world.params[i]!, world.tuning, DEFAULT_BRAIN, line, track, cpu[i]!);
+      for (let i = 0; i < CARS; i++) driveCpu(world, i, drivers[i]!, line, track, [], cpu[i]!);
       stepWorld(world, track, cpu);
       resolveBumps(world, track);
     });
