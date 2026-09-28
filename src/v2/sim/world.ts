@@ -46,6 +46,8 @@ export interface SimWorld {
   readonly params: CarParams[];
   /** Scaling constants shared by the whole race (the DEV overlay edits these live). */
   tuning: DriveTuning;
+  /** Per-car strongest contact this tick (closing speed, m/s); 0 when untouched. An event channel for the view. */
+  readonly impact: Float64Array;
 }
 
 export function createCar(): CarState {
@@ -59,13 +61,14 @@ export function createWorld(carCount = 1, params?: readonly CarParams[], tuning:
     cars.push(createCar());
     ps.push({ ...(params?.[i] ?? statsToParams(DEFAULT_STATS, false, tuning)) });
   }
-  return { tick: 0, cars, params: ps, tuning };
+  return { tick: 0, cars, params: ps, tuning, impact: new Float64Array(carCount) };
 }
 
 /** Copy `src` car state into `dst` in place — the previous snapshot for interpolation, without allocating. */
 export function copyWorld(dst: SimWorld, src: SimWorld): void {
   dst.tick = src.tick;
   for (let i = 0; i < src.cars.length; i++) Object.assign(dst.cars[i]!, src.cars[i]!);
+  dst.impact.set(src.impact);
 }
 
 function approach(v: number, target: number, maxDelta: number): number {
@@ -212,6 +215,7 @@ function stepCar(car: CarState, p: CarParams, input: InputFrame, track: SimTrack
 
 /** Advance the world one fixed step; `inputs[i]` drives car i. */
 export function stepWorld(world: SimWorld, track: SimTrack, inputs: readonly InputFrame[]): void {
+  world.impact.fill(0);
   for (let i = 0; i < world.cars.length; i++) stepCar(world.cars[i]!, world.params[i]!, inputs[i]!, track, world.tuning);
   world.tick++;
 }

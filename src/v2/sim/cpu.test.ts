@@ -138,3 +138,17 @@ describe('bumping', () => {
     expect(resolveBumps(two({ s: 100, x: 0 }, { s: 101, x: 0 }), track, (i) => i === 1)).toBe(0);
   });
 });
+
+describe('contact events', () => {
+  it('reports the closing speed of a hit to both cars, and clears next tick', async () => {
+    const { stepWorld } = await import('./world.js');
+    const w = createWorld(2);
+    Object.assign(w.cars[0]!, { s: 100, x: 0, speed: 30 });
+    Object.assign(w.cars[1]!, { s: 102, x: 0, speed: 20 });
+    resolveBumps(w, track);
+    expect(w.impact[0]).toBeCloseTo(10, 5);
+    expect(w.impact[1]).toBeCloseTo(10, 5);
+    stepWorld(w, track, [emptyInput(), emptyInput()]);
+    expect(w.impact[0]).toBe(0);
+  });
+});

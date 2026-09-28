@@ -44,6 +44,8 @@ export function resolveBumps(world: SimWorld, track: SimTrack, skip?: (i: number
         const rear = dir > 0 ? a : b, front = dir > 0 ? b : a;
         const mr = dir > 0 ? ma : mb, mf = dir > 0 ? mb : ma;
         const closing = rear.speed - front.speed;
+        if (closing > world.impact[i]!) world.impact[i] = closing;
+        if (closing > world.impact[j]!) world.impact[j] = closing;
         if (closing > 0) {
           const impulse = ((1 + BUMP.restitution) * closing) / (mr + mf);
           rear.speed -= impulse * mf;
@@ -58,6 +60,9 @@ export function resolveBumps(world: SimWorld, track: SimTrack, skip?: (i: number
         b.x += dir * (overX + BUMP.sideKick) * wb;
         a.speed *= BUMP.sideScrub;
         b.speed *= BUMP.sideScrub;
+        const side = 3 + overX * 4; // side swipes register as a moderate knock
+        if (side > world.impact[i]!) world.impact[i] = side;
+        if (side > world.impact[j]!) world.impact[j] = side;
       }
     }
   }

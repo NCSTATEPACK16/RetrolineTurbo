@@ -11,6 +11,7 @@ import sunsetBeach from './track/circuits/sunset-beach.json';
 import { Keyboard } from './input/keyboard.js';
 import { mapGamepad, mergeInputs, readPad } from './input/gamepad.js';
 import { View } from './view/View.js';
+import { JUICE } from './view/Juice.js';
 import { RaceOverlay } from './ui/raceOverlay.js';
 
 /**
@@ -51,8 +52,14 @@ window.addEventListener('keydown', (e) => {
 });
 
 let lastFrame = performance.now();
+/** Hit-stop: a big knock to the player freezes the whole game for a few ticks. */
+let hitStop = 0;
 const loop = createLoop({
   update() {
+    if (hitStop > 0) {
+      hitStop--;
+      return;
+    }
     const input = session.inputs[PLAYER]!;
     keyboard.sample(kbFrame);
     const pad = readPad(0);
@@ -60,6 +67,7 @@ const loop = createLoop({
     else Object.assign(input, kbFrame);
     recording.push(input);
     stepSession(session);
+    if (JUICE.hitStop && session.world.impact[PLAYER]! >= JUICE.hitStopImpact) hitStop = JUICE.hitStopTicks;
   },
   render(alpha) {
     const now = performance.now();
@@ -82,6 +90,7 @@ if (import.meta.env.DEV) {
         { title: 'gearbox', target: gearbox },
         { title: 'drive', target: car.DRIVE_TUNING as unknown as Record<string, number> },
         { title: 'camera', target: chase.CHASE_TUNING as unknown as Record<string, number> },
+        { title: 'juice', target: JUICE },
       ], rebuild);
     },
   );

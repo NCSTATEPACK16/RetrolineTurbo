@@ -7,6 +7,7 @@ import { CHASE_TUNING, crestSafeHeight, initialChaseState, updateChase, type Cha
 import { buildCenterline, poseAt, type Centerline, type Pose } from './centerline.js';
 import { PixelPipeline } from './PixelPipeline.js';
 import { CrtOverlay } from './crt.js';
+import { JUICE, PARTICLE_COLORS, Particles, Shake, SpeedLines, prefersReducedMotion } from './Juice.js';
 import { Scenery, Horizon, pixelTexture, type HorizonTheme } from './Scenery.js';
 import { HORIZONS, PROPS_ATLAS, SCENERY_KINDS } from './sprites.js';
 import { placeScenery } from '../track/scenery.js';
@@ -147,6 +148,11 @@ export class RaceScene {
   private readonly crestYs = new Float32Array(3);
   /** Which car the camera chases. */
   focus = 0;
+  private readonly particles = new Particles();
+  private readonly speedLines = new SpeedLines();
+  private readonly shake = new Shake();
+  private readonly v = new THREE.Vector3();
+  private lastEventTick = -1;
   private readonly horizon: Horizon;
 
   constructor(private readonly track: SimTrack, layout: CircuitLayout, carCount: number, textures: SceneTextures, focus = 0) {
@@ -161,6 +167,14 @@ export class RaceScene {
     this.scene.add(this.scenery.group);
     this.horizon = new Horizon(textures.horizon, theme.aspect);
     this.scene.add(this.horizon.mesh);
+    this.scene.add(this.particles.mesh);
+    this.camera.add(this.speedLines.group); // children of the camera need it in the scene graph
+    this.scene.add(this.camera);
+    if (prefersReducedMotion()) {
+      JUICE.shake = false;
+      JUICE.hitStop = false;
+      JUICE.speedLines = false;
+    }
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(4000, 4000),
       new THREE.MeshBasicMaterial({ color: palette.foliage[1]! }),
@@ -215,15 +229,45 @@ export class RaceScene {
       }
       rig.flame.visible = b.boostTime > 0;
       rig.flame.scale.z = flicker * 1.4;
+      this.emitFor(rig, b, curr, i, dt);
       if (i === this.focus) {
         this.chaseIn.topSpeed = curr.params[i]!.topSpeed;
         this.placeCamera(s, x, a.steer + (b.steer - a.steer) * alpha, a.speed + (b.speed - a.speed) * alpha, b, dt);
       }
     }
+    this.lastEventTick = curr.tick;
+    this.particles.update(dt);
     this.camera.updateMatrixWorld();
     this.scenery.update(this.camera);
     this.horizon.update(this.camera);
     this.scene.updateMatrixWorld();
+  }
+
+  /** Smoke from drifting tyres, dust off the tarmac, sparks and shake on contact. */
+  private emitFor(rig: CarRig, car: SimWorld['cars'][number], world: SimWorld, i: number, dt: number): void {
+    const p = this.particles;
+    const speed = Math.max(0, car.speed);
+    rig.group.updateMatrixWorld();
+    const hw = halfWidthAt(this.track, ((car.s % this.track.length) + this.track.length) % this.track.length);
+    const offroad = Math.abs(car.x) > hw;
+    if ((car.drift !== 0 || offroad) && speed > 6) {
+      for (let side = -1; side <= 1; side += 2) {
+        if (p.rand() > dt * 45) continue; // ~45 puffs/s per wheel
+        rig.group.localToWorld(this.v.set(side * 1, 0.25, 2));
+        const col = offroad ? PARTICLE_COLORS.dust : PARTICLE_COLORS.smoke;
+        p.emit(this.v.x, this.v.y, this.v.z, (p.rand() - 0.5) * 2, 0.8 + p.rand(), (p.rand() - 0.5) * 2, offroad ? 0.3 : 0.45, 0.3, offroad ? 1.4 : 2.2, col);
+      }
+    }
+    // Contact: once per sim tick, not once per rendered frame.
+    const hit = world.impact[i]!;
+    if (hit > 2 && world.tick !== this.lastEventTick) {
+      rig.group.localToWorld(this.v.set(0, 0.6, -1));
+      for (let k = 0; k < 10; k++) {
+        p.emit(this.v.x, this.v.y, this.v.z, (p.rand() - 0.5) * 9, 2 + p.rand() * 4, (p.rand() - 0.5) * 9, 0.35, 0.18, -0.8, PARTICLE_COLORS.spark);
+      }
+      if (i === this.focus) this.shake.kick(hit);
+    }
+    if (i === this.focus && offroad && speed > 10) this.shake.kick(0.08);
   }
 
   /** Low Top Gear-style chase camera: rolls into turns, widens on speed/boost, pulls in on drifts, clears crests. */
@@ -244,6 +288,8 @@ export class RaceScene {
     this.look.set(this.pose.x, this.pose.y + t.lookHeight, this.pose.z);
     this.camera.lookAt(this.look);
     this.camera.rotateZ(-st.roll);
+    this.camera.position.add(this.shake.update(dt, this.particles));
+    this.speedLines.update(car.boostTime > 0, dt);
     if (Math.abs(this.camera.fov - st.fov) > 0.01) {
       this.camera.fov = st.fov;
       this.camera.updateProjectionMatrix();
