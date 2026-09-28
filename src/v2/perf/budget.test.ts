@@ -45,7 +45,7 @@ describe('v2 performance budget', () => {
     const ms = timeIt(60 * 20, (i) => {
       copyWorld(prev, curr);
       stepWorld(curr, track, input, idle);
-      race.sync(prev, curr, (i % 10) / 10);
+      race.sync(prev, curr, (i % 10) / 10, 1 / 60);
     });
     console.info(`[budget] scene sync x${CARS}: ${(ms * 1000).toFixed(1)}us`);
     expect(ms).toBeLessThan(SYNC_BUDGET_MS);

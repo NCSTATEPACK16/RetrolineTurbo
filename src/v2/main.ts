@@ -31,6 +31,7 @@ window.addEventListener('keydown', (e) => {
   if (import.meta.env.DEV && e.code === 'KeyP') view.pixels.paletteEnabled = !view.pixels.paletteEnabled;
 });
 
+let lastFrame = performance.now();
 const loop = createLoop({
   update() {
     keyboard.sample(input);
@@ -39,7 +40,9 @@ const loop = createLoop({
     stepWorld(curr, track, input, idle);
   },
   render(alpha) {
-    view.render(prev, curr, alpha);
+    const now = performance.now();
+    view.render(prev, curr, alpha, Math.min(0.1, (now - lastFrame) / 1000));
+    lastFrame = now;
   },
 });
 loop.start();

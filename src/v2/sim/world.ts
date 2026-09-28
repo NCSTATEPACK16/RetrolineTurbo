@@ -30,6 +30,10 @@ export interface CarState {
   /** Smoothed steering position, -1..1. */
   steer: number;
   lap: number;
+  /** Seconds of boost remaining (mini-turbo, items, rocket start). */
+  boostTime: number;
+  /** Drift direction: -1 left, 0 none, 1 right. */
+  drift: number;
 }
 
 export interface SimWorld {
@@ -39,7 +43,7 @@ export interface SimWorld {
 
 export function createWorld(carCount = 1): SimWorld {
   const cars: CarState[] = [];
-  for (let i = 0; i < carCount; i++) cars.push({ s: 0, x: 0, speed: 0, steer: 0, lap: 0 });
+  for (let i = 0; i < carCount; i++) cars.push({ s: 0, x: 0, speed: 0, steer: 0, lap: 0, boostTime: 0, drift: 0 });
   return { tick: 0, cars };
 }
 
@@ -50,6 +54,7 @@ export function copyWorld(dst: SimWorld, src: SimWorld): void {
     const a = dst.cars[i]!;
     const b = src.cars[i]!;
     a.s = b.s; a.x = b.x; a.speed = b.speed; a.steer = b.steer; a.lap = b.lap;
+    a.boostTime = b.boostTime; a.drift = b.drift;
   }
 }
 
@@ -110,6 +115,7 @@ export function hashWorld(world: SimWorld): number {
   h = mix(h, world.tick);
   for (const c of world.cars) {
     h = mix(h, c.s); h = mix(h, c.x); h = mix(h, c.speed); h = mix(h, c.steer); h = mix(h, c.lap);
+    h = mix(h, c.boostTime); h = mix(h, c.drift);
   }
   return h;
 }

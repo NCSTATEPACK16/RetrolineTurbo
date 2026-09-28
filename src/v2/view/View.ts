@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import palette from '../../assets/palette.json';
-import { halfWidthAt, type SimTrack } from '../sim/track.js';
-import type { SimWorld } from '../sim/world.js';
+import { curvatureAt, halfWidthAt, type SimTrack } from '../sim/track.js';
+import { CAR, type SimWorld } from '../sim/world.js';
+import { CHASE_TUNING, crestSafeHeight, initialChaseState, updateChase, type ChaseInput } from './chaseRig.js';
 import { buildCenterline, poseAt, type Centerline, type Pose } from './centerline.js';
 import { PixelPipeline } from './PixelPipeline.js';
 import { CrtOverlay } from './crt.js';
@@ -115,6 +116,9 @@ export class RaceScene {
   private readonly pose: Pose = { x: 0, y: 0, z: 0, heading: 0 };
   private readonly look = new THREE.Vector3();
   private readonly scenery: Scenery;
+  private readonly chase = initialChaseState();
+  private readonly chaseIn: ChaseInput = { curvature: 0, speed: 0, topSpeed: CAR.topSpeed, boosting: false, drifting: false };
+  private readonly crestYs = new Float32Array(3);
   private readonly horizon: Horizon;
 
   constructor(private readonly track: SimTrack, layout: CircuitLayout, carCount: number, textures: SceneTextures) {
@@ -149,8 +153,8 @@ export class RaceScene {
     }
   }
 
-  /** Pose everything `alpha` of the way from `prev` to `curr`. */
-  sync(prev: SimWorld, curr: SimWorld, alpha: number): void {
+  /** Pose everything `alpha` of the way from `prev` to `curr`; `dt` is real seconds since the last frame (camera easing). */
+  sync(prev: SimWorld, curr: SimWorld, alpha: number, dt: number): void {
     const L = this.track.length;
     for (let i = 0; i < this.cars.length; i++) {
       const a = prev.cars[i]!;
@@ -163,21 +167,36 @@ export class RaceScene {
       const g = this.cars[i]!;
       g.position.set(this.pose.x, this.pose.y, this.pose.z);
       g.rotation.y = -this.pose.heading;
-
-      if (i === 0) {
-        // Low Top Gear-style chase camera; roll/FOV/zoom feel lands in v2-06.
-        const steer = a.steer + (b.steer - a.steer) * alpha;
-        poseAt(this.center, s - 7.5, x * 0.85, this.pose);
-        this.camera.position.set(this.pose.x, this.pose.y + 2.6, this.pose.z);
-        poseAt(this.center, s + 14, x * 0.7 + steer * 0.6, this.pose);
-        this.look.set(this.pose.x, this.pose.y + 0.9, this.pose.z);
-        this.camera.lookAt(this.look);
-      }
+      if (i === 0) this.placeCamera(s, x, a.steer + (b.steer - a.steer) * alpha, a.speed + (b.speed - a.speed) * alpha, b, dt);
     }
     this.camera.updateMatrixWorld();
     this.scenery.update(this.camera);
     this.horizon.update(this.camera);
     this.scene.updateMatrixWorld();
+  }
+
+  /** Low Top Gear-style chase camera: rolls into turns, widens on speed/boost, pulls in on drifts, clears crests. */
+  private placeCamera(s: number, x: number, steer: number, speed: number, car: { boostTime: number; drift: number }, dt: number): void {
+    const t = CHASE_TUNING;
+    const inp = this.chaseIn;
+    inp.curvature = curvatureAt(this.track, ((s % this.track.length) + this.track.length) % this.track.length);
+    inp.speed = speed;
+    inp.boosting = car.boostTime > 0;
+    inp.drifting = car.drift !== 0;
+    const st = updateChase(this.chase, inp, dt);
+    const back = t.distance - st.zoom;
+    for (let k = 0; k < 3; k++) this.crestYs[k] = poseAt(this.center, s - back * (k / 3), x, this.pose).y;
+    poseAt(this.center, s - back, x * 0.85, this.pose);
+    const camY = crestSafeHeight(this.pose.y, this.crestYs);
+    this.camera.position.set(this.pose.x, camY, this.pose.z);
+    poseAt(this.center, s + t.lookAhead, x * 0.7 + steer * 0.6, this.pose);
+    this.look.set(this.pose.x, this.pose.y + t.lookHeight, this.pose.z);
+    this.camera.lookAt(this.look);
+    this.camera.rotateZ(-st.roll);
+    if (Math.abs(this.camera.fov - st.fov) > 0.01) {
+      this.camera.fov = st.fov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 }
 
@@ -222,8 +241,8 @@ export class View {
     this.race.camera.updateProjectionMatrix();
   }
 
-  render(prev: SimWorld, curr: SimWorld, alpha: number): void {
-    this.race.sync(prev, curr, alpha);
+  render(prev: SimWorld, curr: SimWorld, alpha: number, dt: number): void {
+    this.race.sync(prev, curr, alpha, dt);
     this.pixels.render(this.renderer, this.race.scene, this.race.camera);
   }
 }
