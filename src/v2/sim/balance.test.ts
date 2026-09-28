@@ -17,7 +17,7 @@ import sunset from '../track/circuits/sunset-beach.json';
 const circuit = parseTrackFile(sunset);
 const track = buildSimTrack(circuit.def);
 const line = buildRacingLine(track, circuit.layout.racingLine);
-const base = { track, grid: circuit.layout.grid, line, itemRows: circuit.layout.itemBoxes };
+const base = { track, grid: circuit.layout.grid, line, itemRows: circuit.layout.itemBoxes, coins: circuit.layout.coins };
 const SEEDS = Array.from({ length: 50 }, (_, i) => i + 1);
 
 function distribution(band: boolean): number[] {
@@ -97,7 +97,7 @@ describe('balance: every engine class meets its own target', () => {
 describe('mirror mode', () => {
   const mirrored = parseTrackFile(mirrorTrackFile(sunset as TrackFileV2));
   const mTrack = buildSimTrack(mirrored.def);
-  const mBase = { track: mTrack, grid: mirrored.layout.grid, line: buildRacingLine(mTrack, mirrored.layout.racingLine), itemRows: mirrored.layout.itemBoxes };
+  const mBase = { track: mTrack, grid: mirrored.layout.grid, line: buildRacingLine(mTrack, mirrored.layout.racingLine), itemRows: mirrored.layout.itemBoxes, coins: mirrored.layout.coins };
 
   it('flips every turn and keeps the lap length', () => {
     expect(mTrack.length).toBeCloseTo(track.length, 6);

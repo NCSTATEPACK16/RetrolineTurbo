@@ -4,6 +4,7 @@ import { wrapS, type SimTrack } from './track.js';
 import { resolveBumps } from './bump.js';
 import { stepSlipstream } from './slipstream.js';
 import { createItems, stepItems, type ItemState } from './items.js';
+import { createCoins, stepCoins, type CoinLine, type CoinState } from './coins.js';
 
 /**
  * Race rules on top of the driving sim: grid, countdown + rocket start,
@@ -67,6 +68,8 @@ export interface RaceState {
   readonly draft: Float64Array;
   /** Items (boxes, held items, slicks, seekers); disabled in Pure mode. */
   readonly items: ItemState;
+  /** Coins on the track and per car. */
+  readonly coins: CoinState;
 }
 
 export interface RaceOptions {
@@ -74,6 +77,8 @@ export interface RaceOptions {
   /** Item boxes on the track (false = Pure mode). */
   items?: boolean;
   itemRows?: readonly { s: number; count: number }[];
+  /** Coin lines from the track layout. */
+  coins?: readonly CoinLine[];
   seed?: number;
 }
 
@@ -116,6 +121,7 @@ export function createRace(
     racers, order: racers.map((_, i) => i), isGhost: (car) => racers[car]!.ghost > 0,
     draft: new Float64Array(racers.length),
     items: createItems(track, opts.itemRows ?? [], racers.length, (opts.items ?? false) && (opts.itemRows?.length ?? 0) > 0, opts.seed ?? 1),
+    coins: createCoins(track, opts.coins ?? [], world),
   };
 }
 
@@ -162,6 +168,7 @@ export function stepRace(race: RaceState, world: SimWorld, track: SimTrack, inpu
   resolveBumps(world, track, race.isGhost);
   stepSlipstream(world, track, race.draft);
   stepItems(race.items, race, world, track, inputs);
+  stepCoins(race.coins, world, track, race.items.spin, DT);
   race.tick++;
 
   const n = RACE.checkpoints;

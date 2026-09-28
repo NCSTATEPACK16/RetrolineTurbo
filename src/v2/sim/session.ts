@@ -28,6 +28,8 @@ export interface SessionConfig {
   itemRows?: readonly { s: number; count: number }[];
   /** Pure mode: no items. */
   pure?: boolean;
+  /** Coin lines from the track layout. */
+  coins?: readonly { s: number; x: number; count: number; spacing: number }[];
   /** Engine class (default 100): scales every car's engine and the CPUs' sharpness. */
   engineClass?: EngineClass;
 }
@@ -58,7 +60,7 @@ export function createSession(cfg: SessionConfig): Session {
   const params = cfg.field.map((_, i) => classParams(cfg.params?.[i] ?? statsToParams(DEFAULT_STATS), cls));
   const world = createWorld(n, params);
   const race = createRace(world, cfg.track, cfg.grid, gridSlots(cfg.field), cfg.field.map((f) => f === null), {
-    laps: cfg.laps ?? 3, items: !cfg.pure, itemRows: cfg.itemRows ?? [], seed: cfg.seed ?? 1,
+    laps: cfg.laps ?? 3, items: !cfg.pure, itemRows: cfg.itemRows ?? [], coins: cfg.coins ?? [], seed: cfg.seed ?? 1,
   });
   const prev = createWorld(n, params);
   copyWorld(prev, world);

@@ -3,6 +3,7 @@ import type { RaceState } from '../../sim/race.js';
 import { lapOf, RACE } from '../../sim/race.js';
 import type { SimWorld } from '../../sim/world.js';
 import { DT } from '../../sim/world.js';
+import { COINS } from '../../sim/coins.js';
 import type { Centerline } from '../centerline.js';
 import { FONT, FONT_H, FONT_W, ICONS, ITEM_ICON, fitPoints, ordinal, positionColor, textWidthPx } from './pixels.js';
 import { Popups, type Mood } from './popups.js';
@@ -137,6 +138,10 @@ export class Hud {
       const ly = r.y + 8 + FONT_H * big;
       this.icon('flag', r.x + 4, ly);
       this.text(`${Math.min(race.laps, lapOf(me) + 1)}/${race.laps}`, r.x + 16, ly + 3, 1, 'w');
+      // Coins held: gold when the buff is maxed.
+      this.icon('coin', r.x + 4, ly + 13);
+      const coins = race.coins.held[player]!;
+      this.text(String(coins), r.x + 16, ly + 16, 1, coins >= COINS.max ? 'y' : 'w');
     }
 
     // Item slot, top centre.

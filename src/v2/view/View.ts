@@ -8,6 +8,8 @@ import { buildCenterline, poseAt, type Centerline, type Pose } from './centerlin
 import { PixelPipeline } from './PixelPipeline.js';
 import { CrtOverlay } from './crt.js';
 import { ItemsView } from './ItemsView.js';
+import { CoinsView } from './CoinsView.js';
+import type { CoinState } from '../sim/coins.js';
 import type { ItemState } from '../sim/items.js';
 import { JUICE, PARTICLE_COLORS, Particles, Shake, SpeedLines, prefersReducedMotion } from './Juice.js';
 import { Scenery, Horizon, pixelTexture, type HorizonTheme } from './Scenery.js';
@@ -191,6 +193,7 @@ export class RaceScene {
   private readonly v = new THREE.Vector3();
   private lastEventTick = -1;
   private itemsView: ItemsView | null = null;
+  private coinsView: CoinsView | null = null;
   private readonly carGroups: THREE.Object3D[] = [];
   private readonly horizon: Horizon;
 
@@ -242,19 +245,23 @@ export class RaceScene {
   applyKit(kit: CarKit, looks: readonly CarLook[]): void {
     for (let i = 0; i < this.cars.length; i++) {
       const rig = this.cars[i]!;
-      rig.paint = kit.paint(this.carColors[i]!);
+      if (rig.paint instanceof THREE.MeshToonMaterial) rig.paint.color.set(this.carColors[i]!);
+      else rig.paint = kit.paint(this.carColors[i]!);
       const { flame } = kit.assemble(looks[i % looks.length]!, rig.body, rig.paint);
       rig.flame.position.set(flame.x, flame.y, flame.z + 0.35);
     }
   }
 
   /** Which car each local player's camera chases. Player cars wear the hero colours (red, then blue). */
-  setFoci(foci: readonly number[]): void {
+  setFoci(foci: readonly number[], paints: readonly (string | undefined)[] = []): void {
     this.active = Math.max(1, Math.min(MAX_LOCAL_PLAYERS, foci.length));
     foci.forEach((f, k) => { if (k < MAX_LOCAL_PLAYERS) this.chasers[k]!.focus = f; });
-    for (let i = 0, rest = foci.length; i < this.cars.length; i++) {
+    const mineColors = foci.map((_, k) => paints[k] ?? BODY_COLORS[k]!);
+    // CPUs take the remaining colours, skipping any a player is wearing.
+    const others = BODY_COLORS.filter((c) => !mineColors.includes(c));
+    for (let i = 0, rest = 0; i < this.cars.length; i++) {
       const mine = foci.indexOf(i);
-      const colour = BODY_COLORS[mine >= 0 ? mine : rest++ % BODY_COLORS.length]!;
+      const colour = mine >= 0 ? mineColors[mine]! : others[rest++ % others.length]!;
       this.carColors[i] = colour;
       this.cars[i]!.paint.color.set(colour);
     }
@@ -265,11 +272,20 @@ export class RaceScene {
     return this.chasers[0]!.camera;
   }
 
-  /** Show a race's items (boxes, slicks, seekers, shields). Call again for each new race. */
-  bindItems(items: ItemState): void {
+  /** Show a race's items (boxes, slicks, seekers, shields) and coins. Call again for each new race. */
+  bindItems(items: ItemState, coins?: CoinState): void {
     if (this.itemsView) this.scene.remove(this.itemsView.group);
     this.itemsView = new ItemsView(items, this.center, this.track, this.cars.length);
     this.scene.add(this.itemsView.group);
+    if (this.coinsView) {
+      this.scene.remove(this.coinsView.mesh);
+      this.coinsView.mesh.geometry.dispose();
+      this.coinsView = null;
+    }
+    if (coins) {
+      this.coinsView = new CoinsView(coins, this.center);
+      this.scene.add(this.coinsView.mesh);
+    }
   }
 
   /** Pose everything `alpha` of the way from `prev` to `curr`; `dt` is real seconds since the last frame (camera easing). */
@@ -311,6 +327,7 @@ export class RaceScene {
     this.lastEventTick = curr.tick;
     this.particles.update(dt);
     this.itemsView?.update(dt, this.carGroups, curr);
+    this.coinsView?.update(dt);
     this.scene.updateMatrixWorld();
     this.aim(0);
   }
@@ -395,6 +412,7 @@ export class View {
   race: RaceScene;
   private readonly textures: SceneTextures;
   private foci: readonly number[] = [0];
+  private paints: readonly (string | undefined)[] = [];
   private kit: CarKit | null = null;
   /** Each car's parts (cycled over the field). */
   looks: readonly CarLook[] = DEFAULT_LOOKS;
@@ -431,10 +449,17 @@ export class View {
     this.race.applyKit(kit, looks);
   }
 
+  /** Each car's parts; rebuilds the cars now if the kit is loaded. */
+  setLooks(looks: readonly CarLook[]): void {
+    this.looks = looks;
+    if (this.kit) this.race.applyKit(this.kit, looks);
+  }
+
   /** Local players' cars, player 1 first: one fills the screen, two split it. */
-  setPlayers(foci: readonly number[]): void {
+  setPlayers(foci: readonly number[], paints: readonly (string | undefined)[] = this.paints): void {
     this.foci = [...foci];
-    this.race.setFoci(foci);
+    this.paints = [...paints];
+    this.race.setFoci(foci, paints);
     for (const ch of this.race.chasers) ch.fovScale = this.race.active > 1 ? SPLIT_FOV_SCALE : 1;
     this.resize();
   }

@@ -13,6 +13,8 @@ export interface MenuOption {
   set(i: number): void;
   /** Hidden rows are skipped (e.g. player 2's settings outside Versus). */
   visible?: () => boolean;
+  /** An action row (e.g. open the garage): OK or ◀▶ runs it; `values[0]` is shown as its caption. */
+  action?: () => void;
 }
 
 export type MenuNav = 'up' | 'down' | 'left' | 'right' | 'ok' | 'back';
@@ -111,6 +113,7 @@ export class Menu {
   }
 
   private step(opt: MenuOption, d: number): void {
+    if (opt.action) return opt.action();
     opt.set((opt.get() + d + opt.values.length) % opt.values.length);
     const count = this.rows().length;
     if (this.sel > count) this.sel = count; // a row may have hidden itself

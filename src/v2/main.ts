@@ -21,7 +21,12 @@ import { JUICE } from './view/Juice.js';
 import { RaceOverlay } from './ui/raceOverlay.js';
 import { Menu, PadNav, keyNav, type MenuNav } from './ui/menu.js';
 import { Hud } from './view/hud/Hud.js';
-import { loadCarKit } from './view/carKit.js';
+import { loadCarKit, DEFAULT_LOOKS, type CarLook } from './view/carKit.js';
+import { Garage } from './ui/garage.js';
+import { DEFAULT_STATS, statsToParams } from './sim/car.js';
+import { buildStats, PAINTS, PART_BY_ID } from './sim/parts.js';
+import { awardCup, parseProfile, raceCredits } from './sim/economy.js';
+import { standings } from './sim/cup.js';
 
 /**
  * v2 entry: the one place the sim and the view meet, plus the flow between
@@ -59,7 +64,16 @@ const saveSettings = (): void => {
   try { localStorage.setItem('rt2.settings', JSON.stringify(settings)); } catch { /* ignore */ }
 };
 
-type Screen = 'menu' | 'race' | 'results' | 'standings' | 'trophy';
+/** The player's garage and wallet; per browser until online saves land (net/). */
+const profile = (() => {
+  try { return parseProfile(JSON.parse(localStorage.getItem('rt2.profile') ?? 'null')); } catch { return parseProfile(null); }
+})();
+const saveProfile = (): void => {
+  try { localStorage.setItem('rt2.profile', JSON.stringify(profile)); } catch { /* ignore */ }
+};
+const paintHex = (): string => PAINTS.find((p) => p.id === profile.build.paint)?.color ?? PAINTS[0]!.color;
+
+type Screen = 'menu' | 'garage' | 'race' | 'results' | 'standings' | 'trophy';
 let screen: Screen = 'menu';
 let cup: CupState | null = null;
 let current: Loaded = load('sunset-beach', false);
@@ -81,14 +95,19 @@ let session: Session;
 let recording: InputRecording;
 /** Start a race on `current` with the current field. */
 function newRace(): void {
+  // Player 1 drives their garage build; everyone else a stock car (player 2 borrows the stock car too).
+  const mine = humans[0];
+  const params = field.map((_, i) => statsToParams(i === mine ? buildStats(profile.build) : DEFAULT_STATS));
   session = createSession({
-    track: current.track, grid: current.circuit.layout.grid, line: current.line, field, seed: seed++,
-    itemRows: current.circuit.layout.itemBoxes, pure: !settings.items, engineClass: screen === 'menu' ? 100 : settings.cls,
+    track: current.track, grid: current.circuit.layout.grid, line: current.line, field, seed: seed++, params,
+    itemRows: current.circuit.layout.itemBoxes, coins: current.circuit.layout.coins,
+    pure: !settings.items, engineClass: screen === 'menu' ? 100 : settings.cls,
   });
   humans.forEach((car, k) => { session.world.assist[car] = settings.junior[k] ? JUNIOR : 0; });
   recording = new InputRecording();
-  view.setPlayers(humans.length ? humans : [0]);
-  view.race.bindItems(session.race.items);
+  view.setPlayers(humans.length ? humans : [0], mine === undefined ? [] : [paintHex()]);
+  view.setLooks(field.map((_, i): CarLook => (i === mine ? profile.build : DEFAULT_LOOKS[i % DEFAULT_LOOKS.length]!)));
+  view.race.bindItems(session.race.items, session.race.coins);
   hud.reset();
   overlay.names = names;
 }
@@ -115,7 +134,17 @@ view.onResize();
 const overlay = new RaceOverlay(stage, names);
 const menu = new Menu(stage);
 newRace();
-loadCarKit().then((kit) => view.setKit(kit), (e: unknown) => console.warn('car kit failed to load; using stand-in cars', e));
+const garage = new Garage(stage, profile);
+garage.onChange = saveProfile;
+garage.onDone = () => {
+  garage.hide();
+  screen = 'menu';
+  showMenu();
+};
+loadCarKit().then((kit) => {
+  view.setKit(kit);
+  garage.setKit(kit);
+}, (e: unknown) => console.warn('car kit failed to load; using stand-in cars', e));
 
 const onOff = ['OFF', 'ON'] as const;
 function openMenu(): void {
@@ -125,6 +154,9 @@ function openMenu(): void {
   useCircuit(load('sunset-beach', false));
   setField(0);
   newRace();
+  showMenu();
+}
+function showMenu(): void {
   menu.show('Retroline Turbo', '2.0', [
     { icon: '🏁', label: 'Mode', values: ['Grand Prix', 'Quick Race', 'Versus 2P'], get: () => MODES.indexOf(settings.mode), set: (i) => { settings.mode = MODES[i]!; } },
     { icon: '⚙️', label: 'Class', values: ['★ 50cc', '★★ 100cc', '★★★ 150cc'], get: () => ENGINE_CLASSES.indexOf(settings.cls), set: (i) => { settings.cls = ENGINE_CLASSES[i]!; } },
@@ -132,7 +164,14 @@ function openMenu(): void {
     { icon: '🎁', label: 'Items', values: onOff, get: () => +settings.items, set: (i) => { settings.items = i === 1; } },
     { icon: '🧒', label: 'Junior P1', values: onOff, get: () => +settings.junior[0]!, set: (i) => { settings.junior[0] = i === 1; } },
     { icon: '🧒', label: 'Junior P2', values: onOff, get: () => +settings.junior[1]!, set: (i) => { settings.junior[1] = i === 1; }, visible: () => settings.mode === 'versus' },
+    { icon: '🔧', label: 'Garage', values: [`💰 ${profile.credits}  ▶`], get: () => 0, set: () => {}, action: openGarage },
   ], 'GO!', 'Arrows / WASD / pad to choose · Enter or A to race · Esc for this menu');
+}
+function openGarage(): void {
+  saveSettings();
+  menu.hide();
+  screen = 'garage';
+  garage.show();
 }
 menu.onGo = () => {
   saveSettings();
@@ -157,9 +196,14 @@ const OK_HINT = '\n\nEnter / A ▶ ';
 function finishRace(): void {
   screen = 'results';
   if (cup) recordRace(cup, results(session.race));
+  // Credits for every local player go into the shared garage wallet.
+  let earned = 0;
+  for (const h of humans) earned += raceCredits(session.race.racers[h]!.position, session.race.coins.collected[h]!, settings.cls);
+  profile.credits += earned;
+  saveProfile();
   // Past the flag, the players' cars drive themselves on a cool-down lap behind the results.
   humans.forEach((h, k) => { session.drivers[h] = createCpuDriver(REFERENCE_PLAYER, 101 + k); });
-  overlay.show(overlay.raceText(session.race, cup) + OK_HINT + (cup ? 'Cup points' : 'Race again   Esc ▶ Menu'));
+  overlay.show(overlay.raceText(session.race, cup) + `\n\n💰 +${earned}` + OK_HINT + (cup ? 'Cup points' : 'Race again   Esc ▶ Menu'));
 }
 
 /** Advance the between-race screens. */
@@ -171,12 +215,17 @@ function proceed(): void {
   } else if (screen === 'standings' && cup) {
     if (!cupOver(cup)) return startRound();
     screen = 'trophy';
-    overlay.show(humans.map((h) => overlay.trophyText(cup!, h)).join('\n') + OK_HINT + 'Menu');
+    const place = standings(cup).find((s) => s.car === humans[0])!.place;
+    const unlocked = awardCup(profile, cup.def.name, settings.cls, place);
+    saveProfile();
+    const news = unlocked.length ? `\n\nNEW PARTS: ${unlocked.map((id) => PART_BY_ID.get(id)!.name).join(', ')}` : '';
+    overlay.show(humans.map((h) => overlay.trophyText(cup!, h)).join('\n') + news + OK_HINT + 'Menu');
   } else if (screen === 'trophy') openMenu();
 }
 
 function nav(n: MenuNav): void {
   if (screen === 'menu') menu.nav(n);
+  else if (screen === 'garage') garage.nav(n);
   else if (screen === 'race') { if (n === 'back') openMenu(); }
   else if (n === 'ok') proceed();
   else if (n === 'back') openMenu();
@@ -190,6 +239,7 @@ window.addEventListener('keydown', (e) => {
   // In a race only Esc means anything here; driving keys go through the Keyboard sampler.
   const n = keyNav(e.code);
   if (!n || (screen === 'race' && n !== 'back')) return;
+  if (screen === 'garage' && e.repeat && n === 'ok') return;
   e.preventDefault();
   nav(n);
 });
@@ -231,6 +281,7 @@ const loop = createLoop({
     const pn = screen === 'race' ? null : padNav.poll(readPad(0), dt);
     if (pn) nav(pn);
     view.render(session.prev, session.world, alpha, dt);
+    garage.frame(dt);
     hud.clear();
     if (screen === 'race') {
       for (let k = 0; k < humans.length; k++) {

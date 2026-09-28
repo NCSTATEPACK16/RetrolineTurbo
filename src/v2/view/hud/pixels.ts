@@ -73,6 +73,10 @@ export const ICONS: Readonly<Record<string, readonly string[]>> = {
     'kwkwkw.....', 'kkwkwk.....', 'kwkwkw.....', 'kkwkwk.....', 'k..........', 'k..........',
     'k..........', 'k..........', '...........', '...........', '...........',
   ],
+  coin: [
+    '...kkkkk...', '..kyyyyyk..', '.kyyoooyyk.', 'kyyoyyyoyyk', 'kyyoyyyyyyk', 'kyyoyyyyyyk',
+    'kyyoyyyoyyk', '.kyyoooyyk.', '..kyyyyyk..', '...kkkkk...', '...........',
+  ],
   wrongWay: [
     '....rr.....', '...rr......', '..rrrrrrr..', '...rr...r..', '....rr..r..', '........r..',
     '........r..', '..r.....r..', '..rrrrrrr..', '...........', '...........',
