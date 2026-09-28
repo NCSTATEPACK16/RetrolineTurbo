@@ -1,0 +1,199 @@
+import palette from '../../../assets/palette.json';
+import type { RaceState } from '../../sim/race.js';
+import { lapOf, RACE } from '../../sim/race.js';
+import type { SimWorld } from '../../sim/world.js';
+import { DT } from '../../sim/world.js';
+import type { Centerline } from '../centerline.js';
+import { FONT, FONT_H, FONT_W, ICONS, ITEM_ICON, fitPoints, ordinal, positionColor, textWidthPx } from './pixels.js';
+import { Popups, type Mood } from './popups.js';
+
+/**
+ * Icon-first race HUD drawn on its own canvas at the internal resolution and
+ * upscaled by the same whole number as the game, so it is as chunky and crisp
+ * as the scene. Everything a 5-year-old needs reads without words: a big
+ * position number, a chequered flag with laps, the item in a box, a mini-map
+ * with coloured dots, and a face that pops up when something happens.
+ * Glyphs and icons are pre-rendered once; per-frame work is drawImage/fillRect.
+ */
+const KEY_COLORS: Record<string, string> = {
+  w: palette.ui.white, k: palette.outline, y: palette.ui.gold, o: palette.sky.sunset[4]!, r: palette.ui.red,
+  c: palette.ui.cyan, m: palette.ui.magenta, g: palette.chrome[2]!, b: palette.ui.blue,
+};
+
+function bitmap(rows: readonly string[], color: (ch: string) => string | null): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = rows[0]!.length;
+  c.height = rows.length;
+  const g = c.getContext('2d')!;
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const col = color(row[x]!);
+      if (col) {
+        g.fillStyle = col;
+        g.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+  return c;
+}
+
+export interface HudRect { x: number; y: number; w: number; h: number }
+
+export class Hud {
+  readonly canvas: HTMLCanvasElement;
+  private readonly g: CanvasRenderingContext2D;
+  private readonly glyphs = new Map<string, HTMLCanvasElement>(); // `${color}${ch}`
+  private readonly icons = new Map<string, HTMLCanvasElement>();
+  private readonly map: HTMLCanvasElement;
+  private readonly mapFit: ReturnType<typeof fitPoints>;
+  readonly popups = new Popups();
+  private blink = 0;
+
+  constructor(canvas: HTMLCanvasElement, center: Centerline, private readonly carColors: readonly string[]) {
+    this.canvas = canvas;
+    this.g = canvas.getContext('2d')!;
+    for (const key of Object.keys(KEY_COLORS)) {
+      for (const [ch, rows] of Object.entries(FONT)) this.glyphs.set(key + ch, bitmap(rows, (p) => (p === '#' ? KEY_COLORS[key]! : null)));
+    }
+    for (const [name, rows] of Object.entries(ICONS)) this.icons.set(name, bitmap(rows, (p) => KEY_COLORS[p] ?? null));
+
+    // Mini-map outline, drawn once.
+    const xs: number[] = [], zs: number[] = [];
+    for (let i = 0; i < center.count; i += 6) { xs.push(center.pos[i * 3]!); zs.push(center.pos[i * 3 + 2]!); }
+    this.map = document.createElement('canvas');
+    this.map.width = 64;
+    this.map.height = 48;
+    this.mapFit = fitPoints(xs, zs, 64, 48, 3);
+    const mg = this.map.getContext('2d')!;
+    mg.fillStyle = 'rgba(16,16,24,0.55)';
+    mg.fillRect(0, 0, 64, 48);
+    for (const [col, w] of [[palette.outline, 3], [palette.ui.white, 1]] as const) {
+      mg.fillStyle = col;
+      for (let i = 0; i < xs.length; i++) {
+        const { x, y } = this.toMap(xs[i]!, zs[i]!);
+        mg.fillRect(Math.round(x - (w - 1) / 2), Math.round(y - (w - 1) / 2), w, w);
+      }
+    }
+  }
+
+  private toMap(x: number, z: number): { x: number; y: number } {
+    const f = this.mapFit;
+    return { x: (x - f.minX) * f.scale + f.ox, y: (z - f.minZ) * f.scale + f.oy };
+  }
+
+  resize(width: number, height: number, cssScale: number): void {
+    this.canvas.width = width;
+    this.canvas.height = height;
+    this.canvas.style.width = `${width * cssScale}px`;
+    this.canvas.style.height = `${height * cssScale}px`;
+    this.g.imageSmoothingEnabled = false;
+  }
+
+  clear(): void {
+    this.g.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  private text(s: string, x: number, y: number, scale: number, color: string): void {
+    let cx = x;
+    for (const ch of s) {
+      const gl = this.glyphs.get(color + ch);
+      if (gl) this.g.drawImage(gl, cx, y, FONT_W * scale, FONT_H * scale);
+      cx += (FONT_W + 1) * scale;
+    }
+  }
+
+  private icon(name: string, x: number, y: number, scale = 1): void {
+    const ic = this.icons.get(name);
+    if (ic) this.g.drawImage(ic, x, y, 11 * scale, 11 * scale);
+  }
+
+  /** Draw one player's HUD inside `r` (the whole screen, or their half in split-screen). */
+  draw(race: RaceState, world: SimWorld, center: Centerline, player: number, r: HudRect, junior: boolean, dt: number): void {
+    const g = this.g;
+    this.blink += dt;
+    const me = race.racers[player]!;
+    const items = race.items;
+    this.popups.update(race, world, player, items.hits[player]!);
+    const compact = r.h < 180;
+
+    if (race.phase !== 'countdown') {
+      // Position: big number, small suffix, podium colours.
+      const pc = positionColor(me.position);
+      const big = compact ? 3 : 4;
+      this.text(String(me.position), r.x + 5, r.y + 5, big, 'k');
+      this.text(String(me.position), r.x + 4, r.y + 4, big, pc);
+      this.text(ordinal(me.position), r.x + 6 + FONT_W * big, r.y + 4, 1, pc);
+      // Laps: chequered flag + n/N.
+      const ly = r.y + 8 + FONT_H * big;
+      this.icon('flag', r.x + 4, ly);
+      this.text(`${Math.min(race.laps, lapOf(me) + 1)}/${race.laps}`, r.x + 16, ly + 3, 1, 'w');
+    }
+
+    // Item slot, top centre.
+    const bx = r.x + Math.round(r.w / 2) - 9, by = r.y + 4;
+    g.fillStyle = palette.outline;
+    g.fillRect(bx, by, 19, 19);
+    g.fillStyle = items.enabled ? palette.ui.white : palette.chrome[1]!;
+    g.fillRect(bx + 1, by + 1, 17, 1); g.fillRect(bx + 1, by + 17, 17, 1);
+    g.fillRect(bx + 1, by + 1, 1, 17); g.fillRect(bx + 17, by + 1, 1, 17);
+    const held = items.held[player]!;
+    if (held) this.icon(ITEM_ICON[held]!, bx + 4, by + 4);
+
+    if (junior) this.text('JR', r.x + r.w - 12, r.y + 4, 1, 'c');
+
+    // Mini-map with every racer as a dot; you are the big red one.
+    if (!compact) {
+      const mx = r.x + r.w - 68, my = r.y + r.h - 52;
+      g.drawImage(this.map, mx, my);
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < world.cars.length; i++) {
+          if ((i === player) !== (pass === 1)) continue; // draw the player last, on top
+          const c = world.cars[i]!;
+          const k = Math.floor(((c.s % center.length) / center.length) * center.count) % center.count;
+          const p = this.toMap(center.pos[k * 3]!, center.pos[k * 3 + 2]!);
+          const size = i === player ? 4 : 3;
+          g.fillStyle = palette.outline;
+          g.fillRect(Math.round(mx + p.x - size / 2) - 1, Math.round(my + p.y - size / 2) - 1, size + 2, size + 2);
+          g.fillStyle = this.carColors[i] ?? palette.ui.white;
+          g.fillRect(Math.round(mx + p.x - size / 2), Math.round(my + p.y - size / 2), size, size);
+        }
+      }
+    }
+
+    // Portrait pop-up, bottom-left.
+    const pop = this.popups.current;
+    if (pop) this.face(r.x + 4, r.y + r.h - 30, this.carColors[pop.car] ?? palette.ui.white, pop.mood);
+
+    // Countdown and GO.
+    const cx = r.x + r.w / 2, cy = r.y + r.h * 0.38;
+    if (race.phase === 'countdown') {
+      const n = String(Math.ceil((race.countdownTicks - race.tick) * DT));
+      const s = compact ? 5 : 7;
+      this.text(n, Math.round(cx - (textWidthPx(n) * s) / 2) + 2, Math.round(cy) + 2, s, 'k');
+      this.text(n, Math.round(cx - (textWidthPx(n) * s) / 2), Math.round(cy), s, 'y');
+    } else if (race.tick - race.countdownTicks < 50) {
+      const s = compact ? 4 : 6;
+      this.text('GO!', Math.round(cx - (textWidthPx('GO!') * s) / 2) + 2, Math.round(cy) + 2, s, 'k');
+      this.text('GO!', Math.round(cx - (textWidthPx('GO!') * s) / 2), Math.round(cy), s, 'c');
+    }
+
+    // Wrong way: a blinking turn-around arrow.
+    if (me.wrongWay > RACE.wrongWaySeconds && (this.blink % 0.5) < 0.3) this.icon('wrongWay', Math.round(cx - 11), r.y + 30, 2);
+  }
+
+  /** Placeholder portrait until the roster's art lands: a face in the driver's colour. */
+  private face(x: number, y: number, color: string, mood: Mood): void {
+    const g = this.g;
+    g.fillStyle = palette.outline;
+    g.fillRect(x, y, 26, 26);
+    g.fillStyle = color;
+    g.fillRect(x + 2, y + 2, 22, 22);
+    g.fillStyle = palette.outline;
+    const browY = mood === 'angry' ? 7 : 8;
+    g.fillRect(x + 7, y + 10, 3, 3); g.fillRect(x + 16, y + 10, 3, 3);
+    if (mood === 'angry') { g.fillRect(x + 6, y + browY, 5, 1); g.fillRect(x + 15, y + browY, 5, 1); }
+    if (mood === 'happy') { g.fillRect(x + 8, y + 17, 10, 2); g.fillRect(x + 7, y + 16, 1, 1); g.fillRect(x + 18, y + 16, 1, 1); }
+    else if (mood === 'angry') { g.fillRect(x + 8, y + 17, 10, 2); g.fillRect(x + 7, y + 19, 1, 1); g.fillRect(x + 18, y + 19, 1, 1); }
+    else g.fillRect(x + 8, y + 18, 10, 1);
+  }
+}

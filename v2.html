@@ -8,7 +8,8 @@
       :root { color-scheme: dark; }
       html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
       #stage { position: relative; display: grid; place-items: center; width: 100vw; height: 100vh; }
-      #v2, #crt { grid-area: 1 / 1; }
+      #v2, #hud, #crt { grid-area: 1 / 1; }
+      #hud { pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; }
       #v2 { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
       /* One dark scanline per internal row (--row = upscale factor in px), plus a soft vignette. */
       #crt {
@@ -22,7 +23,7 @@
     </style>
   </head>
   <body>
-    <div id="stage"><canvas id="v2"></canvas><div id="crt" hidden></div></div>
+    <div id="stage"><canvas id="v2"></canvas><canvas id="hud"></canvas><div id="crt" hidden></div></div>
     <script type="module" src="/src/v2/main.ts"></script>
   </body>
 </html>

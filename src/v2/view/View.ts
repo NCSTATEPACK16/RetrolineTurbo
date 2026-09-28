@@ -140,7 +140,9 @@ function buildCar(color: string): CarRig {
 export class RaceScene {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 900);
-  private readonly center: Centerline;
+  readonly center: Centerline;
+  /** Each car's body colour (CSS hex), for the HUD's mini-map and portraits. */
+  readonly carColors: string[] = [];
   private readonly cars: CarRig[] = [];
   private readonly pose: Pose = { x: 0, y: 0, z: 0, heading: 0 };
   private readonly look = new THREE.Vector3();
@@ -199,6 +201,7 @@ export class RaceScene {
     for (let i = 0; i < carCount; i++) {
       // The chased car always wears the hero red; everyone else takes the next colour.
       const colour = i === focus ? 0 : 1 + ((i < focus ? i : i - 1) % (bodyColors.length - 1));
+      this.carColors.push(bodyColors[colour]!);
       const car = buildCar(bodyColors[colour]!);
       this.cars.push(car);
       this.carGroups.push(car.group);
@@ -318,6 +321,10 @@ export class View {
   readonly crt: CrtOverlay;
   width = 0;
   height = 0;
+  /** Current whole-number CSS upscale. */
+  scale = 1;
+  /** Called after every resize (the HUD matches the new size and scale). */
+  onResize: (() => void) | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement, crtEl: HTMLElement, track: SimTrack, layout: CircuitLayout, carCount: number,
@@ -350,6 +357,8 @@ export class View {
     this.crt.fit(width * k, height * k, k);
     this.race.camera.aspect = width / height;
     this.race.camera.updateProjectionMatrix();
+    this.scale = k;
+    this.onResize?.();
   }
 
   render(prev: SimWorld, curr: SimWorld, alpha: number, dt: number): void {

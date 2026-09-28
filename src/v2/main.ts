@@ -14,6 +14,7 @@ import { mapGamepad, mergeInputs, readPad } from './input/gamepad.js';
 import { View } from './view/View.js';
 import { JUICE } from './view/Juice.js';
 import { RaceOverlay } from './ui/raceOverlay.js';
+import { Hud } from './view/hud/Hud.js';
 
 /**
  * v2 entry: the one place the sim and the view meet. Each fixed step samples
@@ -47,6 +48,9 @@ const keyboard = new Keyboard();
 
 const canvas = document.getElementById('v2') as HTMLCanvasElement;
 const view: View = new View(canvas, document.getElementById('crt')!, track, circuit.layout, FIELD.length, PLAYER);
+const hud = new Hud(document.getElementById('hud') as HTMLCanvasElement, view.race.center, view.race.carColors);
+view.onResize = () => hud.resize(view.width, view.height, view.scale);
+view.onResize();
 newRace();
 const overlay = new RaceOverlay(document.getElementById('stage')!, NAMES);
 window.addEventListener('resize', () => view.resize());
@@ -84,8 +88,11 @@ const loop = createLoop({
   },
   render(alpha) {
     const now = performance.now();
-    view.render(session.prev, session.world, alpha, Math.min(0.1, (now - lastFrame) / 1000));
-    overlay.update(session.race, PLAYER, junior, pure);
+    const dt = Math.min(0.1, (now - lastFrame) / 1000);
+    view.render(session.prev, session.world, alpha, dt);
+    hud.clear();
+    hud.draw(session.race, session.world, view.race.center, PLAYER, { x: 0, y: 0, w: view.width, h: view.height }, junior, dt);
+    overlay.update(session.race);
     lastFrame = now;
   },
 });
