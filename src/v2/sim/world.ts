@@ -17,6 +17,7 @@ export interface CarState {
   speed: number;
   /** Smoothed steering position, -1..1. */
   steer: number;
+  /** Raw start-line crossings (forward minus backward). Race laps come from checkpoints in race.ts. */
   lap: number;
   /** Seconds of boost remaining (mini-turbo, items, rocket start). */
   boostTime: number;
@@ -152,27 +153,36 @@ function stepCar(car: CarState, p: CarParams, input: InputFrame, track: SimTrack
   const boosting = car.boostTime > 0;
   const top = boosting ? p.topSpeed * t.boostSpeed : p.topSpeed;
   let a = 0;
-  if (held(input, Button.Throttle) || boosting) {
-    const room = 1 - car.speed / top;
-    a += p.accel * (room > 0 ? room : 0) * torque(car, t);
-    if (boosting && room > 0) a += t.boostAccel;
+  if (car.speed < 0 || (car.speed === 0 && held(input, Button.Brake) && !held(input, Button.Throttle))) {
+    // Reverse: hold brake from a standstill; throttle brakes you back to zero.
+    if (held(input, Button.Brake)) a -= t.reverseAccel;
+    else a += held(input, Button.Throttle) ? t.brake : t.coastDrag;
+    car.speed += a * DT;
+    if (car.speed < -t.reverseMax) car.speed = -t.reverseMax;
+    if (car.speed > 0) car.speed = 0;
+  } else {
+    if (held(input, Button.Throttle) || boosting) {
+      const room = 1 - car.speed / top;
+      a += p.accel * (room > 0 ? room : 0) * torque(car, t);
+      if (boosting && room > 0) a += t.boostAccel;
+    }
+    if (held(input, Button.Brake)) a -= t.brake;
+    if (!held(input, Button.Throttle) && !boosting) a -= t.coastDrag;
+    if (offroad) {
+      const cap = p.offroadCap * p.topSpeed;
+      if (a > 0) a *= t.offroadDrive; // wheels spin in the sand
+      if (car.speed > cap) a -= (car.speed - cap) * t.offroadBleed;
+    }
+    if (car.drift !== 0) a -= t.driftDrag;
+    if (car.speed > top) a -= (car.speed - top) * 2; // settle back after a boost ends
+    car.speed += a * DT;
+    if (car.speed < 0) car.speed = 0;
   }
-  if (held(input, Button.Brake)) a -= t.brake;
-  if (!held(input, Button.Throttle) && !boosting) a -= t.coastDrag;
-  if (offroad) {
-    const cap = p.offroadCap * p.topSpeed;
-    if (a > 0) a *= t.offroadDrive; // wheels spin in the sand
-    if (car.speed > cap) a -= (car.speed - cap) * t.offroadBleed;
-  }
-  if (car.drift !== 0) a -= t.driftDrag;
-  if (car.speed > top) a -= (car.speed - top) * 2; // settle back after a boost ends
-  car.speed += a * DT;
-  if (car.speed < 0) car.speed = 0;
   if (car.boostTime > 0) car.boostTime = Math.max(0, car.boostTime - DT);
 
   // Lateral: steering moves you across the road, curves push you outward.
   car.steer = approach(car.steer, input.steer / STEER_MAX, p.steerRate * DT);
-  const grip = car.speed < 8 ? car.speed / 8 : 1;
+  const grip = car.speed < 0 ? -0.5 : car.speed < 8 ? car.speed / 8 : 1;
   const k = curvatureAt(track, car.s);
   let lateral = car.steer * p.lateralSpeed * grip;
   let centrifugal = k * car.speed * car.speed * p.centrifugal;
@@ -193,6 +203,9 @@ function stepCar(car: CarState, p: CarParams, input: InputFrame, track: SimTrack
   if (car.s >= track.length) {
     car.s -= track.length;
     car.lap++;
+  } else if (car.s < 0) {
+    car.s += track.length;
+    car.lap--;
   }
   car.prevButtons = input.buttons;
 }

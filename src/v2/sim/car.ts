@@ -27,7 +27,7 @@ export interface DriveTuning {
   massBase: number; massPerStat: number;
   offroadCapBase: number; offroadCapPerStat: number; offroadBleed: number; offroadDrive: number;
   miniTurboBase: number; miniTurboPerStat: number;
-  brake: number; coastDrag: number;
+  brake: number; coastDrag: number; reverseAccel: number; reverseMax: number;
   boostSpeed: number; boostAccel: number;
   /** Gearbox. */
   /** autoDownshift: drop a gear below this fraction of the lower gear's top speed. */
@@ -51,7 +51,7 @@ export const DRIVE_TUNING: DriveTuning = {
   massBase: 0.8, massPerStat: 0.08,
   offroadCapBase: 0.35, offroadCapPerStat: 0.04, offroadBleed: 4, offroadDrive: 0.5,
   miniTurboBase: 0.6, miniTurboPerStat: 0.08,
-  brake: 30, coastDrag: 3,
+  brake: 30, coastDrag: 3, reverseAccel: 6, reverseMax: 8,
   boostSpeed: 1.15, boostAccel: 12,
   shiftCut: 0.12, autoUpshift: 0.93, autoDownshift: 0.75,
   perfectShiftLo: 0.88, perfectShiftHi: 0.97, perfectKick: 1.25, perfectKickTime: 1.2,

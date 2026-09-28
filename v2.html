@@ -7,7 +7,7 @@
     <style>
       :root { color-scheme: dark; }
       html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-      #stage { display: grid; place-items: center; width: 100vw; height: 100vh; }
+      #stage { position: relative; display: grid; place-items: center; width: 100vw; height: 100vh; }
       #v2, #crt { grid-area: 1 / 1; }
       #v2 { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
       /* One dark scanline per internal row (--row = upscale factor in px), plus a soft vignette. */
