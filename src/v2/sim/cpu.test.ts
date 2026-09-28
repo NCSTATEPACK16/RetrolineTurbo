@@ -46,7 +46,7 @@ function race(cpuBrains: Personality[], seconds: number): { world: SimWorld; rac
   const inputs: InputFrame[] = cpuBrains.map(() => emptyInput());
   const scratch: InputFrame[] = cpuBrains.map(() => emptyInput());
   for (let t = 0; t < seconds * 60 && r.racers.some((x) => x.finishTick < 0); t++) {
-    for (let i = 0; i < n; i++) driveCpu(world, i, drivers[i]!, line, track, [], inputs[i]!);
+    for (let i = 0; i < n; i++) driveCpu(world, i, drivers[i]!, line, track, null, inputs[i]!);
     stepRace(r, world, track, inputs, scratch);
   }
   return { world, race: r };
@@ -62,7 +62,7 @@ describe('CPU racers', () => {
     let offroadTicks = 0;
     const driver = createCpuDriver({ ...DEFAULT_PERSONALITY, mistakeRate: 0 }, 1);
     for (let t = 0; t < 60 * 300 && r.racers[0]!.finishTick < 0; t++) {
-      driveCpu(world, 0, driver, line, track, [], inputs[0]!);
+      driveCpu(world, 0, driver, line, track, null, inputs[0]!);
       stepRace(r, world, track, inputs, scratch);
       if (Math.abs(world.cars[0]!.x) > halfWidthAt(track, world.cars[0]!.s)) offroadTicks++;
     }

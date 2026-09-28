@@ -3,6 +3,7 @@ import { stepWorld, DT, type SimWorld } from './world.js';
 import { wrapS, type SimTrack } from './track.js';
 import { resolveBumps } from './bump.js';
 import { stepSlipstream } from './slipstream.js';
+import { createItems, stepItems, type ItemState } from './items.js';
 
 /**
  * Race rules on top of the driving sim: grid, countdown + rocket start,
@@ -64,6 +65,16 @@ export interface RaceState {
   readonly isGhost: (car: number) => boolean;
   /** Per-car slipstream charge, seconds. */
   readonly draft: Float64Array;
+  /** Items (boxes, held items, slicks, seekers); disabled in Pure mode. */
+  readonly items: ItemState;
+}
+
+export interface RaceOptions {
+  laps?: number;
+  /** Item boxes on the track (false = Pure mode). */
+  items?: boolean;
+  itemRows?: readonly { s: number; count: number }[];
+  seed?: number;
 }
 
 /** Lateral and arc position of grid slot `k` (0 = pole). */
@@ -84,8 +95,11 @@ export function sectorAt(track: SimTrack, s: number): number {
  * `humans[i]` marks player-driven cars (the race ends when they all finish).
  */
 export function createRace(
-  world: SimWorld, track: SimTrack, grid: GridSpec, slots: readonly number[], humans: readonly boolean[], laps = 3,
+  world: SimWorld, track: SimTrack, grid: GridSpec, slots: readonly number[], humans: readonly boolean[],
+  lapsOrOptions: number | RaceOptions = 3,
 ): RaceState {
+  const opts: RaceOptions = typeof lapsOrOptions === 'number' ? { laps: lapsOrOptions } : lapsOrOptions;
+  const laps = opts.laps ?? 3;
   const racers: Racer[] = world.cars.map((car, i) => {
     const slot = gridSlot(track, grid, slots[i] ?? i);
     car.s = slot.s;
@@ -101,6 +115,7 @@ export function createRace(
     phase: 'countdown', laps, tick: 0, countdownTicks: Math.round(RACE.countdownSeconds / DT),
     racers, order: racers.map((_, i) => i), isGhost: (car) => racers[car]!.ghost > 0,
     draft: new Float64Array(racers.length),
+    items: createItems(track, opts.itemRows ?? [], racers.length, (opts.items ?? false) && (opts.itemRows?.length ?? 0) > 0, opts.seed ?? 1),
   };
 }
 
@@ -137,10 +152,16 @@ export function stepRace(race: RaceState, world: SimWorld, track: SimTrack, inpu
     dst.steer = src.steer;
     dst.buttons = r.stall > 0 ? src.buttons & ~Button.Throttle : src.buttons;
     if (r.stall > 0) r.stall = Math.max(0, r.stall - DT);
+    if (race.items.spin[i]! > 0) {
+      // Spinning out: no drive, no steering until you've come round.
+      dst.steer = 0;
+      dst.buttons = 0;
+    }
   }
   stepWorld(world, track, scratch);
   resolveBumps(world, track, race.isGhost);
   stepSlipstream(world, track, race.draft);
+  stepItems(race.items, race, world, track, inputs);
   race.tick++;
 
   const n = RACE.checkpoints;
@@ -207,8 +228,15 @@ function rankRacers(race: RaceState, world: SimWorld, track: SimTrack): void {
   for (let p = 0; p < o.length; p++) race.racers[o[p]!]!.position = p + 1;
 }
 
+/** The race ends when every human has finished — or, with no humans (sims, attract mode), when everyone has. */
 function humansFinished(race: RaceState): boolean {
-  for (const r of race.racers) if (r.human && r.finishTick < 0) return false;
+  let humans = 0;
+  for (const r of race.racers) {
+    if (r.human) humans++;
+    if (r.human && r.finishTick < 0) return false;
+  }
+  if (humans > 0) return true;
+  for (const r of race.racers) if (r.finishTick < 0) return false;
   return true;
 }
 

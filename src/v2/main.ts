@@ -31,27 +31,33 @@ const NAMES = FIELD.map((f, i) => (f === null ? 'YOU' : `CPU ${i + 1}`));
 
 let seed = 1;
 let junior = false; // Junior assist for the player; the menus own this setting later
+let pure = false; // Pure mode (no items); the menus own this setting later
 let session: Session;
 let recording: InputRecording;
 function newRace(): void {
-  session = createSession({ track, grid: circuit.layout.grid, line, field: FIELD, seed: seed++ });
+  session = createSession({ track, grid: circuit.layout.grid, line, field: FIELD, seed: seed++, itemRows: circuit.layout.itemBoxes, pure });
   session.world.assist[PLAYER] = junior ? JUNIOR : 0;
   recording = new InputRecording();
+  view.race.bindItems(session.race.items);
 }
-newRace();
 
 const kbFrame = emptyInput();
 const padFrame = emptyInput();
 const keyboard = new Keyboard();
 
 const canvas = document.getElementById('v2') as HTMLCanvasElement;
-const view = new View(canvas, document.getElementById('crt')!, track, circuit.layout, FIELD.length, PLAYER);
+const view: View = new View(canvas, document.getElementById('crt')!, track, circuit.layout, FIELD.length, PLAYER);
+newRace();
 const overlay = new RaceOverlay(document.getElementById('stage')!, NAMES);
 window.addEventListener('resize', () => view.resize());
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyC') view.crt.enabled = !view.crt.enabled; // settings screen owns this later
   if (import.meta.env.DEV && e.code === 'KeyP') view.pixels.paletteEnabled = !view.pixels.paletteEnabled;
   if (e.code === 'Enter' && session.race.phase === 'finished') newRace();
+  if (e.code === 'KeyI' && session.race.phase !== 'racing') {
+    pure = !pure;
+    newRace();
+  }
   if (e.code === 'KeyJ') {
     junior = !junior;
     session.world.assist[PLAYER] = junior ? JUNIOR : 0;
@@ -79,7 +85,7 @@ const loop = createLoop({
   render(alpha) {
     const now = performance.now();
     view.render(session.prev, session.world, alpha, Math.min(0.1, (now - lastFrame) / 1000));
-    overlay.update(session.race, PLAYER, junior);
+    overlay.update(session.race, PLAYER, junior, pure);
     lastFrame = now;
   },
 });

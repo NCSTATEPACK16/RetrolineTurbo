@@ -4,7 +4,7 @@ import { createWorld, copyWorld, type SimWorld } from './world.js';
 import type { CarParams } from './car.js';
 import { createRace, stepRace, type GridSpec, type RaceState } from './race.js';
 import type { RacingLine } from './racingLine.js';
-import { createCpuDriver, driveCpu, type CpuDriver, type Hazard, type Personality } from './ai.js';
+import { createCpuDriver, driveCpu, type CpuDriver, type Personality } from './ai.js';
 import { stepRubberBand } from './rubberBand.js';
 
 /**
@@ -23,6 +23,10 @@ export interface SessionConfig {
   seed?: number;
   /** Fair rubber-banding on (default) or off. */
   band?: boolean;
+  /** Item box rows from the track layout; items are on when given, unless `pure`. */
+  itemRows?: readonly { s: number; count: number }[];
+  /** Pure mode: no items. */
+  pure?: boolean;
 }
 
 export interface Session {
@@ -34,7 +38,6 @@ export interface Session {
   /** Per-car input for this tick. Callers write humans' frames; CPUs fill their own. */
   readonly inputs: InputFrame[];
   readonly scratch: InputFrame[];
-  readonly hazards: Hazard[];
 }
 
 /** Humans start at the back (Mario Kart-style); CPUs fill the grid from pole in field order. */
@@ -49,14 +52,16 @@ export function gridSlots(field: readonly (Personality | null)[]): number[] {
 export function createSession(cfg: SessionConfig): Session {
   const n = cfg.field.length;
   const world = createWorld(n, cfg.params);
-  const race = createRace(world, cfg.track, cfg.grid, gridSlots(cfg.field), cfg.field.map((f) => f === null), cfg.laps ?? 3);
+  const race = createRace(world, cfg.track, cfg.grid, gridSlots(cfg.field), cfg.field.map((f) => f === null), {
+    laps: cfg.laps ?? 3, items: !cfg.pure, itemRows: cfg.itemRows ?? [], seed: cfg.seed ?? 1,
+  });
   const prev = createWorld(n, cfg.params);
   copyWorld(prev, world);
   const seed = cfg.seed ?? 1;
   const drivers = cfg.field.map((p, i) => (p ? createCpuDriver(p, (seed * 7919 + i * 104729) >>> 0) : null));
   return {
     cfg, world, prev, race, drivers,
-    inputs: cfg.field.map(() => emptyInput()), scratch: cfg.field.map(() => emptyInput()), hazards: [],
+    inputs: cfg.field.map(() => emptyInput()), scratch: cfg.field.map(() => emptyInput()),
   };
 }
 
@@ -65,7 +70,7 @@ export function stepSession(s: Session): void {
   const { world, cfg } = s;
   for (let i = 0; i < s.drivers.length; i++) {
     const d = s.drivers[i];
-    if (d) driveCpu(world, i, d, cfg.line, cfg.track, s.hazards, s.inputs[i]!);
+    if (d) driveCpu(world, i, d, cfg.line, cfg.track, s.race.items, s.inputs[i]!);
   }
   copyWorld(s.prev, world);
   stepRace(s.race, world, cfg.track, s.inputs, s.scratch);

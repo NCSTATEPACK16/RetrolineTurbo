@@ -68,7 +68,7 @@ export function nextRandom(d: CpuDriver): number {
 }
 
 /** A thing on the track to steer around (oil slicks and the like, from the item layer). */
-export interface Hazard { active: boolean; s: number; x: number; radius: number }
+export interface Hazard { active: boolean; s: number; x: number; radius: number; /** Seconds left before it vanishes. */ life: number }
 
 export const AI = {
   dt: 1 / 60,
@@ -184,9 +184,41 @@ function avoidHazards(me: CarState, targetX: number, hazards: readonly Hazard[],
   return x > hw ? hw : x < -hw ? -hw : x;
 }
 
+/** What a CPU can see of the item layer: slicks to dodge, and what it's holding. */
+export interface ItemView { readonly hazards: readonly Hazard[]; readonly held?: Int8Array; readonly prevItem?: Uint8Array }
+
+const NO_HAZARDS: readonly Hazard[] = [];
+
+/** Item ids (mirrors items.ts; kept numeric here to avoid a sim import cycle). */
+const I_BOOST = 1, I_OIL = 2, I_SHIELD = 3, I_MAGNET = 4, I_SEEKER = 5;
+
+/** Should this CPU fire its item this tick? Scaled by its item-happiness. */
+function wantsItem(world: SimWorld, i: number, d: CpuDriver, line: RacingLine, track: SimTrack, item: number): boolean {
+  const u = d.personality.itemUse;
+  const me = world.cars[i]!;
+  const r = nextRandom(d);
+  let behind = Infinity, ahead = Infinity;
+  for (let j = 0; j < world.cars.length; j++) {
+    if (j === i) continue;
+    const gap = arcDelta(track, me.s, world.cars[j]!.s);
+    if (gap > 0 && gap < ahead) ahead = gap;
+    if (gap < 0 && -gap < behind) behind = -gap;
+  }
+  const straight = Math.abs(lineK(line, track, me.s + 40)) < 0.004;
+  switch (item) {
+    case I_BOOST: return straight && r < (0.02 + 0.1 * u);
+    case I_OIL: return behind < 15 ? r < 0.05 + 0.2 * u : r < 0.002;
+    case I_SHIELD: return r < 0.004 + 0.02 * u;
+    case I_MAGNET: return ahead < 50 && straight && r < 0.05 + 0.1 * u;
+    case I_SEEKER: return r < 0.05 + 0.1 * u;
+    default: return false;
+  }
+}
+
 export function driveCpu(
-  world: SimWorld, i: number, d: CpuDriver, line: RacingLine, track: SimTrack, hazards: readonly Hazard[], out: InputFrame,
+  world: SimWorld, i: number, d: CpuDriver, line: RacingLine, track: SimTrack, items: ItemView | null, out: InputFrame,
 ): InputFrame {
+  const hazards = items?.hazards ?? NO_HAZARDS;
   const car = world.cars[i]!;
   const p = world.params[i]!;
   const t = world.tuning;
@@ -233,6 +265,8 @@ export function driveCpu(
     const keep = corner > AI.driftMinCurvature * 0.6 && driftTier(car.driftCharge, t) < goal;
     if (keep) buttons |= Button.Drift;
   }
+  const holding = items?.held?.[i] ?? 0;
+  if (holding !== 0 && !items?.prevItem?.[i] && wantsItem(world, i, d, line, track, holding)) buttons |= Button.Item;
   out.buttons = buttons;
   return out;
 }

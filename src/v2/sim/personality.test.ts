@@ -23,7 +23,7 @@ function soloLapTime(p: Personality, seed = 1): { seconds: number; drifts: numbe
   const scratch = [emptyInput()];
   let drifts = 0;
   for (let t = 0; t < 60 * 400 && race.racers[0]!.finishTick < 0; t++) {
-    driveCpu(world, 0, d, line, track, [], inputs[0]!);
+    driveCpu(world, 0, d, line, track, null, inputs[0]!);
     const was = world.cars[0]!.drift;
     stepRace(race, world, track, inputs, scratch);
     if (was === 0 && world.cars[0]!.drift !== 0) drifts++;
@@ -64,7 +64,7 @@ function duel(setup: (w: SimWorld) => void, seconds: number, cpu: Personality, o
   const trace: { x0: number; x1: number; ds: number }[] = [];
   let contacts = 0;
   for (let t = 0; t < seconds * 60; t++) {
-    driveCpu(w, 0, d, line, track, [], inputs[0]!);
+    driveCpu(w, 0, d, line, track, null, inputs[0]!);
     other(w, inputs[1]!);
     stepWorld(w, track, inputs);
     contacts += resolveBumps(w, track);
@@ -105,12 +105,12 @@ describe('awareness', () => {
   it('steers round a hazard on its line', () => {
     const w = createWorld(1);
     Object.assign(w.cars[0]!, { s: 60, x: 0, speed: 30 });
-    const hazards: Hazard[] = [{ active: true, s: 150, x: lineX(line, track, 150), radius: 1.2 }];
+    const hazards: Hazard[] = [{ active: true, s: 150, x: lineX(line, track, 150), radius: 1.2, life: 99 }];
     const d = createCpuDriver(calm, 2);
     const input = [emptyInput()];
     let closest = Infinity;
     for (let t = 0; t < 60 * 5; t++) {
-      driveCpu(w, 0, d, line, track, hazards, input[0]!);
+      driveCpu(w, 0, d, line, track, { hazards }, input[0]!);
       stepWorld(w, track, input);
       const car = w.cars[0]!;
       if (Math.abs(car.s - 150) < 2.1) closest = Math.min(closest, Math.abs(car.x - hazards[0]!.x));

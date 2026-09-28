@@ -25,7 +25,7 @@ export function simulateRace(
   let maxRatio = 0;
   let ticks = 0;
   for (; ticks < maxSeconds * 60 && race.phase !== 'finished'; ticks++) {
-    driveCpu(world, playerIndex, bot, cfg.line, cfg.track, session.hazards, session.inputs[playerIndex]!);
+    driveCpu(world, playerIndex, bot, cfg.line, cfg.track, race.items, session.inputs[playerIndex]!);
     stepSession(session);
     for (let i = 0; i < field.length; i++) {
       const cap = world.params[i]!.topSpeed * world.tuning.boostSpeed;

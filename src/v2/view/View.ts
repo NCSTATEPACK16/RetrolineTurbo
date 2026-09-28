@@ -7,6 +7,8 @@ import { CHASE_TUNING, crestSafeHeight, initialChaseState, updateChase, type Cha
 import { buildCenterline, poseAt, type Centerline, type Pose } from './centerline.js';
 import { PixelPipeline } from './PixelPipeline.js';
 import { CrtOverlay } from './crt.js';
+import { ItemsView } from './ItemsView.js';
+import type { ItemState } from '../sim/items.js';
 import { JUICE, PARTICLE_COLORS, Particles, Shake, SpeedLines, prefersReducedMotion } from './Juice.js';
 import { Scenery, Horizon, pixelTexture, type HorizonTheme } from './Scenery.js';
 import { HORIZONS, PROPS_ATLAS, SCENERY_KINDS } from './sprites.js';
@@ -153,6 +155,8 @@ export class RaceScene {
   private readonly shake = new Shake();
   private readonly v = new THREE.Vector3();
   private lastEventTick = -1;
+  private itemsView: ItemsView | null = null;
+  private readonly carGroups: THREE.Object3D[] = [];
   private readonly horizon: Horizon;
 
   constructor(private readonly track: SimTrack, layout: CircuitLayout, carCount: number, textures: SceneTextures, focus = 0) {
@@ -197,8 +201,16 @@ export class RaceScene {
       const colour = i === focus ? 0 : 1 + ((i < focus ? i : i - 1) % (bodyColors.length - 1));
       const car = buildCar(bodyColors[colour]!);
       this.cars.push(car);
+      this.carGroups.push(car.group);
       this.scene.add(car.group);
     }
+  }
+
+  /** Show a race's items (boxes, slicks, seekers, shields). Call again for each new race. */
+  bindItems(items: ItemState): void {
+    if (this.itemsView) this.scene.remove(this.itemsView.group);
+    this.itemsView = new ItemsView(items, this.center, this.track, this.cars.length);
+    this.scene.add(this.itemsView.group);
   }
 
   /** Pose everything `alpha` of the way from `prev` to `curr`; `dt` is real seconds since the last frame (camera easing). */
@@ -237,6 +249,7 @@ export class RaceScene {
     }
     this.lastEventTick = curr.tick;
     this.particles.update(dt);
+    this.itemsView?.update(dt, this.carGroups, curr);
     this.camera.updateMatrixWorld();
     this.scenery.update(this.camera);
     this.horizon.update(this.camera);

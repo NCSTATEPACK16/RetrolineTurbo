@@ -40,7 +40,7 @@ describe('v2 performance budget', () => {
     const cpu = Array.from({ length: CARS }, () => ({ ...input }));
     const drivers = cpu.map((_, i) => createCpuDriver(DEFAULT_PERSONALITY, i + 1));
     const ms = timeIt(60 * 60, () => {
-      for (let i = 0; i < CARS; i++) driveCpu(world, i, drivers[i]!, line, track, [], cpu[i]!);
+      for (let i = 0; i < CARS; i++) driveCpu(world, i, drivers[i]!, line, track, null, cpu[i]!);
       stepWorld(world, track, cpu);
       resolveBumps(world, track);
     });
